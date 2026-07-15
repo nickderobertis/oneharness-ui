@@ -13,17 +13,17 @@ HTML. The Next.js interface is statically exported into a Tauri v2 webview.
 ```text
 Next.js webview
   └─ validated app IPC request
-      └─ Tauri scoped sidecar permission
-          └─ oneharness-ui bridge (Bun executable)
+      └─ fixed Tauri command (no webview shell permission)
+          └─ oneharness-ui bridge (bundled Bun executable)
               └─ @oneharness/sdk (types + runtime contract validation)
                   └─ pinned oneharness CLI
                       └─ local config, history, and harness process
 ```
 
-Rust grants the webview only permission to spawn the bundled bridge. It does
-not contain oneharness types or accept arbitrary shell commands. The bridge is
-the only package that imports the SDK, and the browser receives a smaller
-application view model validated on both sides of IPC. See
+Rust exposes one fixed JSON transport command and grants the webview no shell
+permission. It does not contain oneharness types or accept arbitrary commands.
+The bridge is the only package that imports the SDK, and the browser receives a
+smaller application view model validated on both sides of IPC. See
 [the architecture decision](docs/architecture.md).
 
 ## Prerequisites

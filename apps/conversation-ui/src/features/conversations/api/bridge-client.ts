@@ -41,27 +41,8 @@ function httpConfiguration(): z.infer<typeof httpConfigurationSchema> {
 }
 
 async function invokeTauri(request: BridgeRequest): Promise<unknown> {
-  const { Command } = await import("@tauri-apps/plugin-shell");
-  const command = Command.sidecar("binaries/oneharness-ui-bridge");
-  let stdout = "";
-  let stderr = "";
-  command.stdout.on("data", (line) => {
-    stdout += `${line}\n`;
-  });
-  command.stderr.on("data", (line) => {
-    stderr += `${line}\n`;
-  });
-  const closed = new Promise<void>((resolve, reject) => {
-    command.on("close", ({ code }) => {
-      if (code === 0) resolve();
-      else reject(new Error(stderr.trim() || `Local bridge exited with status ${code}`));
-    });
-    command.on("error", reject);
-  });
-  const child = await command.spawn();
-  await child.write(`${JSON.stringify(request)}\n`);
-  await closed;
-  return JSON.parse(stdout);
+  const { invoke } = await import("@tauri-apps/api/core");
+  return await invoke("invoke_bridge", { request });
 }
 
 async function invokeHttp(request: BridgeRequest): Promise<unknown> {

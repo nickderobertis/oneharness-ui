@@ -1,13 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The main window may launch only the bundled oneharness bridge.",
+  "description": "The main window receives only Tauri core window capabilities.",
   "windows": ["main"],
-  "permissions": [
-    "core:default",
-    {
-      "identifier": "shell:allow-spawn",
-      "allow": [{ "name": "binaries/oneharness-ui-bridge", "sidecar": true }]
-    }
-  ]
+  "permissions": ["core:default"]
 }

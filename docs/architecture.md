@@ -17,11 +17,12 @@ and usage properties preserve three distinct states: absent, `null`
 
 ## Privilege boundary
 
-The static webview has no filesystem or arbitrary shell capability. Tauri's
-capability grants one operation: spawn `binaries/oneharness-ui-bridge`. The
-bridge size-limits and validates one newline-delimited request, then invokes
-processes with argv arrays and `shell: false`. It returns normalized, sanitized
-errors and does not log prompts, answers, reasoning, or environment values.
+The static webview has no filesystem or shell capability. It can call one fixed
+Tauri command, which size-limits opaque JSON and launches the bundled
+`oneharness-ui-bridge`; Rust owns no oneharness contract. The bridge validates
+one newline-delimited request, then invokes processes with argv arrays and
+`shell: false`. It returns normalized, sanitized errors and does not log
+prompts, answers, reasoning, or environment values.
 
 Production uses that process-local, scoped sidecar transport. The loopback HTTP
 adapter exists only for browser development and end-to-end testing: it accepts
