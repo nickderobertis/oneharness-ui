@@ -13,7 +13,6 @@ declare global {
 }
 
 const httpConfigurationSchema = z.object({
-  authorization: z.string().min(32).max(256),
   url: z
     .string()
     .url()
@@ -37,7 +36,6 @@ const httpConfigurationSchema = z.object({
 
 function httpConfiguration(): z.infer<typeof httpConfigurationSchema> {
   return httpConfigurationSchema.parse({
-    authorization: process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_CAPABILITY,
     url: process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_URL,
   });
 }
@@ -68,10 +66,14 @@ async function invokeTauri(request: BridgeRequest): Promise<unknown> {
 
 async function invokeHttp(request: BridgeRequest): Promise<unknown> {
   const configuration = httpConfiguration();
+  const session = await fetch(`${configuration.url}/session`, {
+    credentials: "include",
+  });
+  if (!session.ok) throw new Error(`Local bridge session returned HTTP ${session.status}`);
   const response = await fetch(`${configuration.url}/invoke`, {
     body: JSON.stringify(request),
+    credentials: "include",
     headers: {
-      Authorization: `Bearer ${configuration.authorization}`,
       "Content-Type": "application/json",
     },
     method: "POST",

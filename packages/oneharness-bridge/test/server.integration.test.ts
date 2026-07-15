@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { startServer } from "../src/server.ts";
 
 const AUTHORIZATION = "oneharness-ui-server-authorization-token";
+const UI_ORIGIN = "http://127.0.0.1:3000";
 let server: ReturnType<typeof Bun.serve> | undefined;
 
 afterEach(async () => {
@@ -14,12 +15,22 @@ function endpoint(): string {
   return `http://127.0.0.1:${server.port}`;
 }
 
+async function sessionCookie(): Promise<string> {
+  const response = await fetch(`${endpoint()}/session`, { headers: { Origin: UI_ORIGIN } });
+  expect(response.status).toBe(204);
+  const cookie = response.headers.get("set-cookie");
+  expect(cookie).toContain("HttpOnly");
+  expect(cookie).toContain("SameSite=Strict");
+  if (!cookie) throw new Error("session response omitted its cookie");
+  return cookie.split(";", 1)[0] ?? "";
+}
+
 describe("development HTTP bridge boundary", () => {
-  test("requires its bearer capability before invoking the service", async () => {
+  test("keeps its capability in an HttpOnly session cookie", async () => {
     server = startServer(0, AUTHORIZATION);
     const missing = await fetch(`${endpoint()}/invoke`, {
       body: JSON.stringify({ kind: "list" }),
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", Origin: UI_ORIGIN },
       method: "POST",
     });
     expect(missing.status).toBe(401);
@@ -27,8 +38,9 @@ describe("development HTTP bridge boundary", () => {
     const wrong = await fetch(`${endpoint()}/invoke`, {
       body: JSON.stringify({ kind: "list" }),
       headers: {
-        Authorization: "Bearer oneharness-ui-wrong-authorization-value",
         "Content-Type": "application/json",
+        Cookie: "oneharness_ui_capability=oneharness-ui-wrong-authorization-value",
+        Origin: UI_ORIGIN,
       },
       method: "POST",
     });
@@ -37,16 +49,17 @@ describe("development HTTP bridge boundary", () => {
 
   test("bounds the actual request stream and rejects malformed JSON", async () => {
     server = startServer(0, AUTHORIZATION);
+    const cookie = await sessionCookie();
     const malformed = await fetch(`${endpoint()}/invoke`, {
       body: "{",
-      headers: { Authorization: `Bearer ${AUTHORIZATION}` },
+      headers: { Cookie: cookie, Origin: UI_ORIGIN },
       method: "POST",
     });
     expect(malformed.status).toBe(400);
 
     const oversized = await fetch(`${endpoint()}/invoke`, {
       body: JSON.stringify({ message: "x".repeat(70_000) }),
-      headers: { Authorization: `Bearer ${AUTHORIZATION}` },
+      headers: { Cookie: cookie, Origin: UI_ORIGIN },
       method: "POST",
     });
     expect(oversized.status).toBe(413);
@@ -55,13 +68,15 @@ describe("development HTTP bridge boundary", () => {
   test("only permits loopback CORS origins", async () => {
     server = startServer(0, AUTHORIZATION);
     const permitted = await fetch(`${endpoint()}/health`, {
-      headers: { Origin: "http://localhost:3000" },
+      headers: { Origin: UI_ORIGIN },
     });
-    expect(permitted.headers.get("access-control-allow-origin")).toBe("http://localhost:3000");
+    expect(permitted.headers.get("access-control-allow-origin")).toBe(UI_ORIGIN);
 
-    const rejected = await fetch(`${endpoint()}/health`, {
+    const rejected = await fetch(`${endpoint()}/session`, {
       headers: { Origin: "https://attacker.example" },
     });
+    expect(rejected.status).toBe(403);
     expect(rejected.headers.get("access-control-allow-origin")).toBe("null");
+    expect(rejected.headers.get("set-cookie")).toBeNull();
   });
 });

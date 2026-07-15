@@ -83,7 +83,6 @@ process.env.ONEHARNESS_UI_HISTORY_DIR = historyDir;
 process.env.ONEHARNESS_BIN = executable;
 process.env.ONEHARNESS_UI_PROVIDER_BIN = provider;
 process.env.ONEHARNESS_UI_PROVIDER_HARNESS = "claude-code";
-process.env.ONEHARNESS_UI_HTTP_TOKEN = authorization;
 process.env.MOCK_EXIT = "0";
 process.env.MOCK_STDERR = "";
 process.env.MOCK_STDOUT =

@@ -25,11 +25,11 @@ errors and does not log prompts, answers, reasoning, or environment values.
 
 Production uses that process-local, scoped sidecar transport. The loopback HTTP
 adapter exists only for browser development and end-to-end testing: it accepts
-only explicit loopback URLs, requires an explicit non-credential test
-capability at both the HTTP and service layers, restricts CORS to loopback
-origins, and bounds the
-bytes read from the request stream. Release builds do not configure this
-adapter.
+only an explicit loopback UI origin, establishes its server-held capability in
+a short-lived `HttpOnly`/`SameSite=Strict` cookie, checks that capability again
+at the service layer, and bounds the bytes read from the request stream. No
+bridge secret is present in browser JavaScript. Release builds do not configure
+this adapter.
 
 The bridge first uses an explicit `ONEHARNESS_BIN`, then a compatible CLI
 bundled beside it, then the SDK's packaged CLI. Config/history resolution is

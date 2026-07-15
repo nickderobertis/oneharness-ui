@@ -45,7 +45,8 @@ const conversation: Conversation = {
 type Handler = (request: Record<string, unknown>) => unknown | Promise<unknown>;
 
 function installBridge(handler: Handler) {
-  globalThis.fetch = (async (_input: string | URL | Request, init?: RequestInit) => {
+  globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+    if (String(input).endsWith("/session")) return new Response(null, { status: 204 });
     const request = JSON.parse(String(init?.body)) as Record<string, unknown>;
     return Response.json(await handler(request));
   }) as typeof fetch;
