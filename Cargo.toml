@@ -1,0 +1,17 @@
+[workspace]
+members = ["apps/desktop-shell"]
+resolver = "2"
+
+[workspace.package]
+edition = "2024"
+license = "MIT"
+repository = "https://github.com/nickderobertis/oneharness-ui"
+rust-version = "1.96"
+version = "0.1.0"
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

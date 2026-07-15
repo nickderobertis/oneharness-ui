@@ -1,0 +1,54 @@
+import { describe, expect, test } from "bun:test";
+import { bridgeRequestSchema, bridgeResponseSchema, usageSchema } from "../src/index.ts";
+
+describe("IPC validation", () => {
+  test("accepts zero usage while preserving absent and null", () => {
+    expect(usageSchema.parse({ inputTokens: 0 })).toEqual({ inputTokens: 0 });
+    expect(usageSchema.parse({ inputTokens: null })).toEqual({ inputTokens: null });
+    expect(usageSchema.parse({})).toEqual({});
+  });
+
+  test("rejects unsafe selectors and blank continuation messages", () => {
+    expect(() => bridgeRequestSchema.parse({ kind: "get", sessionId: "../secret" })).toThrow();
+    expect(() =>
+      bridgeRequestSchema.parse({ kind: "continue", sessionId: "valid", message: "  " }),
+    ).toThrow();
+  });
+
+  test("keeps unknown upstream structured values as data", () => {
+    const response = bridgeResponseSchema.parse({
+      ok: true,
+      data: {
+        kind: "get",
+        conversation: {
+          id: "session-1",
+          name: "Session",
+          project: "/project",
+          startedAt: "2026-07-15T00:00:00Z",
+          state: "future-state",
+          canContinue: false,
+          harnesses: ["future-harness"],
+          turns: [
+            {
+              id: "session-1-0",
+              user: "hello",
+              assistant: null,
+              reasoning: null,
+              status: "future-state",
+              failureKind: null,
+              timestamp: "2026-07-15T00:00:00Z",
+              harness: "future-harness",
+              model: null,
+              tools: [],
+              usage: {},
+              unknown: { future: { nested: true } },
+            },
+          ],
+        },
+      },
+    });
+    expect(response.ok && response.data.kind === "get" && response.data.conversation.state).toBe(
+      "future-state",
+    );
+  });
+});

@@ -1,0 +1,317 @@
+import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
+import { basename, extname } from "node:path";
+import { type HistoryRecord, OneHarness, type RunOptions } from "@oneharness/sdk";
+import {
+  type BridgeRequest,
+  type BridgeResponse,
+  bridgeRequestSchema,
+  bridgeResponseSchema,
+  type Conversation,
+  type ConversationSummary,
+} from "@oneharness-ui/ipc-contract";
+import { z } from "zod";
+import type { BridgeEnvironment } from "./environment.ts";
+
+const discoverySchema = z.array(z.object({ id: z.string().min(1).max(240) }).passthrough());
+const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
+const knownRecordKeys = new Set([
+  "duration_ms",
+  "events",
+  "exit_code",
+  "failure_kind",
+  "harness",
+  "model",
+  "name",
+  "permission_mode",
+  "project",
+  "prompt",
+  "reasoning",
+  "schema_version",
+  "session",
+  "session_id",
+  "status",
+  "text",
+  "text_source",
+  "timestamp",
+  "thinking",
+  "usage",
+]);
+
+type Executable = { command: string; prefix: string[] };
+
+function resolveExecutable(environment: BridgeEnvironment): Executable {
+  if (environment.executable) return { command: environment.executable, prefix: [] };
+  const sdkRequire = createRequire(import.meta.resolve("@oneharness/sdk"));
+  return {
+    command: process.execPath,
+    prefix: [sdkRequire.resolve("oneharness-cli/bin/oneharness.js")],
+  };
+}
+
+async function invokeDiscovery(environment: BridgeEnvironment): Promise<unknown> {
+  const executable = resolveExecutable(environment);
+  const args = [...executable.prefix, "history", "list", "--compact", "--all-projects"];
+  if (environment.historyDir) args.push("--history-dir", environment.historyDir);
+  return await new Promise((resolve, reject) => {
+    const child = spawn(executable.command, args, {
+      env: process.env,
+      shell: false,
+      windowsHide: true,
+    });
+    let stdout = "";
+    let stderr = "";
+    const append = (target: "stdout" | "stderr", chunk: string) => {
+      if (stdout.length + stderr.length + chunk.length > MAX_OUTPUT_BYTES) {
+        child.kill();
+        reject(new Error("oneharness history output exceeded the safe size limit"));
+        return;
+      }
+      if (target === "stdout") stdout += chunk;
+      else stderr += chunk;
+    };
+    child.stdout.setEncoding("utf8").on("data", (chunk: string) => append("stdout", chunk));
+    child.stderr.setEncoding("utf8").on("data", (chunk: string) => append("stderr", chunk));
+    child.once("error", reject);
+    child.once("close", (code) => {
+      if (code !== 0) {
+        reject(new Error(`oneharness history discovery exited ${code}: ${stderr.trim()}`));
+        return;
+      }
+      try {
+        resolve(JSON.parse(stdout));
+      } catch {
+        reject(new Error("oneharness history discovery returned malformed JSON"));
+      }
+    });
+  });
+}
+
+function stateFor(status: string): string {
+  if (status === "ok") return "completed";
+  if (status === "nonzero" || status === "spawn-error") return "failed";
+  if (status === "timeout" || status === "skipped" || status === "planned") return "stopped";
+  return status;
+}
+
+function optionalNumber(value: number | null | undefined): number | null | undefined {
+  return value;
+}
+
+function reasoningFrom(record: HistoryRecord): string | null {
+  const source = record as HistoryRecord & Record<string, unknown>;
+  for (const key of ["reasoning", "thinking"] as const) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim()) return value;
+    if (value !== undefined && value !== null) return JSON.stringify(value, null, 2);
+  }
+  return null;
+}
+
+function toConversation(records: HistoryRecord[]): Conversation {
+  const first = records[0];
+  const last = records.at(-1);
+  if (!first || !last) throw new Error("history session contains no valid SDK records");
+  const harnesses = [...new Set(records.map(({ harness }) => harness))];
+  const state = stateFor(last.status);
+  const canContinue =
+    Boolean(last.session_id) && !["planned", "skipped", "spawn-error"].includes(last.status);
+  return {
+    canContinue,
+    harnesses,
+    id: first.session,
+    name: first.name,
+    project: first.project,
+    startedAt: first.timestamp,
+    state,
+    turns: records.map((record, index) => {
+      const unknown = Object.fromEntries(
+        Object.entries(record).filter(([key]) => !knownRecordKeys.has(key)),
+      );
+      return {
+        assistant: record.text ?? null,
+        failureKind: record.failure_kind ?? null,
+        harness: record.harness,
+        id: `${record.session}-${index}`,
+        model: record.model ?? null,
+        reasoning: reasoningFrom(record),
+        status: stateFor(record.status),
+        timestamp: record.timestamp,
+        tools: (record.events ?? []).map((event) => ({
+          index: event.index,
+          ...(event.input !== undefined ? { input: event.input } : {}),
+          kind: event.kind,
+          ...(event.name !== undefined ? { name: event.name } : {}),
+          ...(event.output !== undefined ? { output: event.output } : {}),
+        })),
+        unknown,
+        usage: {
+          ...(record.usage.cache_read_tokens !== undefined
+            ? { cacheReadTokens: optionalNumber(record.usage.cache_read_tokens) }
+            : {}),
+          ...(record.usage.cache_write_tokens !== undefined
+            ? { cacheWriteTokens: optionalNumber(record.usage.cache_write_tokens) }
+            : {}),
+          ...(record.usage.cost_usd !== undefined
+            ? { costUsd: optionalNumber(record.usage.cost_usd) }
+            : {}),
+          ...(record.usage.input_tokens !== undefined
+            ? { inputTokens: optionalNumber(record.usage.input_tokens) }
+            : {}),
+          ...(record.usage.output_tokens !== undefined
+            ? { outputTokens: optionalNumber(record.usage.output_tokens) }
+            : {}),
+        },
+        user: record.prompt,
+      };
+    }),
+  };
+}
+
+function toSummary(conversation: Conversation): ConversationSummary {
+  const latest = conversation.turns.at(-1);
+  return {
+    canContinue: conversation.canContinue,
+    harnesses: conversation.harnesses,
+    id: conversation.id,
+    name: conversation.name,
+    preview: latest?.user ?? "",
+    project: conversation.project,
+    startedAt: conversation.startedAt,
+    state: conversation.state,
+    turnCount: conversation.turns.length,
+  };
+}
+
+function publicError(error: unknown): BridgeResponse {
+  const detail = error instanceof Error ? error.message : String(error);
+  if (/ENOENT|not found|cannot find|spawn/i.test(detail)) {
+    return {
+      error: {
+        code: "EXECUTABLE_NOT_FOUND",
+        detail,
+        message:
+          "oneharness could not be started. Reinstall the app or set ONEHARNESS_BIN to a valid executable.",
+      },
+      ok: false,
+    };
+  }
+  if (/config|toml/i.test(detail)) {
+    return {
+      error: {
+        code: "CONFIG_ERROR",
+        detail,
+        message: "oneharness configuration could not be loaded. Check the reported config path.",
+      },
+      ok: false,
+    };
+  }
+  if (/invalid|malformed|valid SDK records|contract/i.test(detail)) {
+    return {
+      error: {
+        code: "MALFORMED_HISTORY",
+        detail,
+        message: "A history session is malformed or uses an unsupported contract version.",
+      },
+      ok: false,
+    };
+  }
+  return {
+    error: {
+      code: "ONEHARNESS_ERROR",
+      detail,
+      message: "oneharness could not complete the request. Review the detail and try again.",
+    },
+    ok: false,
+  };
+}
+
+export class BridgeService {
+  readonly #client: OneHarness;
+
+  constructor(readonly environment: BridgeEnvironment = {}) {
+    this.#client = new OneHarness({
+      env: { ONEHARNESS_RUN_MODE: "parallel" },
+      ...(environment.executable ? { executable: environment.executable } : {}),
+    });
+  }
+
+  async #history(session: string): Promise<HistoryRecord[]> {
+    return await this.#client.history({
+      allProjects: true,
+      ...(this.environment.historyDir ? { historyDir: this.environment.historyDir } : {}),
+      session,
+    });
+  }
+
+  async #list(): Promise<ConversationSummary[]> {
+    const discovered = discoverySchema.parse(await invokeDiscovery(this.environment));
+    const conversations = await Promise.all(
+      discovered.map(async ({ id }) => toConversation(await this.#history(id))),
+    );
+    return conversations.map(toSummary);
+  }
+
+  async #continue(sessionId: string, message: string): Promise<Conversation> {
+    const current = await this.#history(sessionId);
+    const latest = current.at(-1);
+    if (!latest?.session_id || ["planned", "skipped", "spawn-error"].includes(latest.status)) {
+      throw new Error("the selected conversation has no eligible native continuation session");
+    }
+    const options: RunOptions = {
+      cwd: latest.project,
+      events: true,
+      harnesses: [latest.harness],
+      history: true,
+      historyName: latest.name,
+      mode: latest.permission_mode,
+      prompt: message,
+      resume: latest.session_id,
+      ...(this.environment.historyDir ? { historyDir: this.environment.historyDir } : {}),
+      ...(this.environment.providerBin
+        ? {
+            bins: {
+              [this.environment.providerHarness ?? latest.harness]: this.environment.providerBin,
+            },
+          }
+        : {}),
+    };
+    const report = await this.#client.run(options);
+    if (!report.history_file) throw new Error("continued run did not create a history session");
+    const filename = basename(report.history_file);
+    const nextId = filename.slice(0, filename.length - extname(filename).length);
+    return toConversation(await this.#history(nextId));
+  }
+
+  async handle(input: unknown): Promise<BridgeResponse> {
+    try {
+      const request: BridgeRequest = bridgeRequestSchema.parse(input);
+      const response: BridgeResponse = await (async () => {
+        if (request.kind === "list") {
+          return { data: { conversations: await this.#list(), kind: "list" }, ok: true };
+        }
+        if (request.kind === "get") {
+          return {
+            data: {
+              conversation: toConversation(await this.#history(request.sessionId)),
+              kind: "get",
+            },
+            ok: true,
+          };
+        }
+        const conversation = await this.#continue(request.sessionId, request.message);
+        return {
+          data: {
+            conversation,
+            kind: "continue",
+            selectedSessionId: conversation.id,
+          },
+          ok: true,
+        };
+      })();
+      return bridgeResponseSchema.parse(response);
+    } catch (error) {
+      return bridgeResponseSchema.parse(publicError(error));
+    }
+  }
+}

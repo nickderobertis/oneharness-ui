@@ -1,0 +1,21 @@
+{
+  "name": "conversation-ui",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/conversation-ui/src",
+  "tags": ["scope:ui", "type:app"],
+  "implicitDependencies": ["ipc-contract", "oneharness-bridge"],
+  "targets": {
+    "build": {
+      "command": "bun run --cwd apps/conversation-ui build",
+      "outputs": ["{projectRoot}/out"]
+    },
+    "test": {
+      "command": "bun test --preload ./apps/conversation-ui/test/setup.ts apps/conversation-ui/src apps/conversation-ui/test --coverage"
+    },
+    "e2e": { "command": "bun run --cwd apps/conversation-ui test:e2e" },
+    "lint": { "command": "bunx biome check apps/conversation-ui" },
+    "typecheck": { "command": "bunx tsc -p apps/conversation-ui/tsconfig.json --noEmit" },
+    "format-check": { "command": "bunx biome format apps/conversation-ui" }
+  }
+}

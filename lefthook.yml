@@ -1,0 +1,7 @@
+pre-push:
+  parallel: false
+  commands:
+    gate:
+      run: just gate
+    llmlint-config:
+      run: command -v llmlint >/dev/null 2>&1 && just lint-llm-validate || true

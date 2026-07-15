@@ -1,0 +1,18 @@
+{
+  "name": "oneharness-bridge",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "packages/oneharness-bridge/src",
+  "tags": ["scope:local", "type:sidecar"],
+  "implicitDependencies": ["ipc-contract"],
+  "targets": {
+    "build": {
+      "command": "bun build packages/oneharness-bridge/src/cli.ts --target=bun --outdir=packages/oneharness-bridge/dist",
+      "outputs": ["{projectRoot}/dist"]
+    },
+    "test": { "command": "bun test packages/oneharness-bridge --coverage" },
+    "lint": { "command": "bunx biome check packages/oneharness-bridge" },
+    "typecheck": { "command": "bunx tsc -p packages/oneharness-bridge/tsconfig.json" },
+    "format-check": { "command": "bunx biome format packages/oneharness-bridge" }
+  }
+}

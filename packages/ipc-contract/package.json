@@ -1,0 +1,22 @@
+{
+  "name": "@oneharness-ui/ipc-contract",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "bun test --coverage src test",
+    "typecheck": "tsc -p tsconfig.json",
+    "lint": "biome check src test package.json tsconfig.json project.json",
+    "format:check": "biome format src test package.json tsconfig.json project.json"
+  },
+  "dependencies": {
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "typescript": "5.9.3"
+  }
+}

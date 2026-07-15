@@ -1,0 +1,89 @@
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
+import { OneHarness } from "@oneharness/sdk";
+import { startServer } from "../src/server.ts";
+
+const repository = resolve(import.meta.dir, "../../..");
+const historyDir = resolve(repository, ".cache/e2e-history");
+const provider = resolve(
+  repository,
+  `.cache/upstream-target/debug/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
+);
+const executable = resolve(
+  repository,
+  `.cache/upstream-target/debug/oneharness${process.platform === "win32" ? ".exe" : ""}`,
+);
+
+await rm(historyDir, { force: true, recursive: true });
+await mkdir(historyDir, { recursive: true });
+const sdk = new OneHarness({ executable });
+
+async function seed({
+  exit = 0,
+  name,
+  prompt,
+  stderr = "",
+  stdout,
+}: {
+  exit?: number;
+  name: string;
+  prompt: string;
+  stderr?: string;
+  stdout: string;
+}) {
+  return await sdk.run({
+    bins: { "claude-code": provider },
+    env: { MOCK_EXIT: String(exit), MOCK_STDERR: stderr, MOCK_STDOUT: stdout },
+    events: true,
+    harnesses: ["claude-code"],
+    history: true,
+    historyDir,
+    historyName: name,
+    mode: "bypass",
+    prompt,
+  });
+}
+
+const tools = await seed({
+  name: "tool-session",
+  prompt: "Inspect the tool boundary",
+  stdout: [
+    '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"pwd"}}]}}',
+    '{"type":"result","result":"Tool inspection complete","session_id":"e2e-native-tool","usage":{"input_tokens":0,"output_tokens":5}}',
+  ].join("\n"),
+});
+if (!tools.history_file) throw new Error("tool fixture did not write history");
+const toolRecord = JSON.parse(await readFile(tools.history_file, "utf8")) as Record<
+  string,
+  unknown
+>;
+toolRecord.reasoning = "I checked the command boundary first.";
+await writeFile(tools.history_file, `${JSON.stringify(toolRecord)}\n`);
+
+await seed({
+  name: "plain-session",
+  prompt: "Answer without reasoning",
+  stdout: '{"result":"A concise answer","session_id":"e2e-native-plain"}',
+});
+await seed({
+  name: "ineligible-session",
+  prompt: "This provider omitted its session handle",
+  stdout: '{"result":"No continuation handle"}',
+});
+await seed({
+  exit: 1,
+  name: "failed-session",
+  prompt: "The provider will fail",
+  stderr: "rate limit exceeded",
+  stdout: '{"result":"","session_id":"e2e-native-failure"}',
+});
+
+process.env.ONEHARNESS_UI_HISTORY_DIR = historyDir;
+process.env.ONEHARNESS_BIN = executable;
+process.env.ONEHARNESS_UI_PROVIDER_BIN = provider;
+process.env.ONEHARNESS_UI_PROVIDER_HARNESS = "claude-code";
+process.env.MOCK_EXIT = "0";
+process.env.MOCK_STDERR = "";
+process.env.MOCK_STDOUT =
+  '{"result":"Continued from the exact desktop session","session_id":"e2e-native-continued"}';
+startServer(4317);

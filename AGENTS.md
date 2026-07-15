@@ -35,6 +35,7 @@ with `just setup-llmlint`.
 
 - Dependency direction is shared → features → app; features do not import one
   another. Nx project tags and the TypeScript linter enforce the graph.
+- TypeScript stays at 5.9 until Next/Nx support the package-layout changes in 7.
 - Never copy, generate, or maintain oneharness contract types here. Import SDK
   types and validators from the reproducibly pinned `@oneharness/sdk` source.
 - Treat URL state, IPC, sidecar IO, executable/config discovery, CLI output,

@@ -1,0 +1,50 @@
+#!/usr/bin/env bun
+import { bridgeResponseSchema } from "@oneharness-ui/ipc-contract";
+import { readEnvironment } from "./environment.ts";
+import { startServer } from "./server.ts";
+import { BridgeService } from "./service.ts";
+
+const MAX_REQUEST_BYTES = 64 * 1024;
+
+async function readRequestLine(): Promise<string> {
+  const reader = Bun.stdin.stream().getReader();
+  const decoder = new TextDecoder();
+  let value = "";
+  while (true) {
+    const next = await reader.read();
+    if (next.done) return value;
+    value += decoder.decode(next.value, { stream: true });
+    if (Buffer.byteLength(value) > MAX_REQUEST_BYTES) throw new Error("IPC request is too large");
+    const newline = value.indexOf("\n");
+    if (newline >= 0) return value.slice(0, newline);
+  }
+}
+
+async function main(): Promise<void> {
+  if (process.argv[2] === "serve") {
+    const port = Number(process.env.ONEHARNESS_UI_BRIDGE_PORT ?? "4317");
+    if (!Number.isSafeInteger(port) || port < 1024 || port > 65_535) {
+      throw new Error("ONEHARNESS_UI_BRIDGE_PORT must be an unprivileged TCP port");
+    }
+    startServer(port);
+    return;
+  }
+
+  const input = await readRequestLine();
+  const service = new BridgeService(readEnvironment());
+  let value: unknown;
+  try {
+    value = JSON.parse(input);
+  } catch {
+    value = undefined;
+  }
+  process.stdout.write(
+    `${JSON.stringify(bridgeResponseSchema.parse(await service.handle(value)))}\n`,
+  );
+}
+
+await main().catch((error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(`oneharness-ui-bridge: ${message}\n`);
+  process.exitCode = 1;
+});

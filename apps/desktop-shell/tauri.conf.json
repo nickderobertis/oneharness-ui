@@ -1,0 +1,45 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "oneharness",
+  "version": "0.1.0",
+  "identifier": "com.nickderobertis.oneharness",
+  "build": {
+    "beforeBuildCommand": "bun ../../scripts/build-sidecar.mjs && bun run --cwd ../conversation-ui build",
+    "beforeDevCommand": "bun ../../scripts/build-sidecar.mjs && bun run --cwd ../conversation-ui dev",
+    "devUrl": "http://localhost:3000",
+    "frontendDist": "../conversation-ui/out"
+  },
+  "app": {
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' ipc: http://ipc.localhost; img-src 'self' asset: http://asset.localhost; style-src 'self' 'unsafe-inline'"
+    },
+    "windows": [
+      {
+        "label": "main",
+        "center": true,
+        "height": 820,
+        "minHeight": 560,
+        "minWidth": 760,
+        "resizable": true,
+        "title": "oneharness",
+        "width": 1240
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "category": "DeveloperTool",
+    "copyright": "Copyright © 2026 Nick DeRobertis",
+    "externalBin": ["binaries/oneharness-ui-bridge", "binaries/oneharness"],
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "longDescription": "A local desktop reader and continuation client for oneharness sessions.",
+    "shortDescription": "Read and continue oneharness sessions",
+    "targets": "all"
+  }
+}

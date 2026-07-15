@@ -1,0 +1,14 @@
+{
+  "name": "ipc-contract",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/ipc-contract/src",
+  "tags": ["scope:shared", "type:contract"],
+  "targets": {
+    "build": { "command": "bunx tsc -p packages/ipc-contract/tsconfig.json" },
+    "test": { "command": "bun test packages/ipc-contract --coverage" },
+    "lint": { "command": "bunx biome check packages/ipc-contract" },
+    "typecheck": { "command": "bunx tsc -p packages/ipc-contract/tsconfig.json" },
+    "format-check": { "command": "bunx biome format packages/ipc-contract" }
+  }
+}

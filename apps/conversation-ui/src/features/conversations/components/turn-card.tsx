@@ -1,0 +1,97 @@
+import type { Conversation } from "@oneharness-ui/ipc-contract";
+
+type Turn = Conversation["turns"][number];
+
+function StructuredDetail({ value }: { value: unknown }) {
+  return <pre className="structured-detail">{JSON.stringify(value, null, 2)}</pre>;
+}
+
+function Usage({ usage }: { usage: Turn["usage"] }) {
+  const entries = [
+    ["Input", "inputTokens", usage.inputTokens],
+    ["Output", "outputTokens", usage.outputTokens],
+    ["Cache read", "cacheReadTokens", usage.cacheReadTokens],
+    ["Cache write", "cacheWriteTokens", usage.cacheWriteTokens],
+    ["Cost", "costUsd", usage.costUsd],
+  ] as const;
+  const present = entries.filter(([, key]) => Object.hasOwn(usage, key));
+  if (present.length === 0) return null;
+  return (
+    <dl aria-label="Usage" className="usage">
+      {present.map(([label, key, value]) => (
+        <div key={key}>
+          <dt>{label}</dt>
+          <dd>
+            {value === null
+              ? "Not reported"
+              : key === "costUsd" && typeof value === "number"
+                ? `$${value.toFixed(4)}`
+                : (value ?? "Not reported")}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+export function TurnCard({ turn }: { turn: Turn }) {
+  const hasUnknown = Object.keys(turn.unknown).length > 0;
+  return (
+    <article aria-label={`Turn from ${turn.harness}`} className="turn">
+      <div className="message message--user">
+        <div className="message__label">You</div>
+        <p>{turn.user}</p>
+      </div>
+      <div className="assistant-row">
+        <div aria-hidden="true" className="assistant-avatar">
+          OH
+        </div>
+        <div className="assistant-content">
+          <div className="message__label">
+            <span>{turn.harness}</span>
+            {turn.model ? <span className="model">{turn.model}</span> : null}
+          </div>
+          {turn.reasoning ? (
+            <details className="disclosure reasoning">
+              <summary>Reasoning</summary>
+              <p>{turn.reasoning}</p>
+            </details>
+          ) : null}
+          {turn.tools.length > 0 ? (
+            <section aria-label="Tool calls" className="tool-list">
+              {turn.tools.map((tool) => (
+                <details className="disclosure tool" key={`${tool.index}-${tool.kind}`}>
+                  <summary>
+                    <span className="tool__icon" aria-hidden="true">
+                      ›_
+                    </span>
+                    <span>{tool.name ?? tool.kind}</span>
+                    <span className="tool__kind">{tool.kind}</span>
+                  </summary>
+                  <StructuredDetail
+                    value={{ input: tool.input ?? null, output: tool.output ?? null }}
+                  />
+                </details>
+              ))}
+            </section>
+          ) : null}
+          {turn.assistant ? (
+            <div className="assistant-text">
+              <p>{turn.assistant}</p>
+            </div>
+          ) : (
+            <p className="muted">No assistant text was captured for this run.</p>
+          )}
+          {turn.failureKind ? <p className="failure-note">Failure: {turn.failureKind}</p> : null}
+          <Usage usage={turn.usage} />
+          {hasUnknown ? (
+            <details className="disclosure unknown">
+              <summary>Additional upstream data</summary>
+              <StructuredDetail value={turn.unknown} />
+            </details>
+          ) : null}
+        </div>
+      </div>
+    </article>
+  );
+}

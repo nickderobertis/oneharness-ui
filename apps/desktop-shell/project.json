@@ -1,0 +1,26 @@
+{
+  "name": "desktop-shell",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/desktop-shell/src",
+  "tags": ["scope:desktop", "type:shell"],
+  "implicitDependencies": ["conversation-ui", "oneharness-bridge"],
+  "targets": {
+    "build": {
+      "command": "cargo check --locked --manifest-path apps/desktop-shell/Cargo.toml --all-targets"
+    },
+    "bundle": {
+      "command": "bunx tauri build --config apps/desktop-shell/tauri.conf.json"
+    },
+    "test": {
+      "command": "cargo llvm-cov --locked --workspace --all-features --fail-under-lines 95"
+    },
+    "lint": {
+      "command": "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings"
+    },
+    "typecheck": {
+      "command": "cargo check --locked --workspace --all-targets --all-features"
+    },
+    "format-check": { "command": "cargo fmt --all -- --check" }
+  }
+}
