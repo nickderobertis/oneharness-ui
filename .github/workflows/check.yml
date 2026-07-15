@@ -50,6 +50,7 @@ jobs:
         run: |
           git fetch --no-tags origin "$GITHUB_BASE_REF"
           base="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
+          # llmlint: ignore[ci_runs_the_real_gate] PRs must remain affected-only; full-check runs just check on every main push.
           NX_BASE="$base" NX_HEAD=HEAD just check-affected
 
   full-check:
