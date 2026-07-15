@@ -2,6 +2,7 @@
 set -uo pipefail
 
 readonly BIN_DIR="$HOME/.local/bin"
+readonly ORIGINAL_PATH="$PATH"
 log() { printf 'session-setup: %s\n' "$*" >&2; }
 status=0
 
@@ -46,9 +47,9 @@ done
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
   safe_environment_file "$CLAUDE_ENV_FILE" \
     || { log "refusing CLAUDE_ENV_FILE outside the local temporary directory; unset it or point it to a file under ${TMPDIR:-/tmp}"; exit 1; }
-  case ":${PATH}:" in
+  case ":${ORIGINAL_PATH}:" in
     *":${BIN_DIR}:"*) ;;
-    *) printf 'export PATH=%q\n' "${BIN_DIR}:${PATH}" >>"$CLAUDE_ENV_FILE" ;;
+    *) printf 'export PATH=%q\n' "${BIN_DIR}:${ORIGINAL_PATH}" >>"$CLAUDE_ENV_FILE" ;;
   esac
 fi
 
