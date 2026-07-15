@@ -4,8 +4,8 @@
   "version": "0.1.0",
   "identifier": "com.nickderobertis.oneharness",
   "build": {
-    "beforeBuildCommand": "bun ../../scripts/build-sidecar.mjs && bun run --cwd ../conversation-ui build",
-    "beforeDevCommand": "bun ../../scripts/build-sidecar.mjs && bun run --cwd ../conversation-ui dev",
+    "beforeBuildCommand": "bun scripts/build-sidecar.mjs && bun run --cwd apps/conversation-ui build",
+    "beforeDevCommand": "bun scripts/build-sidecar.mjs && bun run --cwd apps/conversation-ui dev",
     "devUrl": "http://localhost:3000",
     "frontendDist": "../conversation-ui/out"
   },
