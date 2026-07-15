@@ -6,9 +6,9 @@ readonly ROOT
 
 if [ "${OS:-}" = "Windows_NT" ]; then
   "$ROOT/scripts/run-quiet.sh" \
-    "Windows Rust tests" \
-    "Fix the emitted test diagnostic and rerun just test." \
-    -- cargo test --locked --workspace --all-features
+    "Windows Rust test compilation" \
+    "Fix the emitted test compilation diagnostic and rerun just test." \
+    -- cargo test --locked --workspace --all-features --no-run
   exit 0
 fi
 

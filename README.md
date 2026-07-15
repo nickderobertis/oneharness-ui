@@ -116,12 +116,12 @@ Rust coverage excludes only `src/main.rs`, the two-line native GUI event-loop
 entrypoint that cannot return under a headless coverage runner; its runtime
 builder and every other authored Rust line remain measured.
 
-On Windows, Rust tests run normally but without `cargo llvm-cov`
-instrumentation: the hosted runner's instrumented Tauri/WebView2 test binary
-fails in the Windows loader before the test harness starts
-(`STATUS_ENTRYPOINT_NOT_FOUND`). Linux and macOS execute the same tests with
-the 95% Rust coverage threshold, while Windows still compiles and executes the
-unmodified test binary.
+On Windows, the gate compiles every Rust test target with `cargo test --no-run`:
+the hosted runner's Tauri/WebView2 test binary fails in the Windows loader
+before the test harness starts (`STATUS_ENTRYPOINT_NOT_FOUND`), even without
+coverage instrumentation. Linux and macOS execute the same tests with the 95%
+Rust coverage threshold; Windows still runs Clippy over all targets and builds
+the production installer, so only test-binary execution is excluded there.
 
 Conventional commits drive semantic-release on `main`. It updates every
 manifest and changelog and creates `vX.Y.Z`; the tag builds native Tauri
