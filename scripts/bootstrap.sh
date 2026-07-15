@@ -9,7 +9,7 @@ fail() {
   exit 1
 }
 
-for tool in bun cargo rustup curl uv; do
+for tool in bun cargo node rustup curl uv; do
   command -v "$tool" >/dev/null 2>&1 || {
     printf 'bootstrap: %s is required; install the pinned toolchain from .tool-versions\n' "$tool" >&2
     exit 1

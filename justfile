@@ -73,10 +73,16 @@ set-version:
     @./scripts/run-quiet.sh "version manifests" "Set RELEASE_VERSION to a valid semver, fix any reported manifest error, and rerun 'just set-version'." -- bun scripts/set-version.mjs "${RELEASE_VERSION:-}"
 
 publish-release:
-    @./scripts/run-quiet.sh "semantic release" "Verify RELEASE_TOKEN, commit history, and GitHub access, then rerun 'just publish-release'." -- bunx semantic-release
+    @./scripts/run-quiet.sh "semantic release" "Verify the protected-main history and built-in GitHub token permissions, then rerun 'just publish-release'." -- bunx semantic-release
+
+seed-release:
+    @./scripts/run-quiet.sh "initial release seed" "Verify GITHUB_SHA and built-in GitHub token permissions, then rerun 'just seed-release'." -- ./scripts/seed-release.sh
+
+dispatch-release:
+    @./scripts/run-quiet.sh "release dispatch" "Verify RELEASE_TAG and built-in GitHub token permissions, then rerun 'just dispatch-release'." -- ./scripts/dispatch-release.sh
 
 upload-release:
-    @./scripts/run-quiet.sh "native release upload" "Verify GH_TOKEN and the validated release environment, then rerun 'just upload-release'." -- ./scripts/upload-release.sh
+    @./scripts/run-quiet.sh "native release upload" "Verify the built-in GH_TOKEN and validated release environment, then rerun 'just upload-release'." -- ./scripts/upload-release.sh
 
 supply-chain:
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Rust dependency policy" "Resolve the reported license, advisory, source, or ban finding, then rerun 'just supply-chain'." -- cargo deny check --hide-inclusion-graph

@@ -57,9 +57,10 @@ with `just setup-llmlint`.
 - Squash-only PRs land on protected `main`; auto-merge, conversation resolution,
   linear history, and every `check`, `supply-chain`, `commitlint`, and `llmlint`
   context are required. Admin bypass is break-glass; merged heads auto-delete.
-- semantic-release computes the next version, updates every manifest and the
-  changelog, and creates `vX.Y.Z`; the tag independently builds and checksums
-  Tauri artifacts. The release token is a PAT/App secret so tag workflows fire.
+- semantic-release computes the next version and creates `vX.Y.Z` on protected
+  `main`; its built-in token dispatches the separate artifact workflow because
+  token-created tags do not emit workflows. That workflow verifies the release
+  and tag ancestry, versions its checkout, then builds and checksums artifacts.
 
 ## Output and handoff
 
