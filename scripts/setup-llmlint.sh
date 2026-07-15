@@ -39,8 +39,14 @@ if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
   esac
 fi
 if command -v llmlint >/dev/null 2>&1; then
-  llmlint doctor >/dev/null 2>&1 \
-    || log "llmlint doctor failed; authenticate the configured harness, then run llmlint doctor"
+  doctor_log="$(mktemp "${TMPDIR:-/tmp}/oneharness-ui-llmlint-doctor.XXXXXX")"
+  if ! llmlint doctor >"$doctor_log" 2>&1; then
+    cat "$doctor_log" >&2
+    rm -f "$doctor_log"
+    log "llmlint doctor failed; authenticate the configured harness, then run llmlint doctor"
+    exit 1
+  fi
+  rm -f "$doctor_log"
 else
   log "llmlint is unavailable after installation; add $BIN_DIR to PATH, then rerun just setup-llmlint"
   exit 1

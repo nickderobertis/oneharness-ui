@@ -3,6 +3,7 @@ set -uo pipefail
 
 readonly BIN_DIR="$HOME/.local/bin"
 log() { printf 'session-setup: %s\n' "$*" >&2; }
+status=0
 
 safe_environment_file() {
   local candidate="$1"
@@ -26,16 +27,20 @@ if ! command -v just >/dev/null 2>&1; then
     if ! uv tool install --upgrade "rust-just>=1.42.4" >"$provision_log" 2>&1; then
       cat "$provision_log" >&2
       log "could not install just; verify uv can reach its package index, then run just session-setup"
+      status=1
     fi
     rm -f "$provision_log"
   else
     log "uv is required to provision just; install the pinned uv version from .tool-versions, then rerun this hook"
+    status=1
   fi
 fi
 
 for tool in bun cargo uv; do
-  command -v "$tool" >/dev/null 2>&1 \
-    || log "$tool is missing; install its pinned version from .tool-versions, then run just session-setup"
+  if ! command -v "$tool" >/dev/null 2>&1; then
+    log "$tool is missing; install its pinned version from .tool-versions, then run just session-setup"
+    status=1
+  fi
 done
 
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
@@ -48,7 +53,9 @@ if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
 fi
 
 if [ -x "$(dirname "$0")/setup-llmlint.sh" ]; then
-  "$(dirname "$0")/setup-llmlint.sh" \
-    || log "llmlint setup reported an issue; run just setup-llmlint and follow its remediation"
+  if ! "$(dirname "$0")/setup-llmlint.sh"; then
+    log "llmlint setup reported an issue; run just setup-llmlint and follow its remediation"
+    status=1
+  fi
 fi
-exit 0
+exit "$status"
