@@ -138,8 +138,8 @@ coverage instrumentation. Linux and macOS execute the same tests with the 95%
 Rust coverage threshold; Windows still runs Clippy over all targets and builds
 the production installer, so only test-binary execution is excluded there.
 
-Conventional commits drive semantic-release on `main`. It creates `vX.Y.Z` and
-automatically dispatches a separate release workflow with the repository's
+Conventional commits drive semantic-release on `main`. It creates `vX.Y.Z`, and
+the version job reconciles a separate release workflow with the repository's
 built-in token. That workflow accepts only a published semver release whose tag
 is reachable from `main`, materializes the version in its build checkout, and
 builds native Tauri installers and checksums on Linux, macOS, and Windows. There

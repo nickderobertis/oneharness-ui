@@ -59,7 +59,8 @@ with `just setup-llmlint`.
   linear history, and every `check`, `supply-chain`, `commitlint`, and `llmlint`
   context are required. Admin bypass is break-glass; merged heads auto-delete.
 - semantic-release computes the next version and creates `vX.Y.Z` on protected
-  `main`; its built-in token dispatches the separate artifact workflow because
+  `main`; the version job reconciles the separate artifact workflow with its
+  built-in token because
   token-created tags do not emit workflows. That workflow verifies the release
   and tag ancestry, versions its checkout, then builds and checksums artifacts.
 

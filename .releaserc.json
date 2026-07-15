@@ -19,10 +19,7 @@
     ["@semantic-release/release-notes-generator", { "preset": "conventionalcommits" }],
     [
       "@semantic-release/exec",
-      {
-        "prepareCmd": "RELEASE_VERSION='${nextRelease.version}' just set-version",
-        "successCmd": "RELEASE_TAG='v${nextRelease.version}' just dispatch-release"
-      }
+      { "prepareCmd": "RELEASE_VERSION='${nextRelease.version}' just set-version" }
     ],
     "@semantic-release/github"
   ]

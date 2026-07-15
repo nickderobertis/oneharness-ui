@@ -45,3 +45,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
         run: just publish-release
+      - name: Reconcile the latest native artifact run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: just dispatch-release
