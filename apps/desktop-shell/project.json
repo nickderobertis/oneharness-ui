@@ -13,7 +13,7 @@
       "command": "bunx tauri build --config apps/desktop-shell/tauri.conf.json"
     },
     "test": {
-      "command": "./scripts/test-rust.sh"
+      "command": "bash scripts/test-rust.sh"
     },
     "lint": {
       "command": "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings"
