@@ -18,12 +18,15 @@
     "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "commands": ["bunx biome check --error-on-warnings .", "node scripts/check-boundaries.mjs"],
+        "commands": [
+          "bunx biome check --error-on-warnings apps/conversation-ui",
+          "node scripts/check-boundaries.mjs"
+        ],
         "parallel": false
       }
     },
-    "format": { "command": "bunx biome format --write ." },
+    "format": { "command": "bunx biome format --write apps/conversation-ui" },
     "typecheck": { "command": "bunx tsc -p apps/conversation-ui/tsconfig.json --noEmit" },
-    "format-check": { "command": "bunx biome format ." }
+    "format-check": { "command": "bunx biome format apps/conversation-ui" }
   }
 }

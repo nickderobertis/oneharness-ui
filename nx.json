@@ -45,6 +45,10 @@
     {
       "sourceTag": "scope:shared",
       "onlyDependOnLibsWithTags": ["scope:shared"]
+    },
+    {
+      "sourceTag": "scope:tooling",
+      "onlyDependOnLibsWithTags": ["scope:tooling"]
     }
   ]
 }

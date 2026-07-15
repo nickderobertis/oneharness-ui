@@ -37,7 +37,11 @@ async function projectFiles(directory) {
 }
 
 const projects = new Map();
-for (const path of [...(await projectFiles("apps")), ...(await projectFiles("packages"))]) {
+for (const path of [
+  join(root, "project.json"),
+  ...(await projectFiles("apps")),
+  ...(await projectFiles("packages")),
+]) {
   const project = projectSchema.parse(JSON.parse(await readFile(path, "utf8")));
   projects.set(project.name, project);
 }
