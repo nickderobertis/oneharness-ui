@@ -32,7 +32,7 @@ rm -f "$provision_log"
 
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
   safe_environment_file "$CLAUDE_ENV_FILE" \
-    || { log "refusing CLAUDE_ENV_FILE outside the local temporary directory"; exit 1; }
+    || { log "refusing CLAUDE_ENV_FILE outside the local temporary directory; unset it or point it to a file under ${TMPDIR:-/tmp}"; exit 1; }
   case ":${PATH}:" in
     *":${BIN_DIR}:"*) ;;
     *) printf 'export PATH=%q\n' "${BIN_DIR}:${PATH}" >>"$CLAUDE_ENV_FILE" ;;

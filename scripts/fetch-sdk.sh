@@ -39,8 +39,10 @@ if [ ! -d "$CACHE" ]; then
   tmp="$ROOT/.cache/oneharness-extract-$$"
   trap 'rm -rf "$tmp"' EXIT
   mkdir -p "$tmp"
-  tar -xzf "$ARCHIVE" -C "$tmp"
-  mv "$tmp/oneharness-$SDK_COMMIT" "$CACHE"
+  tar -xzf "$ARCHIVE" -C "$tmp" \
+    || fail "could not extract the pinned source archive; remove $ARCHIVE and rerun just bootstrap"
+  mv "$tmp/oneharness-$SDK_COMMIT" "$CACHE" \
+    || fail "could not install the extracted source cache; remove $tmp and $CACHE, then rerun just bootstrap"
 fi
 
 if [ ! -f "$SDK_PACKAGE/dist/index.js" ]; then
