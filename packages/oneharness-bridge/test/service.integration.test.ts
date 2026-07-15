@@ -16,6 +16,7 @@ const executable = resolve(
   repository,
   `.cache/upstream-target/debug/oneharness${process.platform === "win32" ? ".exe" : ""}`,
 );
+const TEST_AUTHORIZATION = "oneharness-ui-integration-authorization";
 
 let historyDir = "";
 const originalMockEnvironment = new Map<string, string | undefined>();
@@ -58,15 +59,26 @@ async function seed(
 }
 
 function service(): BridgeService {
-  return new BridgeService({
-    executable,
-    historyDir,
-    providerBin: provider,
-    providerHarness: "claude-code",
-  });
+  return new BridgeService(
+    {
+      executable,
+      historyDir,
+      providerBin: provider,
+      providerHarness: "claude-code",
+    },
+    TEST_AUTHORIZATION,
+  );
 }
 
 describe("BridgeService across SDK, CLI, provider, and history boundaries", () => {
+  test("rejects callers without the local authorization capability", async () => {
+    const result = await service().handle({ kind: "list" }, "incorrect-authorization-value-0000");
+    expect(result).toEqual({
+      error: { code: "UNAUTHORIZED", message: "Local bridge authorization failed." },
+      ok: false,
+    });
+  });
+
   test("discovers, selects, and safely preserves optional detail", async () => {
     const report = await seed(
       "tool-session",
@@ -82,11 +94,11 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     record.future_payload = { preserved: true };
     await writeFile(historyFile, `${JSON.stringify(record)}\n`);
 
-    const listed = await service().handle({ kind: "list" });
+    const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
     expect(listed.ok && listed.data.kind === "list" && listed.data.conversations).toHaveLength(1);
     const sessionId =
       listed.ok && listed.data.kind === "list" ? listed.data.conversations[0]?.id : "";
-    const selected = await service().handle({ kind: "get", sessionId });
+    const selected = await service().handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
     expect(
       selected.ok && selected.data.kind === "get" && selected.data.conversation.turns[0],
     ).toMatchObject({
@@ -107,14 +119,17 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     await seed("continue-me", '{"result":"First answer","session_id":"native-continue-1"}');
     process.env.MOCK_STDOUT = '{"result":"Continued answer","session_id":"native-continue-1"}';
     process.env.MOCK_EXIT = "0";
-    const listed = await service().handle({ kind: "list" });
+    const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
     const firstId =
       listed.ok && listed.data.kind === "list" ? listed.data.conversations[0]?.id : "";
-    const continued = await service().handle({
-      kind: "continue",
-      message: "Now explain the smallest fix",
-      sessionId: firstId,
-    });
+    const continued = await service().handle(
+      {
+        kind: "continue",
+        message: "Now explain the smallest fix",
+        sessionId: firstId,
+      },
+      TEST_AUTHORIZATION,
+    );
     if (!continued.ok) throw new Error(JSON.stringify(continued.error));
     expect(continued.ok && continued.data.kind === "continue").toBe(true);
     if (!continued.ok || continued.data.kind !== "continue") return;
@@ -127,30 +142,36 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
 
   test("rejects an ineligible conversation before provider execution", async () => {
     await seed("no-native-session", '{"result":"No resumable handle"}');
-    const listed = await service().handle({ kind: "list" });
+    const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
     const id = listed.ok && listed.data.kind === "list" ? listed.data.conversations[0]?.id : "";
-    const result = await service().handle({
-      kind: "continue",
-      message: "Try anyway",
-      sessionId: id,
-    });
+    const result = await service().handle(
+      {
+        kind: "continue",
+        message: "Try anyway",
+        sessionId: id,
+      },
+      TEST_AUTHORIZATION,
+    );
     expect(result).toMatchObject({ ok: false, error: { code: "ONEHARNESS_ERROR" } });
   });
 
   test("records provider failure and supports a subsequent recovered continuation", async () => {
     await seed("recoverable", '{"result":"Ready","session_id":"native-recovery"}');
-    const listed = await service().handle({ kind: "list" });
+    const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
     const initial =
       listed.ok && listed.data.kind === "list" ? listed.data.conversations[0]?.id : "";
 
     process.env.MOCK_EXIT = "1";
     process.env.MOCK_STDERR = "rate limit exceeded";
     process.env.MOCK_STDOUT = '{"result":"","session_id":"native-recovery"}';
-    const failed = await service().handle({
-      kind: "continue",
-      message: "First retry",
-      sessionId: initial,
-    });
+    const failed = await service().handle(
+      {
+        kind: "continue",
+        message: "First retry",
+        sessionId: initial,
+      },
+      TEST_AUTHORIZATION,
+    );
     if (!failed.ok) throw new Error(JSON.stringify(failed.error));
     expect(failed.ok && failed.data.kind === "continue" && failed.data.conversation.state).toBe(
       "failed",
@@ -160,11 +181,14 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     process.env.MOCK_EXIT = "0";
     process.env.MOCK_STDERR = "";
     process.env.MOCK_STDOUT = '{"result":"Recovered","session_id":"native-recovery"}';
-    const recovered = await service().handle({
-      kind: "continue",
-      message: "Retry after recovery",
-      sessionId: failed.data.selectedSessionId,
-    });
+    const recovered = await service().handle(
+      {
+        kind: "continue",
+        message: "Retry after recovery",
+        sessionId: failed.data.selectedSessionId,
+      },
+      TEST_AUTHORIZATION,
+    );
     expect(
       recovered.ok && recovered.data.kind === "continue" && recovered.data.conversation,
     ).toMatchObject({
@@ -175,16 +199,19 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
 
   test("surfaces an explicitly configured missing config path", async () => {
     await seed("config-check", '{"result":"Ready","session_id":"native-config"}');
-    const listed = await service().handle({ kind: "list" });
+    const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
     const id = listed.ok && listed.data.kind === "list" ? listed.data.conversations[0]?.id : "";
     const previousConfig = process.env.ONEHARNESS_CONFIG;
     const missingConfigPath = resolve(historyDir, "missing-oneharness.toml");
     process.env.ONEHARNESS_CONFIG = missingConfigPath;
-    const missingConfig = await service().handle({
-      kind: "continue",
-      message: "Continue through the configured harness",
-      sessionId: id,
-    });
+    const missingConfig = await service().handle(
+      {
+        kind: "continue",
+        message: "Continue through the configured harness",
+        sessionId: id,
+      },
+      TEST_AUTHORIZATION,
+    );
     if (previousConfig === undefined) delete process.env.ONEHARNESS_CONFIG;
     else process.env.ONEHARNESS_CONFIG = previousConfig;
     expect(missingConfig).toMatchObject({ ok: false, error: { code: "CONFIG_ERROR" } });
@@ -198,21 +225,27 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       resolve(malformedDirectory, "broken-session.jsonl"),
       '{"session":"broken-session","name":"Broken","timestamp":"2026-07-15T00:00:00Z"}\n',
     );
-    const malformed = await service().handle({ kind: "list" });
+    const malformed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
     expect(malformed).toMatchObject({ ok: false, error: { code: "MALFORMED_HISTORY" } });
 
-    const missingExecutable = await new BridgeService({
-      executable: resolve(historyDir, "missing-oneharness"),
-      historyDir,
-    }).handle({ kind: "list" });
+    const missingExecutable = await new BridgeService(
+      {
+        executable: resolve(historyDir, "missing-oneharness"),
+        historyDir,
+      },
+      TEST_AUTHORIZATION,
+    ).handle({ kind: "list" }, TEST_AUTHORIZATION);
     expect(missingExecutable).toMatchObject({ ok: false, error: { code: "EXECUTABLE_NOT_FOUND" } });
 
     const fileInsteadOfDirectory = resolve(historyDir, "not-a-directory");
     await writeFile(fileInsteadOfDirectory, "not a history directory");
-    const storage = await new BridgeService({
-      executable,
-      historyDir: fileInsteadOfDirectory,
-    }).handle({ kind: "list" });
+    const storage = await new BridgeService(
+      {
+        executable,
+        historyDir: fileInsteadOfDirectory,
+      },
+      TEST_AUTHORIZATION,
+    ).handle({ kind: "list" }, TEST_AUTHORIZATION);
     expect(storage.ok).toBe(false);
     if (!storage.ok) expect(storage.error.detail).toContain("not-a-directory");
   });

@@ -4,6 +4,7 @@ import {
   bridgeRequestSchema,
   bridgeResponseSchema,
 } from "@oneharness-ui/ipc-contract";
+import { z } from "zod";
 
 declare global {
   interface Window {
@@ -11,7 +12,35 @@ declare global {
   }
 }
 
-const HTTP_BRIDGE = process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_URL ?? "http://127.0.0.1:4317";
+const httpConfigurationSchema = z.object({
+  authorization: z.string().min(32).max(256),
+  url: z
+    .string()
+    .url()
+    .transform((value, context) => {
+      const url = new URL(value);
+      if (
+        url.protocol !== "http:" ||
+        (url.hostname !== "127.0.0.1" && url.hostname !== "localhost") ||
+        url.username ||
+        url.password
+      ) {
+        context.addIssue({
+          code: "custom",
+          message: "Bridge URL must be an unauthenticated loopback URL",
+        });
+        return z.NEVER;
+      }
+      return url.origin;
+    }),
+});
+
+function httpConfiguration(): z.infer<typeof httpConfigurationSchema> {
+  return httpConfigurationSchema.parse({
+    authorization: process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_TOKEN,
+    url: process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_URL,
+  });
+}
 
 async function invokeTauri(request: BridgeRequest): Promise<unknown> {
   const { Command } = await import("@tauri-apps/plugin-shell");
@@ -38,9 +67,13 @@ async function invokeTauri(request: BridgeRequest): Promise<unknown> {
 }
 
 async function invokeHttp(request: BridgeRequest): Promise<unknown> {
-  const response = await fetch(`${HTTP_BRIDGE}/invoke`, {
+  const configuration = httpConfiguration();
+  const response = await fetch(`${configuration.url}/invoke`, {
     body: JSON.stringify(request),
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      Authorization: `Bearer ${configuration.authorization}`,
+      "Content-Type": "application/json",
+    },
     method: "POST",
   });
   if (!response.ok) throw new Error(`Local bridge returned HTTP ${response.status}`);

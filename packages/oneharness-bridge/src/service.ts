@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { timingSafeEqual } from "node:crypto";
 import { createRequire } from "node:module";
 import { basename, extname } from "node:path";
 import { type HistoryRecord, OneHarness, type RunOptions } from "@oneharness/sdk";
@@ -15,6 +16,7 @@ import type { BridgeEnvironment } from "./environment.ts";
 
 const discoverySchema = z.array(z.object({ id: z.string().min(1).max(240) }).passthrough());
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
+export const authorizationSchema = z.string().min(32).max(256);
 const knownRecordKeys = new Set([
   "duration_ms",
   "events",
@@ -228,12 +230,27 @@ function publicError(error: unknown): BridgeResponse {
 
 export class BridgeService {
   readonly #client: OneHarness;
+  readonly #expectedAuthorization: Buffer;
 
-  constructor(readonly environment: BridgeEnvironment = {}) {
+  constructor(
+    readonly environment: BridgeEnvironment,
+    expectedAuthorization: string,
+  ) {
+    this.#expectedAuthorization = Buffer.from(authorizationSchema.parse(expectedAuthorization));
     this.#client = new OneHarness({
       env: { ONEHARNESS_RUN_MODE: "parallel" },
       ...(environment.executable ? { executable: environment.executable } : {}),
     });
+  }
+
+  isAuthorized(presentedAuthorization: unknown): presentedAuthorization is string {
+    const parsed = authorizationSchema.safeParse(presentedAuthorization);
+    if (!parsed.success) return false;
+    const presented = Buffer.from(parsed.data);
+    return (
+      presented.length === this.#expectedAuthorization.length &&
+      timingSafeEqual(presented, this.#expectedAuthorization)
+    );
   }
 
   async #history(session: string): Promise<HistoryRecord[]> {
@@ -283,7 +300,16 @@ export class BridgeService {
     return toConversation(await this.#history(nextId));
   }
 
-  async handle(input: unknown): Promise<BridgeResponse> {
+  async handle(input: unknown, presentedAuthorization: unknown): Promise<BridgeResponse> {
+    if (!this.isAuthorized(presentedAuthorization)) {
+      return bridgeResponseSchema.parse({
+        error: {
+          code: "UNAUTHORIZED",
+          message: "Local bridge authorization failed.",
+        },
+        ok: false,
+      });
+    }
     try {
       const request: BridgeRequest = bridgeRequestSchema.parse(input);
       const response: BridgeResponse = await (async () => {

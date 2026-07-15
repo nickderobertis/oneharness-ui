@@ -13,6 +13,7 @@ const executable = resolve(
   repository,
   `.cache/upstream-target/debug/oneharness${process.platform === "win32" ? ".exe" : ""}`,
 );
+const authorization = "oneharness-ui-e2e-authorization-token";
 
 await rm(historyDir, { force: true, recursive: true });
 await mkdir(historyDir, { recursive: true });
@@ -82,8 +83,9 @@ process.env.ONEHARNESS_UI_HISTORY_DIR = historyDir;
 process.env.ONEHARNESS_BIN = executable;
 process.env.ONEHARNESS_UI_PROVIDER_BIN = provider;
 process.env.ONEHARNESS_UI_PROVIDER_HARNESS = "claude-code";
+process.env.ONEHARNESS_UI_HTTP_TOKEN = authorization;
 process.env.MOCK_EXIT = "0";
 process.env.MOCK_STDERR = "";
 process.env.MOCK_STDOUT =
   '{"result":"Continued from the exact desktop session","session_id":"e2e-native-continued"}';
-startServer(4317);
+startServer(4317, authorization);

@@ -3,10 +3,12 @@ import { basename, dirname, join } from "node:path";
 import { z } from "zod";
 
 const optionalPath = z.string().trim().min(1).max(4096).optional();
+const optionalAuthorization = z.string().min(32).max(256).optional();
 
 const environmentSchema = z.object({
   ONEHARNESS_BIN: optionalPath,
   ONEHARNESS_UI_HISTORY_DIR: optionalPath,
+  ONEHARNESS_UI_HTTP_TOKEN: optionalAuthorization,
   ONEHARNESS_UI_PROVIDER_BIN: optionalPath,
   ONEHARNESS_UI_PROVIDER_HARNESS: z.string().trim().min(1).max(100).optional(),
 });
@@ -14,6 +16,7 @@ const environmentSchema = z.object({
 export type BridgeEnvironment = {
   executable?: string;
   historyDir?: string;
+  httpAuthorization?: string;
   providerBin?: string;
   providerHarness?: string;
 };
@@ -37,6 +40,9 @@ export function readEnvironment(
   return {
     ...(executable ? { executable } : {}),
     ...(parsed.ONEHARNESS_UI_HISTORY_DIR ? { historyDir: parsed.ONEHARNESS_UI_HISTORY_DIR } : {}),
+    ...(parsed.ONEHARNESS_UI_HTTP_TOKEN
+      ? { httpAuthorization: parsed.ONEHARNESS_UI_HTTP_TOKEN }
+      : {}),
     ...(parsed.ONEHARNESS_UI_PROVIDER_BIN
       ? { providerBin: parsed.ONEHARNESS_UI_PROVIDER_BIN }
       : {}),

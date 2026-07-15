@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+import { randomUUID } from "node:crypto";
 import { bridgeResponseSchema } from "@oneharness-ui/ipc-contract";
 import { readEnvironment } from "./environment.ts";
 import { startServer } from "./server.ts";
@@ -22,16 +23,21 @@ async function readRequestLine(): Promise<string> {
 
 async function main(): Promise<void> {
   if (process.argv[2] === "serve") {
+    const environment = readEnvironment();
     const port = Number(process.env.ONEHARNESS_UI_BRIDGE_PORT ?? "4317");
     if (!Number.isSafeInteger(port) || port < 1024 || port > 65_535) {
       throw new Error("ONEHARNESS_UI_BRIDGE_PORT must be an unprivileged TCP port");
     }
-    startServer(port);
+    if (!environment.httpAuthorization) {
+      throw new Error("ONEHARNESS_UI_HTTP_TOKEN must contain at least 32 characters");
+    }
+    startServer(port, environment.httpAuthorization);
     return;
   }
 
   const input = await readRequestLine();
-  const service = new BridgeService(readEnvironment());
+  const authorization = randomUUID();
+  const service = new BridgeService(readEnvironment(), authorization);
   let value: unknown;
   try {
     value = JSON.parse(input);
@@ -39,7 +45,7 @@ async function main(): Promise<void> {
     value = undefined;
   }
   process.stdout.write(
-    `${JSON.stringify(bridgeResponseSchema.parse(await service.handle(value)))}\n`,
+    `${JSON.stringify(bridgeResponseSchema.parse(await service.handle(value, authorization)))}\n`,
   );
 }
 

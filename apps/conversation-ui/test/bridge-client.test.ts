@@ -1,12 +1,21 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
 import { dataOrThrow, invokeBridge } from "../src/features/conversations/api/bridge-client";
 
+const originalBridgeUrl = process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_URL;
+const originalBridgeToken = process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_TOKEN;
+
 afterEach(() => {
   delete window.__TAURI_INTERNALS__;
+  if (originalBridgeUrl === undefined) delete process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_URL;
+  else process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_URL = originalBridgeUrl;
+  if (originalBridgeToken === undefined) delete process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_TOKEN;
+  else process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_TOKEN = originalBridgeToken;
 });
 
 describe("validated bridge client", () => {
   test("rejects non-success HTTP and bridge error responses", async () => {
+    process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_URL = "http://127.0.0.1:4317";
+    process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_TOKEN = "oneharness-ui-client-authorization-token";
     globalThis.fetch = (async () => new Response(null, { status: 503 })) as typeof fetch;
     await expect(invokeBridge({ kind: "list" })).rejects.toThrow("HTTP 503");
     expect(() =>
@@ -15,6 +24,16 @@ describe("validated bridge client", () => {
         ok: false,
       }),
     ).toThrow("Bad config");
+  });
+
+  test("rejects remote or unauthenticated HTTP bridge configuration", async () => {
+    process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_URL = "https://bridge.example.com";
+    process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_TOKEN = "oneharness-ui-client-authorization-token";
+    await expect(invokeBridge({ kind: "list" })).rejects.toThrow("loopback URL");
+
+    process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_URL = "http://127.0.0.1:4317";
+    process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_TOKEN = "short";
+    await expect(invokeBridge({ kind: "list" })).rejects.toThrow();
   });
 
   test("uses the scoped Tauri sidecar transport", async () => {
