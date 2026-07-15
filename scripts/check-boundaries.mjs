@@ -35,6 +35,8 @@ async function inspect(path) {
 
 for (const directory of sourceRoots) await walk(join(root, directory));
 if (violations.length > 0) {
-  process.stderr.write(`import boundary violations:\n${violations.join("\n")}\n`);
+  process.stderr.write(
+    `import boundary violations:\n${violations.join("\n")}\nRestore imports to the documented package direction, then rerun just lint.\n`,
+  );
   process.exit(1);
 }

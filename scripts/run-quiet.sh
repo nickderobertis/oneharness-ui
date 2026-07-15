@@ -25,4 +25,6 @@ if [ "$status" -ne 0 ]; then
   exit "$status"
 fi
 
-printf '%s: ok\n' "$LABEL"
+if [ "${ONEHARNESS_QUIET:-}" != "1" ]; then
+  printf '%s: ok\n' "$LABEL"
+fi
