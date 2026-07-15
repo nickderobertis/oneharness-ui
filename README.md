@@ -44,7 +44,9 @@ just check
 `bootstrap` downloads the immutable upstream oneharness source archive,
 verifies its SHA-256, builds its SDK package and compatible CLI, installs the
 workspace, and provisions the pinned Rust gate tools. `just --list` shows the
-complete command surface.
+complete command surface. Recipes with release inputs accept validated
+environment values (for example, `BUNDLE_FORMATS=deb just bundle`) so values
+are never interpolated into shell source.
 
 For an end-user install, download the native artifact for your platform from
 the repository's GitHub release and use the platform installer:
@@ -113,6 +115,13 @@ remain real.
 Rust coverage excludes only `src/main.rs`, the two-line native GUI event-loop
 entrypoint that cannot return under a headless coverage runner; its runtime
 builder and every other authored Rust line remain measured.
+
+On Windows, Rust tests run normally but without `cargo llvm-cov`
+instrumentation: the hosted runner's instrumented Tauri/WebView2 test binary
+fails in the Windows loader before the test harness starts
+(`STATUS_ENTRYPOINT_NOT_FOUND`). Linux and macOS execute the same tests with
+the 95% Rust coverage threshold, while Windows still compiles and executes the
+unmodified test binary.
 
 Conventional commits drive semantic-release on `main`. It updates every
 manifest and changelog and creates `vX.Y.Z`; the tag builds native Tauri

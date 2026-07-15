@@ -18,7 +18,10 @@
     ],
     ["@semantic-release/release-notes-generator", { "preset": "conventionalcommits" }],
     "@semantic-release/changelog",
-    ["@semantic-release/exec", { "prepareCmd": "just set-version ${nextRelease.version}" }],
+    [
+      "@semantic-release/exec",
+      { "prepareCmd": "RELEASE_VERSION='${nextRelease.version}' just set-version" }
+    ],
     [
       "@semantic-release/git",
       {

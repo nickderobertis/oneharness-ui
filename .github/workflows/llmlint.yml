@@ -36,7 +36,7 @@ jobs:
           just setup-llmlint
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Validate configuration without a model
-        run: just lint-llm-validate --diff-base origin/main
+        run: just lint-llm-validate
       - name: Judge changed code
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

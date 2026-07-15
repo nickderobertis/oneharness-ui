@@ -20,11 +20,11 @@ jobs:
       matrix:
         include:
           - os: ubuntu-22.04
-            args: --bundles deb,appimage
+            bundles: deb,appimage
           - os: macos-15
-            args: --bundles app,dmg
+            bundles: app,dmg
           - os: windows-2025
-            args: --bundles msi,nsis
+            bundles: msi,nsis
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
@@ -43,20 +43,21 @@ jobs:
         run: cargo install just --locked --version 1.42.4
       - name: Bootstrap clean checkout
         run: just bootstrap
-      - name: Build and upload native release
-        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
+      - name: Build native release through the command surface
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          BUNDLE_FORMATS: ${{ matrix.bundles }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        with:
-          args: ${{ matrix.args }}
-          projectPath: apps/desktop-shell
-          tagName: ${{ github.ref_name }}
-          uploadWorkflowArtifacts: true
+        run: just bundle
       - name: Create checksums
-        run: just checksums target/release/bundle "checksums-${{ runner.os }}.txt"
-      - name: Upload checksums
         env:
+          BUNDLE_DIRECTORY: target/release/bundle
+          CHECKSUM_OUTPUT: checksums-${{ runner.os }}.txt
+        run: just checksums
+      - name: Upload native release and checksums
+        env:
+          BUNDLE_DIRECTORY: target/release/bundle
+          CHECKSUM_OUTPUT: checksums-${{ runner.os }}.txt
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh release upload "${{ github.ref_name }}" "checksums-${{ runner.os }}.txt" --clobber
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: just upload-release

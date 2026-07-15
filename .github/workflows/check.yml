@@ -107,7 +107,9 @@ jobs:
       - name: Bootstrap clean checkout
         run: just bootstrap
       - name: Build native installer
-        run: just bundle "${{ matrix.bundles }}"
+        env:
+          BUNDLE_FORMATS: ${{ matrix.bundles }}
+        run: just bundle
       - name: Install Debian artifact
         if: runner.os == 'Linux'
         run: |

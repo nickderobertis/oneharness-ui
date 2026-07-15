@@ -3,8 +3,20 @@ import { createHash } from "node:crypto";
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 
-const directory = resolve(process.argv[2] ?? "");
-const output = resolve(process.argv[3] ?? "checksums.txt");
+const directoryArgument = process.argv[2];
+const outputArgument = process.argv[3];
+if (!directoryArgument || directoryArgument.length > 4096) {
+  throw new Error(
+    "a valid bundle directory is required; set BUNDLE_DIRECTORY and rerun just checksums",
+  );
+}
+if (!outputArgument || !/^checksums-[A-Za-z0-9_.-]+\.txt$/.test(outputArgument)) {
+  throw new Error(
+    "the checksum output must be a local checksums-<platform>.txt filename; set CHECKSUM_OUTPUT and rerun just checksums",
+  );
+}
+const directory = resolve(directoryArgument);
+const output = resolve(outputArgument);
 if (!statSync(directory, { throwIfNoEntry: false })?.isDirectory()) {
   throw new Error(
     `bundle directory does not exist: ${directory}; build it with just bundle <format> first`,

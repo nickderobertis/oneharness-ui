@@ -15,8 +15,8 @@ readonly LOG
 trap 'rm -f "$LOG"' EXIT
 
 set +e
-"$@" >"$LOG" 2>&1
-status=$?
+"$@" 2>&1 | tail -c 1048576 >"$LOG"
+status=${PIPESTATUS[0]}
 set -e
 
 if [ "$status" -ne 0 ]; then

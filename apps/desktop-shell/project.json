@@ -13,7 +13,7 @@
       "command": "bunx tauri build --config apps/desktop-shell/tauri.conf.json"
     },
     "test": {
-      "command": "cargo llvm-cov --locked --workspace --all-features --ignore-filename-regex 'apps/desktop-shell/src/main.rs' --fail-under-lines 95"
+      "command": "./scripts/test-rust.sh"
     },
     "lint": {
       "command": "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings"

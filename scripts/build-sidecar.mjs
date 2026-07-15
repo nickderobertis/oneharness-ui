@@ -10,9 +10,9 @@ if (rustc.exitCode !== 0) {
   );
 }
 const host = rustc.stdout.toString().match(/^host: (.+)$/m)?.[1];
-if (!host) {
+if (!host || !/^[A-Za-z0-9][A-Za-z0-9_.-]{2,199}$/.test(host)) {
   throw new Error(
-    "could not determine the Rust host target triple; reinstall the Rust version pinned in rust-toolchain.toml and rerun just bootstrap",
+    "rustc returned an invalid host target triple; reinstall the Rust version pinned in rust-toolchain.toml and rerun just bootstrap",
   );
 }
 

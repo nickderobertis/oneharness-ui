@@ -1,13 +1,26 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { isAbsolute, resolve } from "node:path";
 import { OneHarness, type RunReport } from "@oneharness/sdk";
 import { BridgeService } from "../src/service.ts";
 
 const repository = resolve(import.meta.dir, "../../..");
+const providerOverride = process.env.ONEHARNESS_UI_TEST_PROVIDER_BIN;
+if (
+  providerOverride !== undefined &&
+  (providerOverride.length === 0 ||
+    providerOverride.length > 4096 ||
+    !isAbsolute(providerOverride) ||
+    !existsSync(providerOverride))
+) {
+  throw new Error(
+    "ONEHARNESS_UI_TEST_PROVIDER_BIN must be an existing absolute path to the deterministic provider",
+  );
+}
 const provider =
-  process.env.ONEHARNESS_UI_TEST_PROVIDER_BIN ??
+  providerOverride ??
   resolve(
     repository,
     `.cache/upstream-target/debug/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,

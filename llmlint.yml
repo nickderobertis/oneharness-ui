@@ -17,6 +17,8 @@ files:
     - "bun.lock"
     - "apps/conversation-ui/next-env.d.ts"
 rationales: true
+oneharness:
+  timeout: 900
 # The agent only limits rule batch size so broad repository reviews finish within
 # the judge timeout. Harness/model remain unset: `oneharness.toml` owns fallback
 # selection, and ONEHARNESS_<FIELD> overrides continue to work.

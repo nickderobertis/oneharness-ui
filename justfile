@@ -9,7 +9,7 @@ bootstrap:
     @./scripts/run-quiet.sh "bootstrap" "Install the pinned tools in .tool-versions, then rerun 'just bootstrap'." -- ./scripts/bootstrap.sh
 
 dev:
-    @bunx tauri dev --config apps/desktop-shell/tauri.conf.json
+    @./scripts/run-quiet.sh "desktop development session" "Install the platform's Tauri prerequisites, fix the reported startup error, and rerun 'just dev'." -- bunx tauri dev --config apps/desktop-shell/tauri.conf.json
 
 check: format-check lint typecheck test build supply-chain
 
@@ -51,17 +51,21 @@ test-e2e:
 build:
     @./scripts/run-quiet.sh "build" "Fix the reported static-export or native build error, then rerun 'just build'." -- env RUSTFLAGS="-D warnings" bunx nx run-many -t build --all --outputStyle=static
 
-bundle bundles:
-    @./scripts/run-quiet.sh "native {{ bundles }} bundle" "Install the platform's Tauri prerequisites, fix the reported packaging error, and rerun this command." -- bunx tauri build --config apps/desktop-shell/tauri.conf.json --bundles "{{ bundles }}"
+bundle:
+    @[[ "${BUNDLE_FORMATS:-}" =~ ^(deb|appimage|app|dmg|msi|nsis)(,(deb|appimage|app|dmg|msi|nsis))*$ ]] || { echo "native bundle: set BUNDLE_FORMATS to a comma-separated platform bundle list" >&2; exit 2; }
+    @./scripts/run-quiet.sh "native bundle" "Install the platform's Tauri prerequisites, fix the reported packaging error, and rerun 'just bundle'." -- bunx tauri build --config apps/desktop-shell/tauri.conf.json --bundles "$BUNDLE_FORMATS"
 
-checksums directory output:
-    @./scripts/run-quiet.sh "release checksums" "Build the platform bundles first, then rerun this command with their directory." -- bun scripts/checksums.mjs "{{ directory }}" "{{ output }}"
+checksums:
+    @./scripts/run-quiet.sh "release checksums" "Set BUNDLE_DIRECTORY and CHECKSUM_OUTPUT after building the platform bundles, then rerun 'just checksums'." -- bun scripts/checksums.mjs "${BUNDLE_DIRECTORY:-}" "${CHECKSUM_OUTPUT:-}"
 
-set-version version:
-    @./scripts/run-quiet.sh "version manifests" "Fix the reported manifest or lockfile error, then rerun this command." -- bun scripts/set-version.mjs "{{ version }}"
+set-version:
+    @./scripts/run-quiet.sh "version manifests" "Set RELEASE_VERSION to a valid semver, fix any reported manifest error, and rerun 'just set-version'." -- bun scripts/set-version.mjs "${RELEASE_VERSION:-}"
 
 publish-release:
-    @bunx semantic-release
+    @./scripts/run-quiet.sh "semantic release" "Verify RELEASE_TOKEN, commit history, and GitHub access, then rerun 'just publish-release'." -- bunx semantic-release
+
+upload-release:
+    @./scripts/run-quiet.sh "native release upload" "Verify GH_TOKEN and the validated release environment, then rerun 'just upload-release'." -- ./scripts/upload-release.sh
 
 supply-chain:
     @./scripts/run-quiet.sh "Rust dependency policy" "Resolve the reported license, advisory, source, or ban finding, then rerun 'just supply-chain'." -- cargo deny check --hide-inclusion-graph
@@ -80,14 +84,14 @@ setup-llmlint:
 session-setup:
     @./scripts/run-quiet.sh "agent session setup" "Install the missing pinned tool reported above, then rerun 'just session-setup'." -- ./scripts/session-setup.sh
 
-lint-llm *args:
+lint-llm:
     @command -v llmlint >/dev/null 2>&1 || { echo "llmlint missing; run just setup-llmlint" >&2; exit 1; }
-    @llmlint {{ args }}
+    @llmlint
 
-lint-llm-diff *args:
+lint-llm-diff:
     @command -v llmlint >/dev/null 2>&1 || { echo "llmlint missing; run just setup-llmlint" >&2; exit 1; }
-    @llmlint --diff --diff-base "origin/main" {{ args }}
+    @llmlint --diff --diff-base "origin/main"
 
-lint-llm-validate *args:
+lint-llm-validate:
     @command -v llmlint >/dev/null 2>&1 || { echo "llmlint missing; run just setup-llmlint" >&2; exit 1; }
-    @llmlint validate {{ args }}
+    @llmlint validate
