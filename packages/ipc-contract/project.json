@@ -13,7 +13,10 @@
     "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "commands": ["bunx biome check packages/ipc-contract", "node scripts/check-boundaries.mjs"],
+        "commands": [
+          "bunx biome check --error-on-warnings packages/ipc-contract",
+          "node scripts/check-boundaries.mjs"
+        ],
         "parallel": false
       }
     },

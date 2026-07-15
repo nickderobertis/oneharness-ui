@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tauri::{AppHandle, Runtime};
 use tauri_plugin_shell::{
@@ -7,6 +8,18 @@ use tauri_plugin_shell::{
 
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
 const MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
+
+/// Opaque transport envelope. The sidecar's SDK-owned schema validates its
+/// contents; Rust owns only the privilege boundary and cannot construct SDK
+/// contract values.
+#[derive(Debug, Deserialize)]
+#[serde(transparent)]
+struct BridgeRequest(Value);
+
+/// Opaque transport envelope returned after the SDK boundary has validated it.
+#[derive(Debug, Serialize)]
+#[serde(transparent)]
+struct BridgeResponse(Value);
 
 fn append_bounded(target: &mut Vec<u8>, chunk: &[u8]) -> Result<(), String> {
     if target.len().saturating_add(chunk.len()) > MAX_RESPONSE_BYTES {
@@ -60,7 +73,7 @@ fn decode_bridge_response(
     exit_code: Option<i32>,
     stdout: &[u8],
     stderr: &[u8],
-) -> Result<Value, String> {
+) -> Result<BridgeResponse, String> {
     if exit_code != Some(0) {
         let detail = String::from_utf8_lossy(stderr);
         let message = detail.trim();
@@ -71,11 +84,15 @@ fn decode_bridge_response(
         });
     }
     serde_json::from_slice(stdout)
+        .map(BridgeResponse)
         .map_err(|error| format!("Local bridge returned malformed JSON: {error}"))
 }
 
-async fn invoke_bridge_for<R: Runtime>(app: AppHandle<R>, request: Value) -> Result<Value, String> {
-    let mut input = serde_json::to_vec(&request)
+async fn invoke_bridge_for<R: Runtime>(
+    app: AppHandle<R>,
+    request: BridgeRequest,
+) -> Result<BridgeResponse, String> {
+    let mut input = serde_json::to_vec(&request.0)
         .map_err(|error| format!("Could not encode the validated bridge request: {error}"))?;
     if input.len() > MAX_REQUEST_BYTES {
         return Err("Local bridge request exceeded 64 KiB".to_string());
@@ -91,7 +108,7 @@ async fn invoke_bridge_for<R: Runtime>(app: AppHandle<R>, request: Value) -> Res
 }
 
 #[tauri::command]
-async fn invoke_bridge(app: AppHandle, request: Value) -> Result<Value, String> {
+async fn invoke_bridge(app: AppHandle, request: BridgeRequest) -> Result<BridgeResponse, String> {
     invoke_bridge_for(app, request).await
 }
 
@@ -161,11 +178,11 @@ mod tests {
             .build(mock_context(noop_assets()))?;
         let response = tauri::async_runtime::block_on(super::invoke_bridge_for(
             app.handle().clone(),
-            json!({ "kind": "unknown" }),
+            super::BridgeRequest(json!({ "kind": "unknown" })),
         ))
         .map_err(std::io::Error::other)?;
-        assert_eq!(response["ok"], false);
-        assert_eq!(response["error"]["code"], "INVALID_REQUEST");
+        assert_eq!(response.0["ok"], false);
+        assert_eq!(response.0["error"]["code"], "INVALID_REQUEST");
         fs::remove_file(fixture)?;
         Ok(())
     }
@@ -178,7 +195,7 @@ mod tests {
             .build(mock_context(noop_assets()))?;
         let result = tauri::async_runtime::block_on(super::invoke_bridge_for(
             app.handle().clone(),
-            json!({ "message": "x".repeat(super::MAX_REQUEST_BYTES) }),
+            super::BridgeRequest(json!({ "message": "x".repeat(super::MAX_REQUEST_BYTES) })),
         ));
         let error = match result {
             Ok(_) => return Err(std::io::Error::other("oversized input was accepted").into()),

@@ -18,7 +18,7 @@
       "executor": "nx:run-commands",
       "options": {
         "commands": [
-          "bunx biome check packages/oneharness-bridge",
+          "bunx biome check --error-on-warnings packages/oneharness-bridge",
           "node scripts/check-boundaries.mjs"
         ],
         "parallel": false

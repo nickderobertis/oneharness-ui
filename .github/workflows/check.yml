@@ -50,10 +50,10 @@ jobs:
         run: |
           git fetch --no-tags origin "$GITHUB_BASE_REF"
           base="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
-          NX_BASE="$base" NX_HEAD=HEAD just gate
+          NX_BASE="$base" NX_HEAD=HEAD just check-affected
       - name: Full gate
-        if: github.event_name != 'pull_request'
-        run: just gate
+        if: github.event_name == 'push'
+        run: just check
 
   supply-chain:
     name: supply-chain
@@ -76,6 +76,7 @@ jobs:
 
   install:
     name: install (${{ matrix.os }})
+    if: github.event_name == 'push'
     needs: check
     runs-on: ${{ matrix.os }}
     strategy:
@@ -113,23 +114,24 @@ jobs:
       - name: Install Debian artifact
         if: runner.os == 'Linux'
         run: |
-          package="$(find target/release/bundle/deb -name '*.deb' -print -quit)"
+          package="$(find . -name '*.deb' -print -quit)"
           test -n "$package"
           sudo dpkg -i "$package"
           dpkg-query -W oneharness
       - name: Mount and verify macOS artifact
         if: runner.os == 'macOS'
         run: |
-          image="$(find target/release/bundle/dmg -name '*.dmg' -print -quit)"
+          image="$(find . -name '*.dmg' -print -quit)"
           test -n "$image"
           mount="$(hdiutil attach "$image" -nobrowse | tail -1 | sed 's#^.*\(/Volumes/.*\)#\1#')"
-          test -x "$mount/oneharness.app/Contents/MacOS/oneharness"
+          sudo ditto "$mount/oneharness.app" /Applications/oneharness.app
           hdiutil detach "$mount"
+          test -x /Applications/oneharness.app/Contents/MacOS/oneharness
       - name: Install and verify Windows artifact
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $msi = Get-ChildItem target/release/bundle/msi/*.msi | Select-Object -First 1
+          $msi = Get-ChildItem . -Filter *.msi -Recurse | Select-Object -First 1
           if (-not $msi) { throw "No MSI was built" }
           $process = Start-Process msiexec.exe -ArgumentList @('/i', $msi.FullName, '/qn', '/norestart') -Wait -PassThru
           if ($process.ExitCode -ne 0) { throw "MSI install failed: $($process.ExitCode)" }

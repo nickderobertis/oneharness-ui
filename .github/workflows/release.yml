@@ -5,7 +5,7 @@ on:
     tags: ["v*"]
 
 permissions:
-  contents: write
+  contents: read
 
 defaults:
   run:
@@ -58,6 +58,6 @@ jobs:
         env:
           BUNDLE_DIRECTORY: target/release/bundle
           CHECKSUM_OUTPUT: checksums-${{ runner.os }}.txt
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.RELEASE_TOKEN }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: just upload-release

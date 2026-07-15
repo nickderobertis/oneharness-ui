@@ -18,7 +18,7 @@
     "lint": {
       "executor": "nx:run-commands",
       "options": {
-        "commands": ["bunx biome check .", "node scripts/check-boundaries.mjs"],
+        "commands": ["bunx biome check --error-on-warnings .", "node scripts/check-boundaries.mjs"],
         "parallel": false
       }
     },

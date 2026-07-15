@@ -53,13 +53,28 @@ the repository's GitHub release and use the platform installer:
 
 ```console
 # Debian/Ubuntu
-sudo dpkg -i oneharness_*.deb
+package="$(find . -name '*.deb' -print -quit)"
+test -n "$package"
+sudo dpkg -i "$package"
+dpkg-query -W oneharness
 
-# macOS (then drag oneharness.app to Applications)
-hdiutil attach oneharness_*.dmg
+# macOS
+image="$(find . -name '*.dmg' -print -quit)"
+test -n "$image"
+mount="$(hdiutil attach "$image" -nobrowse | tail -1 | sed 's#^.*\(/Volumes/.*\)#\1#')"
+sudo ditto "$mount/oneharness.app" /Applications/oneharness.app
+hdiutil detach "$mount"
+test -x /Applications/oneharness.app/Contents/MacOS/oneharness
+```
 
+```powershell
 # Windows PowerShell
-msiexec.exe /i oneharness_*.msi
+$msi = Get-ChildItem . -Filter *.msi -Recurse | Select-Object -First 1
+if (-not $msi) { throw "No MSI was built" }
+$process = Start-Process msiexec.exe -ArgumentList @('/i', $msi.FullName, '/qn', '/norestart') -Wait -PassThru
+if ($process.ExitCode -ne 0) { throw "MSI install failed: $($process.ExitCode)" }
+$installed = Get-ChildItem $env:ProgramFiles,$env:LOCALAPPDATA -Filter oneharness.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+if (-not $installed) { throw "Installed oneharness.exe was not found" }
 ```
 
 ## Use
