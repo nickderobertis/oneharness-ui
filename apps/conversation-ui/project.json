@@ -14,7 +14,10 @@
       "command": "bun test --preload ./apps/conversation-ui/test/setup.ts apps/conversation-ui/src apps/conversation-ui/test --coverage --coverage-dir coverage/conversation-ui",
       "outputs": ["{workspaceRoot}/coverage/conversation-ui"]
     },
-    "e2e": { "command": "bun run --cwd apps/conversation-ui test:e2e" },
+    "e2e": {
+      "command": "bun run --cwd apps/conversation-ui test:e2e",
+      "dependsOn": ["build"]
+    },
     "lint": {
       "executor": "nx:run-commands",
       "options": {

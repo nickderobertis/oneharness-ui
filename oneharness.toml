@@ -16,6 +16,8 @@
 #   * A contributor with Codex authenticated runs the primary — codex + gpt-5.5.
 #   * A Claude Code web/cloud session, where codex is absent, falls through to the
 #     secondary — claude-code + opus-4.8 — the only harness authenticated there.
+#   * GitHub Actions explicitly selects Copilot, authenticated by its short-lived
+#     built-in token, so the blocking PR check needs no repository secret.
 #
 # Because the fallback already selects claude-code when codex can't run, the
 # SessionStart hook needs no `ONEHARNESS_HARNESSES` override — an override would

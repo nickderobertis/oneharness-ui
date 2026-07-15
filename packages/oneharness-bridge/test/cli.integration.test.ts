@@ -24,7 +24,7 @@ test("exits after one request even while the parent keeps stdin open", async () 
     ]);
     expect(exitCode).toBe(0);
     expect(JSON.parse(await new Response(child.stdout).text())).toMatchObject({
-      error: { code: "MALFORMED_HISTORY" },
+      error: { code: "INVALID_REQUEST" },
       ok: false,
     });
   } finally {

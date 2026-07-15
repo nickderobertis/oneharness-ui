@@ -46,7 +46,8 @@ with `just setup-llmlint`.
 - Add user-driven tests for every behavior and failure/recovery path. The only
   permitted replacement is paid model execution through oneharness's real
   deterministic provider seam; do not mock the layer under test.
-- Keep the command allowlist current and least-privilege. Store release and
+- Keep the command allowlist current and least-privilege. Use short-lived
+  built-in workflow tokens where supported, and store long-lived release and
   harness credentials only in GitHub secrets.
 
 ## Commits, releases, and merging

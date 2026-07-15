@@ -5,6 +5,7 @@ on:
     types: [opened, synchronize, reopened]
 
 permissions:
+  copilot-requests: write
   contents: read
 
 jobs:
@@ -28,10 +29,10 @@ jobs:
         with:
           enable-cache: false
           version: 0.11.28
-      - name: Install and verify configured claude-code fallback harness
+      - name: Install and verify the Copilot judge harness
         run: |
-          npm install --global @anthropic-ai/claude-code@2.1.210
-          claude --version
+          npm install --global @github/copilot@1.0.70
+          copilot --version
       - name: Install just
         run: cargo install just --locked --version 1.42.4
       - name: Install llmlint through the command surface
@@ -39,13 +40,14 @@ jobs:
           just setup-llmlint
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Validate configuration without a model
-        run: just lint-llm-validate
+        run: just lint-llm-validate --diff-base origin/main
       - name: Judge changed code
         env:
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          COPILOT_GITHUB_TOKEN: ${{ github.token }}
+          ONEHARNESS_HARNESSES: copilot
         run: |
-          if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ]; then
-            echo "::error::Add the CLAUDE_CODE_OAUTH_TOKEN repository secret for llmlint." >&2
+          if [ -z "${COPILOT_GITHUB_TOKEN:-}" ]; then
+            echo "::error::GitHub did not provide the short-lived token required by Copilot CLI." >&2
             exit 1
           fi
           just lint-llm-diff
