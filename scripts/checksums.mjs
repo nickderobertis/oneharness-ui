@@ -19,12 +19,14 @@ const directory = resolve(directoryArgument);
 const output = resolve(outputArgument);
 if (!statSync(directory, { throwIfNoEntry: false })?.isDirectory()) {
   throw new Error(
-    `bundle directory does not exist: ${directory}; build it with just bundle <format> first`,
+    `bundle directory does not exist: ${directory}; build it with BUNDLE_FORMATS=<format> just bundle first`,
   );
 }
 const files = [...new Bun.Glob("**/*").scanSync({ cwd: directory, onlyFiles: true })].sort();
 if (files.length === 0) {
-  throw new Error(`no bundle artifacts found under ${directory}; rerun just bundle <format>`);
+  throw new Error(
+    `no bundle artifacts found under ${directory}; rerun BUNDLE_FORMATS=<format> just bundle`,
+  );
 }
 const lines = files.map((relative) => {
   const digest = createHash("sha256")
