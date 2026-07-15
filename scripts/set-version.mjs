@@ -77,10 +77,10 @@ if (format.exitCode !== 0) {
 
 const lock = Bun.spawnSync(["cargo", "update", "--workspace"], {
   cwd: root,
-  stderr: "inherit",
-  stdout: "ignore",
 });
 if (lock.exitCode !== 0) {
+  process.stderr.write(lock.stdout);
+  process.stderr.write(lock.stderr);
   throw new Error(
     "cargo failed to refresh Cargo.lock after versioning; resolve the dependency error and rerun just set-version",
   );
