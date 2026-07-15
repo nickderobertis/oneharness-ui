@@ -55,7 +55,7 @@ jobs:
           tagName: ${{ github.ref_name }}
           uploadWorkflowArtifacts: true
       - name: Create checksums
-        run: bun scripts/checksums.mjs target/release/bundle "checksums-${{ runner.os }}.txt"
+        run: just checksums target/release/bundle "checksums-${{ runner.os }}.txt"
       - name: Upload checksums
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

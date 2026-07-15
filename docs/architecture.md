@@ -25,8 +25,9 @@ errors and does not log prompts, answers, reasoning, or environment values.
 
 Production uses that process-local, scoped sidecar transport. The loopback HTTP
 adapter exists only for browser development and end-to-end testing: it accepts
-only explicit loopback URLs, requires a per-run bearer capability at both the
-HTTP and service layers, restricts CORS to loopback origins, and bounds the
+only explicit loopback URLs, requires an explicit non-credential test
+capability at both the HTTP and service layers, restricts CORS to loopback
+origins, and bounds the
 bytes read from the request stream. Release builds do not configure this
 adapter.
 

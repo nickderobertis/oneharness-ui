@@ -30,7 +30,7 @@ application view model validated on both sides of IPC. See
 
 - Bun 1.3.14, Rust 1.96.0, just 1.42.4, and uv 0.11.28 (pinned in `.tool-versions` and
   `rust-toolchain.toml`)
-- `curl`, npm, and the native [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/)
+- `curl` and the native [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/)
 - On Linux: WebKitGTK 4.1, GTK 3, appindicator, librsvg, `pkg-config`, and
   `patchelf`
 
@@ -72,7 +72,7 @@ history = true
 Start the desktop app during development:
 
 ```console
-bunx tauri dev --config apps/desktop-shell/tauri.conf.json
+just dev
 ```
 
 The app discovers the same layered oneharness config and platform history

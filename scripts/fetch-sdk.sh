@@ -21,7 +21,7 @@ checksum() {
   elif command -v shasum >/dev/null 2>&1; then
     shasum -a 256 "$1" | awk '{print $1}'
   else
-    fail "no SHA-256 utility found; install sha256sum or shasum"
+    fail "no SHA-256 utility found; install sha256sum or shasum, then rerun just bootstrap"
   fi
 }
 
@@ -29,10 +29,11 @@ mkdir -p "$ROOT/.cache"
 if [ ! -f "$ARCHIVE" ]; then
   curl --fail --location --silent --show-error \
     "https://github.com/nickderobertis/oneharness/archive/$SDK_COMMIT.tar.gz" \
-    --output "$ARCHIVE" || fail "could not download pinned oneharness source"
+    --output "$ARCHIVE" \
+    || fail "could not download pinned oneharness source; verify GitHub access, remove $ARCHIVE, and rerun just bootstrap"
 fi
 [ "$(checksum "$ARCHIVE")" = "$ARCHIVE_SHA256" ] \
-  || fail "pinned source checksum mismatch; remove $ARCHIVE and retry"
+  || fail "pinned source checksum mismatch; remove $ARCHIVE and rerun just bootstrap"
 
 if [ ! -d "$CACHE" ]; then
   tmp="$ROOT/.cache/oneharness-extract-$$"
@@ -47,9 +48,9 @@ if [ ! -f "$SDK_PACKAGE/dist/index.js" ]; then
     cd "$CACHE/npm/oneharness-sdk"
     bun install --frozen-lockfile >/dev/null
     bun run build >/dev/null
-  ) || fail "could not build @oneharness/sdk from pinned source"
+  ) || fail "could not build @oneharness/sdk from pinned source; remove $CACHE/npm/oneharness-sdk/node_modules and rerun just bootstrap"
   node "$CACHE/scripts/sdk-pack.mjs" >/dev/null \
-    || fail "could not assemble the pinned SDK package"
+    || fail "could not assemble the pinned SDK package; remove $SDK_PACKAGE and rerun just bootstrap"
 fi
 
 cli="$ROOT/.cache/upstream-target/debug/oneharness"
@@ -62,5 +63,5 @@ if [ ! -x "$cli" ] || [ ! -x "$mock" ]; then
   cargo build --quiet --locked --manifest-path "$CACHE/Cargo.toml" \
     --target-dir "$ROOT/.cache/upstream-target" --features mock-harness \
     --bin oneharness --bin oneharness-mock-harness \
-    || fail "could not build oneharness's deterministic provider fixture"
+    || fail "could not build oneharness's deterministic provider fixture; install the pinned Rust toolchain and rerun just bootstrap"
 fi

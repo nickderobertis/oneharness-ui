@@ -4,32 +4,46 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 readonly ROOT
 
-for tool in bun cargo rustup curl npm uv; do
+fail() {
+  printf 'bootstrap: %s\n' "$1" >&2
+  exit 1
+}
+
+for tool in bun cargo rustup curl uv; do
   command -v "$tool" >/dev/null 2>&1 || {
     printf 'bootstrap: %s is required; install the pinned toolchain from .tool-versions\n' "$tool" >&2
     exit 1
   }
 done
 
-"$ROOT/scripts/fetch-sdk.sh"
+"$ROOT/scripts/fetch-sdk.sh" \
+  || fail "SDK materialization failed; follow the fetch-sdk remedy above, then rerun just bootstrap"
 cd "$ROOT"
 if [ -f bun.lock ]; then
-  bun install --frozen-lockfile >/dev/null
+  bun install --frozen-lockfile >/dev/null \
+    || fail "workspace install failed; resolve the Bun lockfile diagnostic, then rerun just bootstrap"
 else
-  bun install >/dev/null
+  bun install >/dev/null \
+    || fail "workspace install failed; restore bun.lock or resolve the Bun diagnostic, then rerun just bootstrap"
 fi
-bun "$ROOT/scripts/build-sidecar.mjs"
-bunx playwright install chromium >/dev/null
-uvx --from actionlint-py==1.7.12.24 actionlint --version >/dev/null
-uvx --from shellcheck-py==0.11.0.1 shellcheck --version >/dev/null
-cargo fetch --locked --quiet
+bun "$ROOT/scripts/build-sidecar.mjs" \
+  || fail "sidecar assembly failed; follow the build-sidecar remedy above, then rerun just bootstrap"
+bunx playwright install chromium >/dev/null \
+  || fail "Chromium provisioning failed; verify Playwright download access, then rerun just bootstrap"
+uvx --from actionlint-py==1.7.12.24 actionlint --version >/dev/null \
+  || fail "actionlint provisioning failed; verify uv package-index access, then rerun just bootstrap"
+uvx --from shellcheck-py==0.11.0.1 shellcheck --version >/dev/null \
+  || fail "shellcheck provisioning failed; verify uv package-index access, then rerun just bootstrap"
+cargo fetch --locked --quiet \
+  || fail "Rust dependency fetch failed; verify registry access and Cargo.lock, then rerun just bootstrap"
 
 install_cargo_tool() {
   local command="$1"
   local crate="$2"
   local version="$3"
   if ! cargo "$command" --version >/dev/null 2>&1; then
-    cargo install --locked --quiet "$crate" --version "$version"
+    cargo install --locked --quiet "$crate" --version "$version" \
+      || fail "could not install $crate $version; verify crates.io access, then rerun just bootstrap"
   fi
 }
 

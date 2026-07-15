@@ -37,7 +37,7 @@ const httpConfigurationSchema = z.object({
 
 function httpConfiguration(): z.infer<typeof httpConfigurationSchema> {
   return httpConfigurationSchema.parse({
-    authorization: process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_TOKEN,
+    authorization: process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_CAPABILITY,
     url: process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_URL,
   });
 }

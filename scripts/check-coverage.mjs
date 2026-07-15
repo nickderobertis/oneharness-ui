@@ -1,12 +1,19 @@
 #!/usr/bin/env node
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 
 const threshold = 0.95;
 const reports = process.argv.slice(2);
-if (reports.length === 0) throw new Error("usage: scripts/check-coverage.mjs <lcov.info> [...]");
+if (reports.length === 0) {
+  throw new Error(
+    "no coverage reports were provided; run just test to generate and validate the authored coverage reports",
+  );
+}
 
 const sources = new Map();
 for (const report of reports) {
+  if (!existsSync(report)) {
+    throw new Error(`coverage report is missing: ${report}; run just test to regenerate it`);
+  }
   const records = readFileSync(report, "utf8").split("end_of_record");
   for (const record of records) {
     const source = record.match(/^SF:(.+)$/m)?.[1];
@@ -39,7 +46,11 @@ for (const source of sources.values()) {
   functionsFound += source.functionsFound;
   functionsHit += source.functionsHit;
 }
-if (linesFound === 0 || functionsFound === 0) throw new Error("coverage reports contain no code");
+if (linesFound === 0 || functionsFound === 0) {
+  throw new Error(
+    "coverage reports contain no code; rerun just test and inspect the test target inputs",
+  );
+}
 
 const lineRate = linesHit / linesFound;
 const functionRate = functionsHit / functionsFound;
@@ -47,5 +58,7 @@ process.stdout.write(
   `Authored coverage: lines ${(lineRate * 100).toFixed(2)}%, functions ${(functionRate * 100).toFixed(2)}%\n`,
 );
 if (lineRate < threshold || functionRate < threshold) {
-  throw new Error("authored line and function coverage must each be at least 95%");
+  throw new Error(
+    "authored line and function coverage must each be at least 95%; add realistic user-facing tests and rerun just test",
+  );
 }

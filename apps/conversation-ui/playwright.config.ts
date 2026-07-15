@@ -24,7 +24,7 @@ export default defineConfig({
     },
     {
       command:
-        "NEXT_PUBLIC_ONEHARNESS_BRIDGE_URL=http://127.0.0.1:4317 NEXT_PUBLIC_ONEHARNESS_BRIDGE_TOKEN=oneharness-ui-e2e-authorization-token bun run --cwd apps/conversation-ui build && bun apps/conversation-ui/tests/e2e/static-server.ts",
+        "NEXT_PUBLIC_ONEHARNESS_BRIDGE_URL=http://127.0.0.1:4317 NEXT_PUBLIC_ONEHARNESS_BRIDGE_CAPABILITY=oneharness-ui-e2e-authorization-token bun run --cwd apps/conversation-ui build && bun apps/conversation-ui/tests/e2e/static-server.ts",
       cwd: "../..",
       port: 3000,
       reuseExistingServer: false,

@@ -7,11 +7,13 @@ log() { printf 'setup-llmlint: %s\n' "$*" >&2; }
 
 export PATH="${BIN_DIR}:${PATH}"
 if ! command -v uv >/dev/null 2>&1; then
-  log "uv not found; install it from https://docs.astral.sh/uv/"
-  exit 0
+  log "uv not found; install the version pinned in .tool-versions, then rerun just setup-llmlint"
+  exit 1
 fi
-uv tool install --upgrade "llmlint-cli>=$LLMLINT_MIN" >/dev/null 2>&1 \
-  || log "llmlint installation failed; retry with just setup-llmlint"
+if ! uv tool install --upgrade "llmlint-cli>=$LLMLINT_MIN" >/dev/null 2>&1; then
+  log "llmlint installation failed; verify package-index access, then rerun just setup-llmlint"
+  exit 1
+fi
 
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
   case ":${PATH}:" in
@@ -20,8 +22,10 @@ if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
   esac
 fi
 if command -v llmlint >/dev/null 2>&1; then
-  llmlint doctor >/dev/null 2>&1 || log "llmlint doctor failed; authenticate a configured harness"
+  llmlint doctor >/dev/null 2>&1 \
+    || log "llmlint doctor failed; authenticate the configured harness, then run llmlint doctor"
 else
-  log "llmlint is unavailable after installation"
+  log "llmlint is unavailable after installation; add $BIN_DIR to PATH, then rerun just setup-llmlint"
+  exit 1
 fi
 exit 0

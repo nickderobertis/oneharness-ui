@@ -29,10 +29,11 @@ jobs:
         run: |
           npm install --global @anthropic-ai/claude-code@2.1.210
           claude --version
-      - name: Install just and llmlint
+      - name: Install just
+        run: cargo install just --locked --version 1.42.4
+      - name: Install llmlint through the command surface
         run: |
-          cargo install just --locked --version 1.42.4
-          ./scripts/setup-llmlint.sh
+          just setup-llmlint
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
       - name: Validate configuration without a model
         run: just lint-llm-validate --diff-base origin/main

@@ -27,14 +27,13 @@
       "Bash(just build)",
       "Bash(just setup-llmlint)",
       "Bash(just session-setup)",
-      "Bash(just lint-llm:*)",
-      "Bash(just lint-llm-diff:*)",
-      "Bash(just lint-llm-validate:*)",
-      "Bash(git status:*)",
-      "Bash(git diff:*)",
-      "Bash(git log:*)",
-      "Bash(git add:*)",
-      "Bash(git commit:*)"
+      "Bash(just lint-llm)",
+      "Bash(just lint-llm-diff)",
+      "Bash(just lint-llm-validate)",
+      "Bash(git status --short)",
+      "Bash(git diff)",
+      "Bash(git diff --check)",
+      "Bash(git log --oneline -10)"
     ],
     "deny": []
   }

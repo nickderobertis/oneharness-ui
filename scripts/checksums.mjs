@@ -6,10 +6,14 @@ import { basename, resolve } from "node:path";
 const directory = resolve(process.argv[2] ?? "");
 const output = resolve(process.argv[3] ?? "checksums.txt");
 if (!statSync(directory, { throwIfNoEntry: false })?.isDirectory()) {
-  throw new Error(`bundle directory does not exist: ${directory}`);
+  throw new Error(
+    `bundle directory does not exist: ${directory}; build it with just bundle <format> first`,
+  );
 }
 const files = [...new Bun.Glob("**/*").scanSync({ cwd: directory, onlyFiles: true })].sort();
-if (files.length === 0) throw new Error(`no bundle artifacts found under ${directory}`);
+if (files.length === 0) {
+  throw new Error(`no bundle artifacts found under ${directory}; rerun just bundle <format>`);
+}
 const lines = files.map((relative) => {
   const digest = createHash("sha256")
     .update(readFileSync(resolve(directory, relative)))

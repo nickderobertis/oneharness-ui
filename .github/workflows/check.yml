@@ -44,16 +44,16 @@ jobs:
         run: cargo install just --locked --version 1.42.4
       - name: Bootstrap clean checkout
         run: just bootstrap
-      - name: Affected gate from explicit merge base
+      - name: Shared gate from explicit merge base
         if: github.event_name == 'pull_request'
         shell: bash
         run: |
           git fetch --no-tags origin "$GITHUB_BASE_REF"
           base="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
-          just check-affected "$base" HEAD
+          NX_BASE="$base" NX_HEAD=HEAD just gate
       - name: Full gate
         if: github.event_name != 'pull_request'
-        run: just check
+        run: just gate
 
   supply-chain:
     name: supply-chain
@@ -107,7 +107,7 @@ jobs:
       - name: Bootstrap clean checkout
         run: just bootstrap
       - name: Build native installer
-        run: bunx tauri build --config apps/desktop-shell/tauri.conf.json --bundles ${{ matrix.bundles }}
+        run: just bundle "${{ matrix.bundles }}"
       - name: Install Debian artifact
         if: runner.os == 'Linux'
         run: |
