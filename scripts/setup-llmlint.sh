@@ -3,6 +3,7 @@ set -uo pipefail
 
 readonly LLMLINT_MIN="0.3.17"
 readonly BIN_DIR="$HOME/.local/bin"
+readonly ORIGINAL_PATH="$PATH"
 log() { printf 'setup-llmlint: %s\n' "$*" >&2; }
 
 safe_environment_file() {
@@ -33,9 +34,9 @@ rm -f "$provision_log"
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
   safe_environment_file "$CLAUDE_ENV_FILE" \
     || { log "refusing CLAUDE_ENV_FILE outside the local temporary directory; unset it or point it to a file under ${TMPDIR:-/tmp}"; exit 1; }
-  case ":${PATH}:" in
+  case ":${ORIGINAL_PATH}:" in
     *":${BIN_DIR}:"*) ;;
-    *) printf 'export PATH=%q\n' "${BIN_DIR}:${PATH}" >>"$CLAUDE_ENV_FILE" ;;
+    *) printf 'export PATH=%q\n' "${BIN_DIR}:${ORIGINAL_PATH}" >>"$CLAUDE_ENV_FILE" ;;
   esac
 fi
 if command -v llmlint >/dev/null 2>&1; then
