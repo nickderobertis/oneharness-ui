@@ -111,6 +111,7 @@ lint-llm-diff:
     @command -v llmlint >/dev/null 2>&1 || { echo "llmlint missing; run just setup-llmlint" >&2; exit 1; }
     @./scripts/run-quiet.sh "semantic diff lint" "Inspect 'llmlint history latest', fix every finding, then rerun 'just lint-llm-diff'." -- llmlint --diff --diff-base "origin/main"
 
+[positional-arguments]
 lint-llm-validate *args:
     @command -v llmlint >/dev/null 2>&1 || { echo "llmlint missing; run just setup-llmlint" >&2; exit 1; }
-    @./scripts/run-quiet.sh "semantic lint configuration" "Correct llmlint.yml or its rule references, then rerun 'just lint-llm-validate'." -- llmlint validate {{args}}
+    @./scripts/run-quiet.sh "semantic lint configuration" "Correct llmlint.yml or its rule references, then rerun 'just lint-llm-validate'." -- llmlint validate "$@"
