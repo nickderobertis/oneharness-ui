@@ -9,7 +9,8 @@ fail() {
 [ -n "${GH_TOKEN:-}" ] \
   || fail "GH_TOKEN is missing; expose the workflow's built-in token, then rerun just seed-release"
 
-existing_tag="$(git tag --list 'v*' --sort=-version:refname | head -1)"
+existing_tag="$(git tag --list 'v*' --sort=-version:refname | head -1)" \
+  || fail "could not inspect release tags; run 'git status', then repair the checkout before rerunning just seed-release"
 if [ -n "$existing_tag" ]; then
   [[ "$existing_tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] \
     || fail "the existing release tag is invalid; repair or remove it, then rerun just seed-release"
@@ -32,7 +33,8 @@ readonly SHA="${GITHUB_SHA:-}"
   || fail "GITHUB_SHA must identify protected main; run from its push workflow, then rerun just seed-release"
 [ "$(git rev-parse HEAD)" = "$SHA" ] \
   || fail "GITHUB_SHA does not match the checkout; rerun just seed-release from the protected-main push workflow"
-VERSION="$(bun -e 'const value = await Bun.file("package.json").json(); console.log(value.version)')"
+VERSION="$(bun -e 'const value = await Bun.file("package.json").json(); console.log(value.version)')" \
+  || fail "could not read package.json; run 'bun pm pkg get version' and correct it before rerunning just seed-release"
 readonly VERSION
 [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] \
   || fail "package.json has no semantic version; correct it, then rerun just seed-release"
