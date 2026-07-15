@@ -45,9 +45,4 @@ jobs:
         env:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
           ONEHARNESS_HARNESSES: copilot
-        run: |
-          if [ -z "${COPILOT_GITHUB_TOKEN:-}" ]; then
-            echo "::error::GitHub did not provide the short-lived token required by Copilot CLI." >&2
-            exit 1
-          fi
-          just lint-llm-diff
+        run: scripts/run-llmlint-copilot.sh
