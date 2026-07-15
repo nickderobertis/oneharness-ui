@@ -92,6 +92,14 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     });
   });
 
+  test("rejects invalid bridge input before touching history", async () => {
+    const result = await service().handle({ kind: "unknown" }, TEST_AUTHORIZATION);
+    expect(result).toEqual({
+      error: { code: "INVALID_REQUEST", message: "The local bridge request is invalid." },
+      ok: false,
+    });
+  });
+
   test("discovers, selects, and safely preserves optional detail", async () => {
     const report = await seed(
       "tool-session",

@@ -37,7 +37,7 @@ if ! command -v just >/dev/null 2>&1; then
   fi
 fi
 
-for tool in bun cargo uv; do
+for tool in bun cargo node uv; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     log "$tool is missing; install its pinned version from .tool-versions, then run just session-setup"
     status=1

@@ -1,0 +1,6 @@
+paths:
+  .github/workflows/llmlint.yml:
+    ignore:
+      # GitHub requires this scope for built-in-token Copilot requests. Remove
+      # once actionlint resolves https://github.com/rhysd/actionlint/issues/686.
+      - 'unknown permission scope "copilot-requests"'

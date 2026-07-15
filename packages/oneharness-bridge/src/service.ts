@@ -310,8 +310,18 @@ export class BridgeService {
         ok: false,
       });
     }
+    const parsedRequest = bridgeRequestSchema.safeParse(input);
+    if (!parsedRequest.success) {
+      return bridgeResponseSchema.parse({
+        error: {
+          code: "INVALID_REQUEST",
+          message: "The local bridge request is invalid.",
+        },
+        ok: false,
+      });
+    }
     try {
-      const request: BridgeRequest = bridgeRequestSchema.parse(input);
+      const request: BridgeRequest = parsedRequest.data;
       const response: BridgeResponse = await (async () => {
         if (request.kind === "list") {
           return { data: { conversations: await this.#list(), kind: "list" }, ok: true };

@@ -51,7 +51,7 @@ typecheck:
 
 # Nx project tests enforce Bun coverage thresholds and cargo llvm-cov --fail-under-lines 95.
 test:
-    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "tests" "Fix the reported test failure, then rerun 'just test'." -- bunx nx run-many -t test --all --outputStyle=static
+    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "tests" "Fix the reported test failure, then rerun 'just test'." -- env RUSTFLAGS="-D warnings" bunx nx run-many -t test --all --outputStyle=static
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "authored coverage" "Add user-facing tests for uncovered authored code, then rerun 'just test'." -- node scripts/check-coverage.mjs coverage/ipc-contract/lcov.info coverage/oneharness-bridge/lcov.info coverage/conversation-ui/lcov.info
     @ONEHARNESS_QUIET=1 just test-e2e
     @if [ "${ONEHARNESS_QUIET:-}" != "1" ]; then echo "test: ok"; fi
@@ -73,10 +73,16 @@ set-version:
     @./scripts/run-quiet.sh "version manifests" "Set RELEASE_VERSION to a valid semver, fix any reported manifest error, and rerun 'just set-version'." -- bun scripts/set-version.mjs "${RELEASE_VERSION:-}"
 
 publish-release:
-    @./scripts/run-quiet.sh "semantic release" "Verify RELEASE_TOKEN, commit history, and GitHub access, then rerun 'just publish-release'." -- bunx semantic-release
+    @./scripts/run-quiet.sh "semantic release" "Verify the protected-main history and built-in GitHub token permissions, then rerun 'just publish-release'." -- bunx semantic-release
+
+seed-release:
+    @./scripts/run-quiet.sh "initial release seed" "Verify GITHUB_SHA and built-in GitHub token permissions, then rerun 'just seed-release'." -- ./scripts/seed-release.sh
+
+dispatch-release:
+    @./scripts/run-quiet.sh "release dispatch" "Verify RELEASE_TAG and built-in GitHub token permissions, then rerun 'just dispatch-release'." -- ./scripts/dispatch-release.sh
 
 upload-release:
-    @./scripts/run-quiet.sh "native release upload" "Verify GH_TOKEN and the validated release environment, then rerun 'just upload-release'." -- ./scripts/upload-release.sh
+    @./scripts/run-quiet.sh "native release upload" "Verify the built-in GH_TOKEN and validated release environment, then rerun 'just upload-release'." -- ./scripts/upload-release.sh
 
 supply-chain:
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Rust dependency policy" "Resolve the reported license, advisory, source, or ban finding, then rerun 'just supply-chain'." -- cargo deny check --hide-inclusion-graph
@@ -105,6 +111,7 @@ lint-llm-diff:
     @command -v llmlint >/dev/null 2>&1 || { echo "llmlint missing; run just setup-llmlint" >&2; exit 1; }
     @./scripts/run-quiet.sh "semantic diff lint" "Inspect 'llmlint history latest', fix every finding, then rerun 'just lint-llm-diff'." -- llmlint --diff --diff-base "origin/main"
 
-lint-llm-validate:
+[positional-arguments]
+lint-llm-validate *args:
     @command -v llmlint >/dev/null 2>&1 || { echo "llmlint missing; run just setup-llmlint" >&2; exit 1; }
-    @./scripts/run-quiet.sh "semantic lint configuration" "Correct llmlint.yml or its rule references, then rerun 'just lint-llm-validate'." -- llmlint validate
+    @./scripts/run-quiet.sh "semantic lint configuration" "Correct llmlint.yml or its rule references, then rerun 'just lint-llm-validate'." -- llmlint validate "$@"

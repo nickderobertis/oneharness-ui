@@ -88,7 +88,8 @@ fn decode_bridge_response(
         .map_err(|error| format!("Local bridge returned malformed JSON: {error}"))
 }
 
-async fn invoke_bridge_for<R: Runtime>(
+#[tauri::command]
+async fn invoke_bridge<R: Runtime>(
     app: AppHandle<R>,
     request: BridgeRequest,
 ) -> Result<BridgeResponse, String> {
@@ -107,11 +108,6 @@ async fn invoke_bridge_for<R: Runtime>(
     decode_bridge_response(exit_code, &stdout, &stderr)
 }
 
-#[tauri::command]
-async fn invoke_bridge(app: AppHandle, request: BridgeRequest) -> Result<BridgeResponse, String> {
-    invoke_bridge_for(app, request).await
-}
-
 /// Build the least-privilege desktop runtime. The webview can invoke one fixed
 /// Rust command and has no shell permission.
 pub fn builder() -> tauri::Builder<tauri::Wry> {
@@ -125,7 +121,12 @@ mod tests {
     use std::{fs, path::PathBuf};
 
     use serde_json::json;
-    use tauri::{test::mock_context, test::noop_assets};
+    use tauri::{
+        WebviewWindowBuilder,
+        ipc::{CallbackFn, InvokeBody},
+        test::{INVOKE_KEY, get_ipc_response, mock_context, noop_assets},
+        webview::InvokeRequest,
+    };
     use tauri_plugin_shell::ShellExt;
 
     fn install_bridge_fixture() -> Result<PathBuf, Box<dyn std::error::Error>> {
@@ -145,21 +146,13 @@ mod tests {
         let executable = std::env::current_exe()?;
         let target_directory = executable
             .parent()
-            .and_then(|directory| {
-                if directory.ends_with("deps") {
-                    directory.parent()
-                } else {
-                    Some(directory)
-                }
-            })
+            .and_then(|directory| directory.parent())
             .ok_or_else(|| std::io::Error::other("test executable has no target directory"))?
             .join("binaries");
         fs::create_dir_all(&target_directory)?;
-        let destination = target_directory.join(if cfg!(windows) {
-            "oneharness-ui-bridge.exe"
-        } else {
-            "oneharness-ui-bridge"
-        });
+        let destination = target_directory.join("oneharness-ui-bridge");
+        #[cfg(windows)]
+        let destination = destination.with_extension("exe");
         fs::copy(source, &destination)?;
         Ok(destination)
     }
@@ -175,14 +168,25 @@ mod tests {
         let fixture = install_bridge_fixture()?;
         let app = tauri::test::mock_builder()
             .plugin(tauri_plugin_shell::init())
+            .invoke_handler(tauri::generate_handler![super::invoke_bridge])
             .build(mock_context(noop_assets()))?;
-        let response = tauri::async_runtime::block_on(super::invoke_bridge_for(
-            app.handle().clone(),
-            super::BridgeRequest(json!({ "kind": "unknown" })),
-        ))
-        .map_err(std::io::Error::other)?;
-        assert_eq!(response.0["ok"], false);
-        assert_eq!(response.0["error"]["code"], "INVALID_REQUEST");
+        let webview = WebviewWindowBuilder::new(&app, "main", Default::default()).build()?;
+        let response = get_ipc_response(
+            &webview,
+            InvokeRequest {
+                cmd: "invoke_bridge".into(),
+                callback: CallbackFn(0),
+                error: CallbackFn(1),
+                url: "tauri://localhost".parse()?,
+                body: InvokeBody::Json(json!({ "request": { "kind": "unknown" } })),
+                headers: Default::default(),
+                invoke_key: INVOKE_KEY.to_string(),
+            },
+        )
+        .map_err(|error| std::io::Error::other(error.to_string()))?
+        .deserialize::<serde_json::Value>()?;
+        assert_eq!(response["ok"], false);
+        assert_eq!(response["error"]["code"], "INVALID_REQUEST");
         fs::remove_file(fixture)?;
         Ok(())
     }
@@ -193,15 +197,26 @@ mod tests {
         let app = tauri::test::mock_builder()
             .plugin(tauri_plugin_shell::init())
             .build(mock_context(noop_assets()))?;
-        let result = tauri::async_runtime::block_on(super::invoke_bridge_for(
+        let result = tauri::async_runtime::block_on(super::invoke_bridge(
             app.handle().clone(),
             super::BridgeRequest(json!({ "message": "x".repeat(super::MAX_REQUEST_BYTES) })),
         ));
-        let error = match result {
-            Ok(_) => return Err(std::io::Error::other("oversized input was accepted").into()),
-            Err(error) => error,
-        };
+        let error = result.expect_err("oversized input was accepted");
         assert!(error.contains("64 KiB"));
+        Ok(())
+    }
+
+    #[test]
+    fn reports_a_bridge_that_closes_its_input() -> Result<(), Box<dyn std::error::Error>> {
+        let app = tauri::test::mock_builder()
+            .plugin(tauri_plugin_shell::init())
+            .build(mock_context(noop_assets()))?;
+        let command = app.shell().command("sh").args(["-c", "exec 0<&-; sleep 1"]);
+        let result = tauri::async_runtime::block_on(super::run_bridge_command(
+            command,
+            &vec![b'x'; 1024 * 1024],
+        ));
+        assert!(matches!(result, Err(message) if message.contains("Could not send")));
         Ok(())
     }
 

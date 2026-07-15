@@ -16,4 +16,5 @@ fi
   "Rust tests and coverage" \
   "Add tests or fix the emitted diagnostic, then rerun just test." \
   -- cargo llvm-cov --locked --workspace --all-features \
-  --ignore-filename-regex 'apps/desktop-shell/src/main.rs' --fail-under-lines 95
+  --ignore-filename-regex 'apps/desktop-shell/src/main.rs' --show-missing-lines \
+  --fail-under-lines 95

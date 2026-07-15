@@ -28,8 +28,8 @@ smaller application view model validated on both sides of IPC. See
 
 ## Prerequisites
 
-- Bun 1.3.14, Rust 1.96.0, just 1.42.4, and uv 0.11.28 (pinned in `.tool-versions` and
-  `rust-toolchain.toml`)
+- Bun 1.3.14, Node 26.5.0, Rust 1.96.0, just 1.42.4, and uv 0.11.28
+  (pinned in `.tool-versions` and `rust-toolchain.toml`)
 - `curl` and the native [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/)
 - On Linux: WebKitGTK 4.1, GTK 3, appindicator, librsvg, `pkg-config`, and
   `patchelf`
@@ -138,9 +138,11 @@ coverage instrumentation. Linux and macOS execute the same tests with the 95%
 Rust coverage threshold; Windows still runs Clippy over all targets and builds
 the production installer, so only test-binary execution is excluded there.
 
-Conventional commits drive semantic-release on `main`. It updates every
-manifest and changelog and creates `vX.Y.Z`; the tag builds native Tauri
-installers and checksums on Linux, macOS, and Windows. There is no manual
-dispatch or hand-edited version.
+Conventional commits drive semantic-release on `main`. It creates `vX.Y.Z`, and
+the version job reconciles a separate release workflow with the repository's
+built-in token. That workflow accepts only a published semver release whose tag
+is reachable from `main`, materializes the version in its build checkout, and
+builds native Tauri installers and checksums on Linux, macOS, and Windows. There
+is no manual dispatch or hand-edited version.
 
 MIT licensed. Security reports follow [SECURITY.md](SECURITY.md).

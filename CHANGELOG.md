@@ -1,3 +1,4 @@
 # Changelog
 
-All notable changes are generated from Conventional Commits by semantic-release.
+Release notes are generated from Conventional Commits by semantic-release and
+published with each GitHub Release.

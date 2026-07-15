@@ -46,7 +46,8 @@ with `just setup-llmlint`.
 - Add user-driven tests for every behavior and failure/recovery path. The only
   permitted replacement is paid model execution through oneharness's real
   deterministic provider seam; do not mock the layer under test.
-- Keep the command allowlist current and least-privilege. Store release and
+- Keep the command allowlist current and least-privilege. Use short-lived
+  built-in workflow tokens where supported, and store long-lived release and
   harness credentials only in GitHub secrets.
 
 ## Commits, releases, and merging
@@ -57,9 +58,11 @@ with `just setup-llmlint`.
 - Squash-only PRs land on protected `main`; auto-merge, conversation resolution,
   linear history, and every `check`, `supply-chain`, `commitlint`, and `llmlint`
   context are required. Admin bypass is break-glass; merged heads auto-delete.
-- semantic-release computes the next version, updates every manifest and the
-  changelog, and creates `vX.Y.Z`; the tag independently builds and checksums
-  Tauri artifacts. The release token is a PAT/App secret so tag workflows fire.
+- semantic-release computes the next version and creates `vX.Y.Z` on protected
+  `main`; the version job reconciles the separate artifact workflow with its
+  built-in token because
+  token-created tags do not emit workflows. That workflow verifies the release
+  and tag ancestry, versions its checkout, then builds and checksums artifacts.
 
 ## Output and handoff
 

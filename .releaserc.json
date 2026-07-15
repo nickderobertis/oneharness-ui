@@ -17,27 +17,9 @@
       }
     ],
     ["@semantic-release/release-notes-generator", { "preset": "conventionalcommits" }],
-    "@semantic-release/changelog",
     [
       "@semantic-release/exec",
       { "prepareCmd": "RELEASE_VERSION='${nextRelease.version}' just set-version" }
-    ],
-    [
-      "@semantic-release/git",
-      {
-        "assets": [
-          "CHANGELOG.md",
-          "Cargo.lock",
-          "Cargo.toml",
-          "apps/conversation-ui/package.json",
-          "apps/desktop-shell/Cargo.toml",
-          "apps/desktop-shell/tauri.conf.json",
-          "package.json",
-          "packages/ipc-contract/package.json",
-          "packages/oneharness-bridge/package.json"
-        ],
-        "message": "chore(release): ${nextRelease.version}\n\n${nextRelease.notes}"
-      }
     ],
     "@semantic-release/github"
   ]
