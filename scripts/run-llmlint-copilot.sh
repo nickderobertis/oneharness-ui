@@ -34,6 +34,7 @@ if ! probe_copilot; then
   exit 1
 fi
 
+# llmlint: ignore[work_goes_through_command_surface] This wrapper delegates semantic diff work to the documented just recipe.
 if just lint-llm-diff; then
   exit 0
 fi
