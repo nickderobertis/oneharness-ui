@@ -51,7 +51,7 @@ typecheck:
 
 # Nx project tests enforce Bun coverage thresholds and cargo llvm-cov --fail-under-lines 95.
 test:
-    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "tests" "Fix the reported test failure, then rerun 'just test'." -- bunx nx run-many -t test --all --outputStyle=static
+    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "tests" "Fix the reported test failure, then rerun 'just test'." -- env RUSTFLAGS="-D warnings" bunx nx run-many -t test --all --outputStyle=static
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "authored coverage" "Add user-facing tests for uncovered authored code, then rerun 'just test'." -- node scripts/check-coverage.mjs coverage/ipc-contract/lcov.info coverage/oneharness-bridge/lcov.info coverage/conversation-ui/lcov.info
     @ONEHARNESS_QUIET=1 just test-e2e
     @if [ "${ONEHARNESS_QUIET:-}" != "1" ]; then echo "test: ok"; fi

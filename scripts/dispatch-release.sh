@@ -26,4 +26,4 @@ active_run="$(
 [ -z "$active_run" ] || exit 0
 
 gh workflow run release.yml --ref main --field "release_tag=$TAG" >/dev/null \
-  || fail "GitHub rejected the artifact workflow dispatch for $TAG; verify actions:write and release.yml on main, then rerun just dispatch-release"
+  || fail "GitHub rejected the artifact workflow dispatch for $TAG; run 'gh workflow view release.yml' and grant actions:write, then rerun just dispatch-release"

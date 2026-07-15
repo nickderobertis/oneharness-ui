@@ -18,13 +18,13 @@ files:
     - "apps/conversation-ui/next-env.d.ts"
 rationales: true
 oneharness:
-  timeout: 900
+  timeout: 1200
 # The agent only limits rule batch size so broad repository reviews finish within
 # the judge timeout. Harness/model remain unset: `oneharness.toml` owns fallback
 # selection, and ONEHARNESS_<FIELD> overrides continue to work.
 agents:
   default:
-    batch_size: 5
+    batch_size: 4
 plugins:
   - "https://raw.githubusercontent.com/nickderobertis/llmlint/main/assets/config_lint.yml@1"
   - "https://raw.githubusercontent.com/nickderobertis/dero-skills/main/skills/bootstrap/create-repo/assets/llmlint/base.llmlint.yml@1"

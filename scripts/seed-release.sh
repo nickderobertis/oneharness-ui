@@ -39,8 +39,8 @@ readonly VERSION
 readonly TAG="v$VERSION"
 
 git tag "$TAG" "$SHA" \
-  || fail "could not create $TAG at $SHA; remove a conflicting local tag or correct GITHUB_SHA, then rerun just seed-release"
+  || fail "could not create $TAG at $SHA; run 'git tag -d $TAG' to remove a local conflict or correct GITHUB_SHA, then rerun just seed-release"
 git push --quiet origin "refs/tags/$TAG" \
-  || fail "could not push $TAG; verify contents:write and that the remote tag is absent, then rerun just seed-release"
+  || fail "could not push $TAG; run 'git ls-remote --tags origin refs/tags/$TAG', then remove a conflict or grant contents:write before rerunning just seed-release"
 gh release create "$TAG" --verify-tag --target "$SHA" --title "$TAG" --generate-notes >/dev/null \
-  || fail "could not create the $TAG GitHub Release; verify contents:write and the remote tag, then rerun just seed-release"
+  || fail "could not create the $TAG GitHub Release; run 'gh release view $TAG', then repair the release or grant contents:write before rerunning just seed-release"
