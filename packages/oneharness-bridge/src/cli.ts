@@ -11,13 +11,20 @@ async function readRequestLine(): Promise<string> {
   const reader = Bun.stdin.stream().getReader();
   const decoder = new TextDecoder();
   let value = "";
-  while (true) {
-    const next = await reader.read();
-    if (next.done) return value;
-    value += decoder.decode(next.value, { stream: true });
-    if (Buffer.byteLength(value) > MAX_REQUEST_BYTES) throw new Error("IPC request is too large");
-    const newline = value.indexOf("\n");
-    if (newline >= 0) return value.slice(0, newline);
+  try {
+    while (true) {
+      const next = await reader.read();
+      if (next.done) return value;
+      value += decoder.decode(next.value, { stream: true });
+      if (Buffer.byteLength(value) > MAX_REQUEST_BYTES) {
+        throw new Error("IPC request is too large");
+      }
+      const newline = value.indexOf("\n");
+      if (newline >= 0) return value.slice(0, newline);
+    }
+  } finally {
+    await reader.cancel();
+    reader.releaseLock();
   }
 }
 
