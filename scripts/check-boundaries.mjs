@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { readdir, readFile } from "node:fs/promises";
 import { extname, join, relative } from "node:path";
+import { fileURLToPath } from "node:url";
 
-const root = new URL("..", import.meta.url).pathname;
+const root = fileURLToPath(new URL("..", import.meta.url));
 const sourceRoots = ["apps/conversation-ui/src", "packages/oneharness-bridge/src"];
 const extensions = new Set([".ts", ".tsx"]);
 const violations = [];
