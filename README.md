@@ -90,7 +90,9 @@ session, refreshes the list, and selects that result.
 `@oneharness/sdk` is not yet published to npm. `scripts/fetch-sdk.sh` consumes
 oneharness commit `964a5e030b2e0caa4cd0827ac871a0f94ca1d8a5`, verifies source archive
 SHA-256 `beb8b4fe66d56dc212ab1105efa15c8d2e0479b070b3e470d1f68a6fe5138224`,
-and builds the upstream package without copying its contracts here. The same
+and builds the upstream package in that immutable source tree without copying
+its contracts here. The workspace uses the assembled package directory rather
+than a repacked tarball, avoiding platform-dependent archive metadata. The same
 commit supplies the compatible CLI and deterministic provider fixture used by
 boundary/e2e tests.
 

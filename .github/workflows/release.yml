@@ -7,6 +7,10 @@ on:
 permissions:
   contents: write
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   release:
     name: release (${{ matrix.os }})

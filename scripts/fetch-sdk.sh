@@ -3,13 +3,12 @@
 set -euo pipefail
 
 readonly SDK_COMMIT="964a5e030b2e0caa4cd0827ac871a0f94ca1d8a5"
-readonly SDK_VERSION="0.3.21"
 readonly ARCHIVE_SHA256="beb8b4fe66d56dc212ab1105efa15c8d2e0479b070b3e470d1f68a6fe5138224"
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 readonly ROOT
 readonly CACHE="$ROOT/.cache/oneharness-$SDK_COMMIT"
 readonly ARCHIVE="$ROOT/.cache/oneharness-$SDK_COMMIT.tar.gz"
-readonly ARTIFACT="$ROOT/.artifacts/oneharness-sdk-$SDK_VERSION.tgz"
+readonly SDK_PACKAGE="$CACHE/npm/dist/sdk"
 
 fail() {
   printf 'fetch-sdk: %s\n' "$1" >&2
@@ -26,7 +25,7 @@ checksum() {
   fi
 }
 
-mkdir -p "$ROOT/.cache" "$ROOT/.artifacts"
+mkdir -p "$ROOT/.cache"
 if [ ! -f "$ARCHIVE" ]; then
   curl --fail --location --silent --show-error \
     "https://github.com/nickderobertis/oneharness/archive/$SDK_COMMIT.tar.gz" \
@@ -43,7 +42,7 @@ if [ ! -d "$CACHE" ]; then
   mv "$tmp/oneharness-$SDK_COMMIT" "$CACHE"
 fi
 
-if [ ! -f "$ARTIFACT" ]; then
+if [ ! -f "$SDK_PACKAGE/dist/index.js" ]; then
   (
     cd "$CACHE/npm/oneharness-sdk"
     bun install --frozen-lockfile >/dev/null
@@ -51,8 +50,6 @@ if [ ! -f "$ARTIFACT" ]; then
   ) || fail "could not build @oneharness/sdk from pinned source"
   node "$CACHE/scripts/sdk-pack.mjs" >/dev/null \
     || fail "could not assemble the pinned SDK package"
-  npm pack "$CACHE/npm/dist/sdk" --pack-destination "$ROOT/.artifacts" >/dev/null \
-    || fail "could not pack the pinned SDK artifact"
 fi
 
 cli="$ROOT/.cache/upstream-target/debug/oneharness"

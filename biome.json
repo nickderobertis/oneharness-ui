@@ -5,7 +5,6 @@
       "**",
       "!!apps/desktop-shell/binaries",
       "!!apps/desktop-shell/gen",
-      "!!**/.artifacts",
       "!!**/.cache",
       "!!**/.next",
       "!!**/.nx",
