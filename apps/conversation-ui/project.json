@@ -11,7 +11,8 @@
       "outputs": ["{projectRoot}/out"]
     },
     "test": {
-      "command": "bun test --preload ./apps/conversation-ui/test/setup.ts apps/conversation-ui/src apps/conversation-ui/test --coverage"
+      "command": "bun test --preload ./apps/conversation-ui/test/setup.ts apps/conversation-ui/src apps/conversation-ui/test --coverage --coverage-dir coverage/conversation-ui",
+      "outputs": ["{workspaceRoot}/coverage/conversation-ui"]
     },
     "e2e": { "command": "bun run --cwd apps/conversation-ui test:e2e" },
     "lint": { "command": "bunx biome check apps/conversation-ui" },

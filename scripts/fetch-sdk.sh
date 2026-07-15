@@ -5,7 +5,8 @@ set -euo pipefail
 readonly SDK_COMMIT="964a5e030b2e0caa4cd0827ac871a0f94ca1d8a5"
 readonly SDK_VERSION="0.3.21"
 readonly ARCHIVE_SHA256="beb8b4fe66d56dc212ab1105efa15c8d2e0479b070b3e470d1f68a6fe5138224"
-readonly ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+readonly ROOT
 readonly CACHE="$ROOT/.cache/oneharness-$SDK_COMMIT"
 readonly ARCHIVE="$ROOT/.cache/oneharness-$SDK_COMMIT.tar.gz"
 readonly ARTIFACT="$ROOT/.artifacts/oneharness-sdk-$SDK_VERSION.tgz"

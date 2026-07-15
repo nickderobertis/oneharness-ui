@@ -24,8 +24,12 @@ export function ReplyForm({
     resolver: zodResolver(formSchema),
   });
   const submit = handleSubmit(async ({ message }) => {
-    await onSubmit(message);
-    reset();
+    try {
+      await onSubmit(message);
+      reset();
+    } catch {
+      // The mutation error is rendered below; retain the draft for a retry.
+    }
   });
   return (
     <form className="reply-form" onSubmit={submit}>
@@ -35,6 +39,12 @@ export function ReplyForm({
           aria-describedby="reply-help reply-error"
           disabled={pending}
           id="reply"
+          onKeyDown={(event) => {
+            if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+              event.preventDefault();
+              event.currentTarget.form?.requestSubmit();
+            }
+          }}
           placeholder="Ask a follow-up…"
           rows={2}
           {...register("message")}
@@ -44,7 +54,7 @@ export function ReplyForm({
         </button>
       </div>
       <div className="reply-form__footer">
-        <span id="reply-help">⌘ Enter to send · continues the exact native session</span>
+        <span id="reply-help">Ctrl/⌘ Enter to send · continues the exact native session</span>
         <span aria-live="polite">{pending ? "Continuing session…" : ""}</span>
       </div>
       <p className="form-error" id="reply-error" role="alert">

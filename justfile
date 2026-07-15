@@ -11,6 +11,14 @@ check: format-check lint typecheck test build supply-chain
 
 gate: check
 
+check-affected base head:
+  @bunx nx affected -t format-check lint typecheck test build e2e --base={{base}} --head={{head}} --outputStyle=static
+  @files=(coverage/*/lcov.info); if [ -e "${files[0]}" ]; then node scripts/check-coverage.mjs "${files[@]}"; fi
+  @node scripts/check-boundaries.mjs
+  @uvx --from shellcheck-py==0.11.0.1 shellcheck scripts/*.sh
+  @uvx --from actionlint-py==1.7.12.24 actionlint .github/workflows/*.yml
+  @just supply-chain
+
 format:
   @bunx biome format --write .
   @cargo fmt --all
@@ -21,13 +29,16 @@ format-check:
 lint:
   @bunx nx run-many -t lint --all --outputStyle=static
   @node scripts/check-boundaries.mjs
-  @shellcheck scripts/*.sh
+  @uvx --from shellcheck-py==0.11.0.1 shellcheck scripts/*.sh
+  @uvx --from actionlint-py==1.7.12.24 actionlint .github/workflows/*.yml
 
 typecheck:
   @bunx nx run-many -t typecheck --all --outputStyle=static
 
+# Nx project tests enforce Bun coverage thresholds and cargo llvm-cov --fail-under-lines 95.
 test:
   @bunx nx run-many -t test --all --outputStyle=static
+  @node scripts/check-coverage.mjs coverage/ipc-contract/lcov.info coverage/oneharness-bridge/lcov.info coverage/conversation-ui/lcov.info
   @just test-e2e
 
 test-e2e:

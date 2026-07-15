@@ -6,7 +6,10 @@
   "tags": ["scope:shared", "type:contract"],
   "targets": {
     "build": { "command": "bunx tsc -p packages/ipc-contract/tsconfig.json" },
-    "test": { "command": "bun test packages/ipc-contract --coverage" },
+    "test": {
+      "command": "bun test packages/ipc-contract --coverage --coverage-dir coverage/ipc-contract",
+      "outputs": ["{workspaceRoot}/coverage/ipc-contract"]
+    },
     "lint": { "command": "bunx biome check packages/ipc-contract" },
     "typecheck": { "command": "bunx tsc -p packages/ipc-contract/tsconfig.json" },
     "format-check": { "command": "bunx biome format packages/ipc-contract" }

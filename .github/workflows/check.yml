@@ -1,0 +1,128 @@
+name: check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: check-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: check (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, macos-15, windows-2025]
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: 0.11.28
+      - name: Install Tauri prerequisites
+        if: runner.os == 'Linux'
+        run: >-
+          sudo apt-get update -qq && sudo apt-get install -y
+          libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - name: Install just
+        run: cargo install just --locked --version 1.42.4
+      - name: Bootstrap clean checkout
+        run: just bootstrap
+      - name: Affected gate from explicit merge base
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          git fetch --no-tags origin "$GITHUB_BASE_REF"
+          base="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
+          just check-affected "$base" HEAD
+      - name: Full gate
+        if: github.event_name != 'pull_request'
+        run: just check
+
+  supply-chain:
+    name: supply-chain
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: 0.11.28
+      - name: Install tools
+        run: cargo install just --locked --version 1.42.4
+      - name: Bootstrap clean checkout
+        run: just bootstrap
+      - name: Dependency policy and audit
+        run: just supply-chain
+
+  install:
+    name: install (${{ matrix.os }})
+    needs: check
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            bundles: deb
+          - os: macos-15
+            bundles: dmg
+          - os: windows-2025
+            bundles: msi
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: 0.11.28
+      - name: Install Tauri prerequisites
+        if: runner.os == 'Linux'
+        run: >-
+          sudo apt-get update -qq && sudo apt-get install -y
+          libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - name: Install just
+        run: cargo install just --locked --version 1.42.4
+      - name: Bootstrap clean checkout
+        run: just bootstrap
+      - name: Build native installer
+        run: bunx tauri build --config apps/desktop-shell/tauri.conf.json --bundles ${{ matrix.bundles }}
+      - name: Install Debian artifact
+        if: runner.os == 'Linux'
+        run: |
+          package="$(find target/release/bundle/deb -name '*.deb' -print -quit)"
+          test -n "$package"
+          sudo dpkg -i "$package"
+          dpkg-query -W oneharness
+      - name: Mount and verify macOS artifact
+        if: runner.os == 'macOS'
+        run: |
+          image="$(find target/release/bundle/dmg -name '*.dmg' -print -quit)"
+          test -n "$image"
+          mount="$(hdiutil attach "$image" -nobrowse | tail -1 | sed 's#^.*\(/Volumes/.*\)#\1#')"
+          test -x "$mount/oneharness.app/Contents/MacOS/oneharness"
+          hdiutil detach "$mount"
+      - name: Install and verify Windows artifact
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $msi = Get-ChildItem target/release/bundle/msi/*.msi | Select-Object -First 1
+          if (-not $msi) { throw "No MSI was built" }
+          $process = Start-Process msiexec.exe -ArgumentList @('/i', $msi.FullName, '/qn', '/norestart') -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "MSI install failed: $($process.ExitCode)" }
+          $installed = Get-ChildItem $env:ProgramFiles,$env:LOCALAPPDATA -Filter oneharness.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $installed) { throw "Installed oneharness.exe was not found" }

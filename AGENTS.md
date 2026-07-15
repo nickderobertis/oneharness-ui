@@ -57,8 +57,8 @@ with `just setup-llmlint`.
 - Squash-only PRs land on protected `main`; auto-merge, conversation resolution,
   linear history, and every `check`, `supply-chain`, `commitlint`, and `llmlint`
   context are required. Admin bypass is break-glass; merged heads auto-delete.
-- release-please opens the release PR. Merging it alone updates manifests and
-  changelog and creates `vX.Y.Z`; the tag independently builds signed/checksummed
+- semantic-release computes the next version, updates every manifest and the
+  changelog, and creates `vX.Y.Z`; the tag independently builds and checksums
   Tauri artifacts. The release token is a PAT/App secret so tag workflows fire.
 
 ## Output and handoff

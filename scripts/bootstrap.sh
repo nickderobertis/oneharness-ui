@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-readonly ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+readonly ROOT
 
-for tool in bun cargo rustup curl npm; do
+for tool in bun cargo rustup curl npm uv; do
   command -v "$tool" >/dev/null 2>&1 || {
     printf 'bootstrap: %s is required; install the pinned toolchain from .tool-versions\n' "$tool" >&2
     exit 1
@@ -17,6 +18,9 @@ if [ -f bun.lock ]; then
 else
   bun install >/dev/null
 fi
+bunx playwright install chromium >/dev/null
+uvx --from actionlint-py==1.7.12.24 actionlint --version >/dev/null
+uvx --from shellcheck-py==0.11.0.1 shellcheck --version >/dev/null
 cargo fetch --locked --quiet
 
 install_cargo_tool() {

@@ -18,32 +18,47 @@ describe("validated bridge client", () => {
   });
 
   test("uses the scoped Tauri sidecar transport", async () => {
-    const stdoutListeners: Array<(line: string) => void> = [];
-    const closeListeners: Array<(event: { code: number }) => void> = [];
+    let exitCode = 0;
     mock.module("@tauri-apps/plugin-shell", () => ({
       Command: {
-        sidecar: () => ({
-          on: (event: string, listener: (value: { code: number }) => void) => {
-            if (event === "close") closeListeners.push(listener);
-          },
-          spawn: async () => ({
-            write: async () => {
-              for (const listener of stdoutListeners) {
-                listener(JSON.stringify({ data: { conversations: [], kind: "list" }, ok: true }));
-              }
-              for (const listener of closeListeners) listener({ code: 0 });
+        sidecar: () => {
+          const stdoutListeners: Array<(line: string) => void> = [];
+          const stderrListeners: Array<(line: string) => void> = [];
+          const closeListeners: Array<(event: { code: number }) => void> = [];
+          return {
+            on: (event: string, listener: (value: { code: number }) => void) => {
+              if (event === "close") closeListeners.push(listener);
             },
-          }),
-          stderr: { on: () => undefined },
-          stdout: {
-            on: (_event: string, listener: (line: string) => void) =>
-              stdoutListeners.push(listener),
-          },
-        }),
+            spawn: async () => ({
+              write: async () => {
+                if (exitCode === 0) {
+                  for (const listener of stdoutListeners) {
+                    listener(
+                      JSON.stringify({ data: { conversations: [], kind: "list" }, ok: true }),
+                    );
+                  }
+                } else {
+                  for (const listener of stderrListeners) listener("bridge unavailable");
+                }
+                for (const listener of closeListeners) listener({ code: exitCode });
+              },
+            }),
+            stderr: {
+              on: (_event: string, listener: (line: string) => void) =>
+                stderrListeners.push(listener),
+            },
+            stdout: {
+              on: (_event: string, listener: (line: string) => void) =>
+                stdoutListeners.push(listener),
+            },
+          };
+        },
       },
     }));
     window.__TAURI_INTERNALS__ = {};
     const response = await invokeBridge({ kind: "list" });
     expect(response).toEqual({ data: { conversations: [], kind: "list" }, ok: true });
+    exitCode = 1;
+    await expect(invokeBridge({ kind: "list" })).rejects.toThrow("bridge unavailable");
   });
 });

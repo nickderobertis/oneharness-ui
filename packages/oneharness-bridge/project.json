@@ -10,7 +10,10 @@
       "command": "bun build packages/oneharness-bridge/src/cli.ts --target=bun --outdir=packages/oneharness-bridge/dist",
       "outputs": ["{projectRoot}/dist"]
     },
-    "test": { "command": "bun test packages/oneharness-bridge --coverage" },
+    "test": {
+      "command": "bun test packages/oneharness-bridge --coverage --coverage-dir coverage/oneharness-bridge",
+      "outputs": ["{workspaceRoot}/coverage/oneharness-bridge"]
+    },
     "lint": { "command": "bunx biome check packages/oneharness-bridge" },
     "typecheck": { "command": "bunx tsc -p packages/oneharness-bridge/tsconfig.json" },
     "format-check": { "command": "bunx biome format packages/oneharness-bridge" }

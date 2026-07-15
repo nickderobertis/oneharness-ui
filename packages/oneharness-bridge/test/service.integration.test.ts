@@ -173,6 +173,24 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     });
   });
 
+  test("surfaces an explicitly configured missing config path", async () => {
+    await seed("config-check", '{"result":"Ready","session_id":"native-config"}');
+    const listed = await service().handle({ kind: "list" });
+    const id = listed.ok && listed.data.kind === "list" ? listed.data.conversations[0]?.id : "";
+    const previousConfig = process.env.ONEHARNESS_CONFIG;
+    const missingConfigPath = resolve(historyDir, "missing-oneharness.toml");
+    process.env.ONEHARNESS_CONFIG = missingConfigPath;
+    const missingConfig = await service().handle({
+      kind: "continue",
+      message: "Continue through the configured harness",
+      sessionId: id,
+    });
+    if (previousConfig === undefined) delete process.env.ONEHARNESS_CONFIG;
+    else process.env.ONEHARNESS_CONFIG = previousConfig;
+    expect(missingConfig).toMatchObject({ ok: false, error: { code: "CONFIG_ERROR" } });
+    if (!missingConfig.ok) expect(missingConfig.error.detail).toContain(missingConfigPath);
+  });
+
   test("surfaces malformed history and useful executable/storage errors", async () => {
     const malformedDirectory = resolve(historyDir, "project");
     await mkdir(malformedDirectory);

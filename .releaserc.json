@@ -1,0 +1,44 @@
+{
+  "branches": ["main"],
+  "tagFormat": "v${version}",
+  "plugins": [
+    [
+      "@semantic-release/commit-analyzer",
+      {
+        "preset": "conventionalcommits",
+        "releaseRules": [
+          { "breaking": true, "release": "minor" },
+          { "release": "minor", "type": "feat" },
+          { "release": "patch", "type": "build" },
+          { "release": "patch", "type": "fix" },
+          { "release": "patch", "type": "perf" },
+          { "release": "patch", "type": "refactor" }
+        ]
+      }
+    ],
+    ["@semantic-release/release-notes-generator", { "preset": "conventionalcommits" }],
+    "@semantic-release/changelog",
+    [
+      "@semantic-release/exec",
+      { "prepareCmd": "bun scripts/set-version.mjs ${nextRelease.version}" }
+    ],
+    [
+      "@semantic-release/git",
+      {
+        "assets": [
+          "CHANGELOG.md",
+          "Cargo.lock",
+          "Cargo.toml",
+          "apps/conversation-ui/package.json",
+          "apps/desktop-shell/Cargo.toml",
+          "apps/desktop-shell/tauri.conf.json",
+          "package.json",
+          "packages/ipc-contract/package.json",
+          "packages/oneharness-bridge/package.json"
+        ],
+        "message": "chore(release): ${nextRelease.version}\n\n${nextRelease.notes}"
+      }
+    ],
+    "@semantic-release/github"
+  ]
+}
