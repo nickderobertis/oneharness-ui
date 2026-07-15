@@ -57,6 +57,7 @@ async fn run_bridge_command(
                 exit_code = payload.code;
                 Ok(())
             }
+            _ => Ok(()),
         };
         if let Err(error) = result {
             if let Some(running) = child.take() {
