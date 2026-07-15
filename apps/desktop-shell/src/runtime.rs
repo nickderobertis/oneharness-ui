@@ -108,7 +108,7 @@ mod tests {
     use std::{fs, path::PathBuf};
 
     use serde_json::json;
-    use tauri::{Manager, test::mock_context, test::noop_assets};
+    use tauri::{test::mock_context, test::noop_assets};
     use tauri_plugin_shell::ShellExt;
 
     fn install_bridge_fixture() -> Result<PathBuf, Box<dyn std::error::Error>> {
