@@ -28,5 +28,23 @@
     "lint": { "cache": true },
     "typecheck": { "cache": true },
     "format-check": { "cache": true }
-  }
+  },
+  "dependencyConstraints": [
+    {
+      "sourceTag": "scope:desktop",
+      "onlyDependOnLibsWithTags": ["scope:desktop", "scope:ui", "scope:local", "scope:shared"]
+    },
+    {
+      "sourceTag": "scope:ui",
+      "onlyDependOnLibsWithTags": ["scope:ui", "scope:local", "scope:shared"]
+    },
+    {
+      "sourceTag": "scope:local",
+      "onlyDependOnLibsWithTags": ["scope:local", "scope:shared"]
+    },
+    {
+      "sourceTag": "scope:shared",
+      "onlyDependOnLibsWithTags": ["scope:shared"]
+    }
+  ]
 }
