@@ -18,6 +18,7 @@ if [ -f bun.lock ]; then
 else
   bun install >/dev/null
 fi
+bun "$ROOT/scripts/build-sidecar.mjs"
 bunx playwright install chromium >/dev/null
 uvx --from actionlint-py==1.7.12.24 actionlint --version >/dev/null
 uvx --from shellcheck-py==0.11.0.1 shellcheck --version >/dev/null

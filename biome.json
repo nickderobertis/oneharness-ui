@@ -37,9 +37,44 @@
         "useHookAtTopLevel": "error"
       },
       "security": { "noDangerouslySetInnerHtml": "error" },
+      "style": {
+        "noRestrictedImports": {
+          "level": "error",
+          "options": {
+            "patterns": [
+              {
+                "group": ["@/features/*/*"],
+                "message": "Import another feature through its public index."
+              }
+            ]
+          }
+        }
+      },
       "suspicious": { "noExplicitAny": "error" }
     }
   },
+  "overrides": [
+    {
+      "includes": ["apps/conversation-ui/src/components/**"],
+      "linter": {
+        "rules": {
+          "style": {
+            "noRestrictedImports": {
+              "level": "error",
+              "options": {
+                "patterns": [
+                  {
+                    "group": ["@/features/*", "@/features/*/*"],
+                    "message": "Shared UI cannot depend on a feature."
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
   "assist": {
     "actions": { "source": { "organizeImports": "on" } }
   }

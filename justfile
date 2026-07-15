@@ -1,5 +1,6 @@
 set dotenv-load := false
 set shell := ["bash", "-cu"]
+set windows-shell := ["sh", "-cu"]
 
 default:
   @just --list
@@ -20,20 +21,18 @@ check-affected base head:
   @just supply-chain
 
 format:
-  @bunx biome format --write .
-  @cargo fmt --all
+  @bunx nx run-many -t format --all --parallel=1 --outputStyle=static
 
 format-check:
   @bunx nx run-many -t format-check --all --outputStyle=static
 
 lint:
   @bunx nx run-many -t lint --all --outputStyle=static
-  @node scripts/check-boundaries.mjs
   @uvx --from shellcheck-py==0.11.0.1 shellcheck scripts/*.sh
   @uvx --from actionlint-py==1.7.12.24 actionlint .github/workflows/*.yml
 
 typecheck:
-  @bunx nx run-many -t typecheck --all --outputStyle=static
+  @RUSTFLAGS="-D warnings" bunx nx run-many -t typecheck --all --outputStyle=static
 
 # Nx project tests enforce Bun coverage thresholds and cargo llvm-cov --fail-under-lines 95.
 test:
@@ -45,7 +44,7 @@ test-e2e:
   @bunx nx run conversation-ui:e2e --outputStyle=static
 
 build:
-  @bunx nx run-many -t build --all --outputStyle=static
+  @RUSTFLAGS="-D warnings" bunx nx run-many -t build --all --outputStyle=static
 
 supply-chain:
   @cargo deny check --hide-inclusion-graph

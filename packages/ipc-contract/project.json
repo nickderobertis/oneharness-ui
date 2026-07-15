@@ -10,7 +10,14 @@
       "command": "bun test packages/ipc-contract --coverage --coverage-dir coverage/ipc-contract",
       "outputs": ["{workspaceRoot}/coverage/ipc-contract"]
     },
-    "lint": { "command": "bunx biome check packages/ipc-contract" },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": ["bunx biome check packages/ipc-contract", "node scripts/check-boundaries.mjs"],
+        "parallel": false
+      }
+    },
+    "format": { "command": "bunx biome format --write packages/ipc-contract" },
     "typecheck": { "command": "bunx tsc -p packages/ipc-contract/tsconfig.json" },
     "format-check": { "command": "bunx biome format packages/ipc-contract" }
   }

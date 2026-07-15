@@ -14,7 +14,17 @@
       "command": "bun test packages/oneharness-bridge --coverage --coverage-dir coverage/oneharness-bridge",
       "outputs": ["{workspaceRoot}/coverage/oneharness-bridge"]
     },
-    "lint": { "command": "bunx biome check packages/oneharness-bridge" },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "bunx biome check packages/oneharness-bridge",
+          "node scripts/check-boundaries.mjs"
+        ],
+        "parallel": false
+      }
+    },
+    "format": { "command": "bunx biome format --write packages/oneharness-bridge" },
     "typecheck": { "command": "bunx tsc -p packages/oneharness-bridge/tsconfig.json" },
     "format-check": { "command": "bunx biome format packages/oneharness-bridge" }
   }

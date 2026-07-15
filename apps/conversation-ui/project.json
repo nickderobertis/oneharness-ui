@@ -15,7 +15,14 @@
       "outputs": ["{workspaceRoot}/coverage/conversation-ui"]
     },
     "e2e": { "command": "bun run --cwd apps/conversation-ui test:e2e" },
-    "lint": { "command": "bunx biome check apps/conversation-ui" },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": ["bunx biome check apps/conversation-ui", "node scripts/check-boundaries.mjs"],
+        "parallel": false
+      }
+    },
+    "format": { "command": "bunx biome format --write ." },
     "typecheck": { "command": "bunx tsc -p apps/conversation-ui/tsconfig.json --noEmit" },
     "format-check": { "command": "bunx biome format apps/conversation-ui" }
   }

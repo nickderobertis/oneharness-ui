@@ -10,12 +10,19 @@ files:
   # List committed files that shouldn't be judged (lock files, generated output).
   exclude:
     - "**/.git/**"
+    - "**/*.icns"
+    - "**/*.ico"
+    - "**/*.png"
+    - "Cargo.lock"
+    - "bun.lock"
+    - "apps/conversation-ui/next-env.d.ts"
 rationales: true
-# No `agents` block: the harness/model are NOT pinned here. `oneharness.toml`
-# (composed alongside this file) selects them in fallback mode — codex + gpt-5.5
-# primary, claude-code + opus-4.8 secondary — so a Claude Code session falls
-# through to claude-code with no config edit. Leaving the harness unset is what
-# lets that fallback (or an ONEHARNESS_<FIELD> env override) decide.
+# The agent only limits rule batch size so broad repository reviews finish within
+# the judge timeout. Harness/model remain unset: `oneharness.toml` owns fallback
+# selection, and ONEHARNESS_<FIELD> overrides continue to work.
+agents:
+  default:
+    batch_size: 5
 plugins:
   - "https://raw.githubusercontent.com/nickderobertis/llmlint/main/assets/config_lint.yml@1"
   - "https://raw.githubusercontent.com/nickderobertis/dero-skills/main/skills/bootstrap/create-repo/assets/llmlint/base.llmlint.yml@1"
