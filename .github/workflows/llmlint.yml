@@ -46,4 +46,4 @@ jobs:
           COPILOT_GITHUB_TOKEN: ${{ github.token }}
           ONEHARNESS_HARNESSES: copilot
         # llmlint: ignore[live_tier_compiles_and_requires_credential, diagnostics_error_or_absent] Explicit Copilot quota exhaustion is the sole permitted non-blocking judge failure; all code findings and other harness errors remain blocking.
-        run: scripts/run-llmlint-copilot.sh
+        run: just lint-llm-copilot
