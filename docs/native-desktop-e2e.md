@@ -14,7 +14,9 @@ xvfb-run -a just test-desktop-e2e
 ```
 
 Windows uses WebView2; the pinned WebdriverIO Tauri service downloads the Edge
-driver matching the installed runtime. Failure screenshots and driver logs stay
+driver matching the installed runtime. The session gives EdgeDriver and Tauri
+the same isolated, writable WebView2 user-data folder so the driver can discover
+the application's DevTools endpoint. Failure screenshots and driver logs stay
 under `test-results/desktop-e2e`; successful runs remove them.
 
 The fixture replaces only paid model execution with oneharness's own

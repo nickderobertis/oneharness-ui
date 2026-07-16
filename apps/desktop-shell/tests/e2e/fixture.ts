@@ -98,6 +98,7 @@ export type DesktopFixture = {
     MOCK_STDOUT: string;
     ONEHARNESS_NO_CONFIG: string;
     ONEHARNESS_UI_E2E_PROVIDER_ARGV: string;
+    ONEHARNESS_UI_E2E_WEBVIEW2_USER_DATA_DIR: string;
     ONEHARNESS_UI_HISTORY_DIR: string;
     ONEHARNESS_UI_PROVIDER_BIN: string;
     ONEHARNESS_UI_PROVIDER_HARNESS: string;
@@ -156,6 +157,7 @@ export async function createDesktopFixture(providerPath = provider): Promise<Des
           '{"result":"Native continuation succeeded","session_id":"native-continued-session"}',
         ONEHARNESS_NO_CONFIG: "1",
         ONEHARNESS_UI_E2E_PROVIDER_ARGV: providerArgv,
+        ONEHARNESS_UI_E2E_WEBVIEW2_USER_DATA_DIR: resolve(root, "webview2-user-data"),
         ONEHARNESS_UI_HISTORY_DIR: historyDir,
         ONEHARNESS_UI_PROVIDER_BIN: providerPath,
         ONEHARNESS_UI_PROVIDER_HARNESS: "claude-code",

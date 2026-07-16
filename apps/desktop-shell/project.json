@@ -20,7 +20,7 @@
       "options": {
         "commands": [
           "bash scripts/test-rust.sh",
-          "bun test apps/desktop-shell/tests/e2e/fixture.integration.test.ts"
+          "bun test apps/desktop-shell/tests/e2e/fixture.integration.test.ts apps/desktop-shell/tests/e2e/capabilities.test.ts"
         ],
         "parallel": false
       }
