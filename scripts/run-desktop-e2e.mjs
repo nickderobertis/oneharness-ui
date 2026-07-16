@@ -5,6 +5,11 @@ import {
   createDesktopFixture,
   deterministicDesktopEnvironment,
 } from "../apps/desktop-shell/tests/e2e/fixture.ts";
+import {
+  desktopE2eStageLog,
+  recordDesktopStage,
+  runDesktopStage,
+} from "../apps/desktop-shell/tests/e2e/stage-log.ts";
 
 const root = resolve(import.meta.dir, "..");
 const artifacts = resolve(root, "test-results/desktop-e2e");
@@ -33,74 +38,87 @@ function appBinary() {
 }
 
 async function main() {
-  if (process.platform === "darwin") {
-    throw new Error(
-      "official tauri-driver cannot drive WKWebView on macOS; use the macOS native build/install smoke in CI",
-    );
-  }
-  if (process.platform !== "linux" && process.platform !== "win32") {
-    throw new Error(
-      `official tauri-driver is unsupported on ${process.platform}; run the journey on Linux or Windows, or use the macOS native smoke in CI`,
-    );
-  }
-  if (process.platform === "linux") {
-    if (!Bun.which("pkg-config") || !Bun.which("WebKitWebDriver")) {
-      throw new Error(
-        "Linux requires pkg-config and WebKitWebDriver; install webkit2gtk-driver and the documented Tauri prerequisites",
-      );
-    }
-    const environment = deterministicDesktopEnvironment({});
-    const webkit = Bun.spawnSync(["pkg-config", "--exists", "webkit2gtk-4.1"], {
-      cwd: root,
-      env: environment,
-    });
-    if (webkit.exitCode !== 0) {
-      throw new Error(
-        "Linux requires the WebKitGTK 4.1 development package; install libwebkit2gtk-4.1-dev and rerun just test-desktop-e2e",
-      );
-    }
-    if (!/^(?:[A-Za-z0-9_.-]+)?:\d+(?:\.\d+)?$/.test(environment.DISPLAY ?? "")) {
-      throw new Error("Linux requires a display; rerun with xvfb-run -a just test-desktop-e2e");
-    }
-  }
-
-  const installed = Bun.spawnSync(["cargo", "install", "--list"], {
-    cwd: root,
-    env: deterministicDesktopEnvironment({}),
-  });
-  if (
-    installed.exitCode !== 0 ||
-    !installed.stdout.toString().split("\n").includes(driverVersion)
-  ) {
-    throw new Error("tauri-driver 2.0.6 is required; run just bootstrap");
-  }
-
   rmSync(artifacts, { force: true, recursive: true });
+  await recordDesktopStage(desktopE2eStageLog, "artifact initialization", "pass");
+
+  await runDesktopStage(desktopE2eStageLog, "platform prerequisites", () => {
+    if (process.platform === "darwin") {
+      throw new Error(
+        "official tauri-driver cannot drive WKWebView on macOS; use the macOS native build/install smoke in CI",
+      );
+    }
+    if (process.platform !== "linux" && process.platform !== "win32") {
+      throw new Error(
+        `official tauri-driver is unsupported on ${process.platform}; run the journey on Linux or Windows, or use the macOS native smoke in CI`,
+      );
+    }
+    if (process.platform === "linux") {
+      if (!Bun.which("pkg-config") || !Bun.which("WebKitWebDriver")) {
+        throw new Error(
+          "Linux requires pkg-config and WebKitWebDriver; install webkit2gtk-driver and the documented Tauri prerequisites",
+        );
+      }
+      const environment = deterministicDesktopEnvironment({});
+      const webkit = Bun.spawnSync(["pkg-config", "--exists", "webkit2gtk-4.1"], {
+        cwd: root,
+        env: environment,
+      });
+      if (webkit.exitCode !== 0) {
+        throw new Error(
+          "Linux requires the WebKitGTK 4.1 development package; install libwebkit2gtk-4.1-dev and rerun just test-desktop-e2e",
+        );
+      }
+      if (!/^(?:[A-Za-z0-9_.-]+)?:\d+(?:\.\d+)?$/.test(environment.DISPLAY ?? "")) {
+        throw new Error("Linux requires a display; rerun with xvfb-run -a just test-desktop-e2e");
+      }
+    }
+  });
+
+  await runDesktopStage(desktopE2eStageLog, "tauri driver verification", () => {
+    const installed = Bun.spawnSync(["cargo", "install", "--list"], {
+      cwd: root,
+      env: deterministicDesktopEnvironment({}),
+    });
+    if (
+      installed.exitCode !== 0 ||
+      !installed.stdout.toString().split("\n").includes(driverVersion)
+    ) {
+      throw new Error("tauri-driver 2.0.6 is required; run just bootstrap");
+    }
+  });
+
   const format = process.platform === "win32" ? "msi" : "deb";
-  run(
-    ["just", "bundle"],
-    deterministicDesktopEnvironment({ BUNDLE_FORMATS: format }),
-    `native ${format} package build`,
-    "install the reported Tauri prerequisite and rerun just test-desktop-e2e",
+  await runDesktopStage(desktopE2eStageLog, `native ${format} package build`, () =>
+    run(
+      ["just", "bundle"],
+      deterministicDesktopEnvironment({ BUNDLE_FORMATS: format }),
+      `native ${format} package build`,
+      "install the reported Tauri prerequisite and rerun just test-desktop-e2e",
+    ),
   );
 
-  const fixture = await createDesktopFixture();
+  const fixture = await runDesktopStage(desktopE2eStageLog, "desktop fixture creation", async () =>
+    createDesktopFixture(),
+  );
   try {
-    run(
-      ["bun", "run", "--cwd", "apps/desktop-shell", "test:e2e"],
-      deterministicDesktopEnvironment({
-        ...fixture.environment,
-        ONEHARNESS_UI_E2E_APP_BINARY: appBinary(),
-        // Node 26 must provide the fetch primitives as one compatible set. The
-        // mixed global/bundled Undici path fails before reaching tauri-driver.
-        WDIO_USE_NATIVE_FETCH: "1",
-      }),
-      "WebdriverIO native journey",
-      "inspect test-results/desktop-e2e and rerun just test-desktop-e2e",
+    await runDesktopStage(desktopE2eStageLog, "webdriver native journey", () =>
+      run(
+        ["bun", "run", "--cwd", "apps/desktop-shell", "test:e2e"],
+        deterministicDesktopEnvironment({
+          ...fixture.environment,
+          ONEHARNESS_UI_E2E_APP_BINARY: appBinary(),
+          // Node 26 must provide the fetch primitives as one compatible set. The
+          // mixed global/bundled Undici path fails before reaching tauri-driver.
+          WDIO_USE_NATIVE_FETCH: "1",
+        }),
+        "WebdriverIO native journey",
+        "inspect test-results/desktop-e2e and rerun just test-desktop-e2e",
+      ),
     );
   } finally {
-    await fixture.cleanup();
+    await runDesktopStage(desktopE2eStageLog, "desktop fixture cleanup", fixture.cleanup);
   }
+  await recordDesktopStage(desktopE2eStageLog, "native desktop journey", "pass");
   rmSync(artifacts, { force: true, recursive: true });
 }
 

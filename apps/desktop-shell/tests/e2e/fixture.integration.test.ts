@@ -56,6 +56,9 @@ describe("native desktop fixture", () => {
     const fixture = await createDesktopFixture();
     try {
       expect(Object.hasOwn(fixture.environment, "ONEHARNESS_BIN")).toBe(false);
+      expect(fixture.environment.WEBVIEW2_USER_DATA_FOLDER).toBe(
+        fixture.environment.ONEHARNESS_UI_E2E_WEBVIEW2_USER_DATA_DIR,
+      );
       const historyDir = fixture.environment.ONEHARNESS_UI_HISTORY_DIR;
       const listed = await invoke([
         "history",

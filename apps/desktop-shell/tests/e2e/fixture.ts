@@ -229,6 +229,7 @@ export type DesktopFixture = {
     ONEHARNESS_UI_HISTORY_DIR: string;
     ONEHARNESS_UI_PROVIDER_BIN: string;
     ONEHARNESS_UI_PROVIDER_HARNESS: string;
+    WEBVIEW2_USER_DATA_FOLDER: string;
   };
 };
 
@@ -295,6 +296,7 @@ export async function createDesktopFixture(
         ONEHARNESS_UI_HISTORY_DIR: historyDir,
         ONEHARNESS_UI_PROVIDER_BIN: providerPath,
         ONEHARNESS_UI_PROVIDER_HARNESS: "claude-code",
+        WEBVIEW2_USER_DATA_FOLDER: webview2UserDataDir,
       },
     };
   } catch (error) {
