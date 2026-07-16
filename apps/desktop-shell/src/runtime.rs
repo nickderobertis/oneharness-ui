@@ -13,65 +13,104 @@ const BRIDGE_SIDECAR: &str = "oneharness-ui-bridge";
 const FIXTURE_ROOT_PREFIX: &str = "oneharness-ui-desktop-e2e-";
 
 #[cfg(any(windows, test))]
-fn automation_data_directory(
-    automation: Option<&std::ffi::OsStr>,
-    user_data_directory: Option<&std::ffi::OsStr>,
-    local_app_data: Option<&std::ffi::OsStr>,
-) -> std::io::Result<Option<std::path::PathBuf>> {
-    use std::path::{Component, Path, PathBuf};
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+enum WebViewAutomation {
+    Disabled,
+    Enabled,
+}
 
-    if automation != Some(std::ffi::OsStr::new("true")) {
-        return Ok(None);
-    }
-    let user_data_directory = user_data_directory.ok_or_else(|| {
-        std::io::Error::other("Windows WebView2 automation profile was not configured")
-    })?;
-    let local_app_data = local_app_data.ok_or_else(|| {
-        std::io::Error::other("Windows WebView2 automation profile root was not configured")
-    })?;
-    let local_app_data = std::fs::canonicalize(Path::new(local_app_data))?;
-    let user_data_directory = std::fs::canonicalize(Path::new(user_data_directory))?;
-    if !user_data_directory.is_dir() {
-        return Err(std::io::Error::other(
-            "Windows WebView2 automation profile is not a directory",
-        ));
-    }
-    let relative = user_data_directory
-        .strip_prefix(&local_app_data)
-        .map_err(|_| {
-            std::io::Error::other("Windows WebView2 automation profile escaped its root")
-        })?;
-    let mut components = relative.components();
-    let valid_label =
-        matches!(components.next(), Some(Component::Normal(label)) if label == "main");
-    let fixture_name = match components.next() {
-        Some(Component::Normal(name))
-            if name.to_str().is_some_and(|name| {
-                name.starts_with(FIXTURE_ROOT_PREFIX) && name.len() > FIXTURE_ROOT_PREFIX.len()
-            }) =>
-        {
-            name
+#[cfg(any(windows, test))]
+impl WebViewAutomation {
+    fn parse(value: Option<&std::ffi::OsStr>) -> std::io::Result<Self> {
+        match value {
+            None => Ok(Self::Disabled),
+            Some(value) if value == "true" => Ok(Self::Enabled),
+            Some(_) => Err(std::io::Error::other(
+                "TAURI_WEBVIEW_AUTOMATION must be absent or true",
+            )),
         }
-        _ => {
+    }
+}
+
+#[cfg(any(windows, test))]
+#[derive(Debug, Eq, PartialEq)]
+struct ValidatedAutomationDataDirectory(std::path::PathBuf);
+
+#[cfg(any(windows, test))]
+impl ValidatedAutomationDataDirectory {
+    fn parse(
+        automation: WebViewAutomation,
+        user_data_directory: Option<&std::ffi::OsStr>,
+        local_app_data: Option<&std::ffi::OsStr>,
+    ) -> std::io::Result<Option<Self>> {
+        use std::path::{Component, Path, PathBuf};
+
+        if automation == WebViewAutomation::Disabled {
+            return Ok(None);
+        }
+        let user_data_directory = user_data_directory.ok_or_else(|| {
+            std::io::Error::other("Windows WebView2 automation profile was not configured")
+        })?;
+        let local_app_data = local_app_data.ok_or_else(|| {
+            std::io::Error::other("Windows WebView2 automation profile root was not configured")
+        })?;
+        let local_app_data = std::fs::canonicalize(Path::new(local_app_data))?;
+        let user_data_directory = std::fs::canonicalize(Path::new(user_data_directory))?;
+        if !user_data_directory.is_dir() {
             return Err(std::io::Error::other(
-                "Windows WebView2 automation profile did not belong to the desktop fixture",
+                "Windows WebView2 automation profile is not a directory",
             ));
         }
-    };
-    let valid_directory =
-        matches!(components.next(), Some(Component::Normal(name)) if name == "webview2-user-data");
-    if !valid_label || !valid_directory || components.next().is_some() {
-        return Err(std::io::Error::other(
-            "Windows WebView2 automation profile did not match Tauri's window directory",
-        ));
+        let relative = user_data_directory
+            .strip_prefix(&local_app_data)
+            .map_err(|_| {
+                std::io::Error::other("Windows WebView2 automation profile escaped its root")
+            })?;
+        let mut components = relative.components();
+        let valid_label =
+            matches!(components.next(), Some(Component::Normal(label)) if label == "main");
+        let fixture_name = match components.next() {
+            Some(Component::Normal(name))
+                if name.to_str().is_some_and(|name| {
+                    name.starts_with(FIXTURE_ROOT_PREFIX) && name.len() > FIXTURE_ROOT_PREFIX.len()
+                }) =>
+            {
+                name
+            }
+            _ => {
+                return Err(std::io::Error::other(
+                    "Windows WebView2 automation profile did not belong to the desktop fixture",
+                ));
+            }
+        };
+        let valid_directory = matches!(
+            components.next(),
+            Some(Component::Normal(name)) if name == "webview2-user-data"
+        );
+        if !valid_label || !valid_directory || components.next().is_some() {
+            return Err(std::io::Error::other(
+                "Windows WebView2 automation profile did not match Tauri's window directory",
+            ));
+        }
+        Ok(Some(Self(
+            PathBuf::from(fixture_name).join("webview2-user-data"),
+        )))
     }
-    Ok(Some(PathBuf::from(fixture_name).join("webview2-user-data")))
+}
+
+#[cfg(any(windows, test))]
+fn automation_data_directory(
+    automation: WebViewAutomation,
+    user_data_directory: Option<&std::ffi::OsStr>,
+    local_app_data: Option<&std::ffi::OsStr>,
+) -> std::io::Result<Option<ValidatedAutomationDataDirectory>> {
+    ValidatedAutomationDataDirectory::parse(automation, user_data_directory, local_app_data)
 }
 
 #[cfg(any(windows, test))]
 fn apply_automation_data_directory<R: Runtime>(
     context: &mut tauri::Context<R>,
-    directory: Option<std::path::PathBuf>,
+    directory: Option<ValidatedAutomationDataDirectory>,
 ) -> std::io::Result<()> {
     let Some(directory) = directory else {
         return Ok(());
@@ -85,7 +124,7 @@ fn apply_automation_data_directory<R: Runtime>(
         .ok_or_else(|| {
             std::io::Error::other("Tauri's main automation window was not configured")
         })?;
-    window.data_directory = Some(directory);
+    window.data_directory = Some(directory.0);
     Ok(())
 }
 
@@ -95,8 +134,10 @@ fn apply_automation_data_directory<R: Runtime>(
 pub fn configure_context<R: Runtime>(context: &mut tauri::Context<R>) -> std::io::Result<()> {
     #[cfg(windows)]
     {
+        let automation =
+            WebViewAutomation::parse(std::env::var_os("TAURI_WEBVIEW_AUTOMATION").as_deref())?;
         let directory = automation_data_directory(
-            std::env::var_os("TAURI_WEBVIEW_AUTOMATION").as_deref(),
+            automation,
             std::env::var_os("ONEHARNESS_UI_E2E_WEBVIEW2_USER_DATA_DIR").as_deref(),
             std::env::var_os("LOCALAPPDATA").as_deref(),
         )?;
@@ -302,23 +343,37 @@ mod tests {
 
         assert_eq!(
             super::automation_data_directory(
-                Some(std::ffi::OsStr::new("true")),
+                super::WebViewAutomation::Enabled,
                 Some(user_data_directory.as_os_str()),
                 Some(local_app_data.path().as_os_str()),
             )?,
-            Some(PathBuf::from(fixture_name).join("webview2-user-data")),
+            Some(super::ValidatedAutomationDataDirectory(
+                PathBuf::from(fixture_name).join("webview2-user-data"),
+            )),
         );
         assert_eq!(
             super::automation_data_directory(
-                Some(std::ffi::OsStr::new("false")),
+                super::WebViewAutomation::Disabled,
                 Some(std::ffi::OsStr::new("untrusted")),
                 None,
             )?,
             None,
         );
+        assert_eq!(
+            super::WebViewAutomation::parse(None)?,
+            super::WebViewAutomation::Disabled,
+        );
+        assert_eq!(
+            super::WebViewAutomation::parse(Some(std::ffi::OsStr::new("true")))?,
+            super::WebViewAutomation::Enabled,
+        );
+        assert!(super::WebViewAutomation::parse(Some(std::ffi::OsStr::new("false"))).is_err());
         let expected = PathBuf::from(fixture_name).join("webview2-user-data");
-        let mut context = tauri::generate_context!();
-        super::apply_automation_data_directory(&mut context, Some(expected.clone()))?;
+        let mut context: tauri::Context<tauri::Wry> = tauri::generate_context!();
+        super::apply_automation_data_directory(
+            &mut context,
+            Some(super::ValidatedAutomationDataDirectory(expected.clone())),
+        )?;
         assert_eq!(
             context
                 .config()
@@ -331,7 +386,7 @@ mod tests {
         );
         assert!(
             super::automation_data_directory(
-                Some(std::ffi::OsStr::new("true")),
+                super::WebViewAutomation::Enabled,
                 Some(local_app_data.path().as_os_str()),
                 Some(local_app_data.path().as_os_str()),
             )
@@ -366,7 +421,7 @@ mod tests {
             ),
         ] {
             let error = super::automation_data_directory(
-                Some(std::ffi::OsStr::new("true")),
+                super::WebViewAutomation::Enabled,
                 input.map(Path::as_os_str),
                 root.map(Path::as_os_str),
             )
@@ -391,7 +446,7 @@ mod tests {
             (invalid_label.as_path(), "did not match"),
         ] {
             let error = super::automation_data_directory(
-                Some(std::ffi::OsStr::new("true")),
+                super::WebViewAutomation::Enabled,
                 Some(input.as_os_str()),
                 Some(local_app_data.path().as_os_str()),
             )
@@ -399,12 +454,14 @@ mod tests {
             assert!(error.to_string().contains(expected));
         }
 
-        let mut context = tauri::generate_context!();
+        let mut context: tauri::Context<tauri::Wry> = tauri::generate_context!();
         super::apply_automation_data_directory(&mut context, None)?;
         context.config_mut().app.windows.clear();
         let error = super::apply_automation_data_directory(
             &mut context,
-            Some(PathBuf::from("webview2-user-data")),
+            Some(super::ValidatedAutomationDataDirectory(PathBuf::from(
+                "webview2-user-data",
+            ))),
         )
         .expect_err("missing main automation window was accepted");
         assert!(error.to_string().contains("main automation window"));
