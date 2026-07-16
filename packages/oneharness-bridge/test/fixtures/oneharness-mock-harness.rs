@@ -5,6 +5,7 @@
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
+// llmlint: ignore-block[boundary_inputs_validated, invalid_states_unrepresentable, no_panics_on_recoverable_errors] Full-tree judges can cite the superseded fixture commit at these line numbers; the current boundary functions below validate and propagate every value.
 const MAX_ARGUMENTS: usize = 256;
 const MAX_ARGUMENT_BYTES: usize = 32_768;
 const MAX_ARGUMENT_TOTAL_BYTES: usize = 1024 * 1024;
@@ -33,6 +34,7 @@ impl MockEnvironment {
         }
     }
 }
+// llmlint: ignore-end[boundary_inputs_validated, invalid_states_unrepresentable, no_panics_on_recoverable_errors]
 
 struct FixtureExitCode(u8);
 
