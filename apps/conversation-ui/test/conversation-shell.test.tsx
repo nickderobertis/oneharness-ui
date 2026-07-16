@@ -222,7 +222,7 @@ describe("ConversationShell", () => {
   test("shows ineligible and failure/retry states without hiding details", async () => {
     let fail = true;
     installBridge((request) => {
-      if (fail) throw new Error("connection refused");
+      if (fail) throw "connection refused";
       if (request.kind === "list") {
         return success({
           conversations: [{ ...summary, canContinue: false, state: "failed" }],
@@ -238,6 +238,7 @@ describe("ConversationShell", () => {
     render(<ConversationShell />);
     expect(await screen.findByRole("alert")).toBeTruthy();
     expect(screen.getByText(/Couldn't load conversations/)).toBeTruthy();
+    expect(screen.getByText("connection refused")).toBeTruthy();
     fail = false;
     await user.click(screen.getByRole("button", { name: /retry/i }));
     const item = await screen.findByRole("button", { name: /inspect-login/i });
