@@ -122,7 +122,9 @@ async function main() {
       );
     } catch (diagnosticError) {
       const detail = diagnosticError instanceof Error ? diagnosticError.message : "unknown error";
-      console.error(`native desktop E2E profile diagnostics failed: ${detail}`);
+      console.error(
+        `native desktop E2E profile diagnostics failed: ${detail}; inspect test-results/desktop-e2e and rerun just test-desktop-e2e`,
+      );
     }
     throw error;
   } finally {
