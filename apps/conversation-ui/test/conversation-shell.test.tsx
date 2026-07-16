@@ -103,14 +103,16 @@ describe("ConversationShell", () => {
     const user = userEvent.setup();
     render(<ConversationShell />);
 
-    const item = await screen.findByRole("button", { name: /inspect-login/i });
+    const item = await screen.findByRole("button", {
+      name: "Open conversation inspect-login",
+    });
     await user.click(item);
     expect(await screen.findByRole("heading", { name: "inspect-login" })).toBeTruthy();
     expect(screen.getByText("The redirect drops the return path.")).toBeTruthy();
     expect(screen.getByText("0")).toBeTruthy();
     expect(screen.getByText("Not reported")).toBeTruthy();
 
-    await user.click(screen.getByText("Bash"));
+    await user.click(screen.getByLabelText("Bash tool details"));
     expect(screen.getByText(/rg redirect/)).toBeTruthy();
     await user.click(screen.getByText("Reasoning"));
     expect(screen.getByText("Checked the redirect boundary before answering.")).toBeTruthy();

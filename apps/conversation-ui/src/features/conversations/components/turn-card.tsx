@@ -2,8 +2,12 @@ import type { Conversation } from "@oneharness-ui/ipc-contract";
 
 type Turn = Conversation["turns"][number];
 
-function StructuredDetail({ value }: { value: unknown }) {
-  return <pre className="structured-detail">{JSON.stringify(value, null, 2)}</pre>;
+function StructuredDetail({ label, value }: { label: string; value: unknown }) {
+  return (
+    <pre aria-label={label} className="structured-detail">
+      {JSON.stringify(value, null, 2)}
+    </pre>
+  );
 }
 
 function Usage({ usage }: { usage: Turn["usage"] }) {
@@ -61,7 +65,7 @@ export function TurnCard({ turn }: { turn: Turn }) {
             <section aria-label="Tool calls" className="tool-list">
               {turn.tools.map((tool) => (
                 <details className="disclosure tool" key={`${tool.index}-${tool.kind}`}>
-                  <summary>
+                  <summary aria-label={`${tool.name ?? tool.kind} tool details`}>
                     <span className="tool__icon" aria-hidden="true">
                       ›_
                     </span>
@@ -69,6 +73,7 @@ export function TurnCard({ turn }: { turn: Turn }) {
                     <span className="tool__kind">{tool.kind}</span>
                   </summary>
                   <StructuredDetail
+                    label={`${tool.name ?? tool.kind} tool input and output`}
                     value={{ input: tool.input ?? null, output: tool.output ?? null }}
                   />
                 </details>
@@ -87,7 +92,7 @@ export function TurnCard({ turn }: { turn: Turn }) {
           {hasUnknown ? (
             <details className="disclosure unknown">
               <summary>Additional upstream data</summary>
-              <StructuredDetail value={turn.unknown} />
+              <StructuredDetail label="Additional upstream data detail" value={turn.unknown} />
             </details>
           ) : null}
         </div>

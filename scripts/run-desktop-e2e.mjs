@@ -7,15 +7,15 @@ const root = resolve(import.meta.dir, "..");
 const artifacts = resolve(root, "test-results/desktop-e2e");
 const driverVersion = "tauri-driver v2.0.6:";
 
-function run(command, environment = process.env) {
+function run(command, environment, label, remedy) {
   const result = Bun.spawnSync(command, {
     cwd: root,
-    env: environment,
-    stderr: "inherit",
-    stdin: "inherit",
-    stdout: "inherit",
+    env: environment ?? process.env,
   });
-  return result.exitCode;
+  if (result.exitCode === 0) return;
+  process.stderr.write(result.stdout);
+  process.stderr.write(result.stderr);
+  throw new Error(`${label} exited with status ${result.exitCode}; ${remedy}`);
 }
 
 function appBinary() {
@@ -61,23 +61,29 @@ async function main() {
 
   rmSync(artifacts, { force: true, recursive: true });
   const format = process.platform === "win32" ? "msi" : "deb";
-  if (run(["bun", "scripts/build-native.mjs", format]) !== 0) {
-    throw new Error(`could not build the ${format} package used by the native desktop E2E`);
-  }
+  run(
+    ["just", "bundle"],
+    { ...process.env, BUNDLE_FORMATS: format },
+    `native ${format} package build`,
+    "install the reported Tauri prerequisite and rerun just test-desktop-e2e",
+  );
 
   const fixture = await createDesktopFixture();
-  let exitCode = 1;
   try {
-    exitCode = run(["bun", "run", "--cwd", "apps/desktop-shell", "test:e2e"], {
-      ...process.env,
-      ...fixture.environment,
-      ONEHARNESS_UI_E2E_APP_BINARY: appBinary(),
-    });
+    run(
+      ["bun", "run", "--cwd", "apps/desktop-shell", "test:e2e"],
+      {
+        ...process.env,
+        ...fixture.environment,
+        ONEHARNESS_UI_E2E_APP_BINARY: appBinary(),
+      },
+      "WebdriverIO native journey",
+      "inspect test-results/desktop-e2e and rerun just test-desktop-e2e",
+    );
   } finally {
     await fixture.cleanup();
   }
-  if (exitCode === 0) rmSync(artifacts, { force: true, recursive: true });
-  return exitCode;
+  rmSync(artifacts, { force: true, recursive: true });
 }
 
 try {
@@ -85,7 +91,7 @@ try {
 } catch (error) {
   const detail = error instanceof Error ? error.message : String(error);
   console.error(
-    `native desktop E2E: ${detail}; correct the prerequisite and rerun just test-desktop-e2e`,
+    `native desktop E2E: ${detail}; apply the reported remedy and rerun just test-desktop-e2e`,
   );
   process.exitCode = 1;
 }

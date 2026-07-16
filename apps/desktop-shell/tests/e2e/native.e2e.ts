@@ -2,9 +2,7 @@ import { readFile } from "node:fs/promises";
 import { $, $$, browser, expect } from "@wdio/globals";
 
 async function conversation(name: string) {
-  return await $(
-    `//nav[@aria-label='Conversation history']//button[.//strong[normalize-space()='${name}']]`,
-  );
+  return await $(`aria/Open conversation ${name}`);
 }
 
 async function expectExactResume(sessionId: string): Promise<void> {
@@ -27,49 +25,46 @@ async function expectExactResume(sessionId: string): Promise<void> {
 describe("packaged native desktop journey", () => {
   it("loads real history, reveals optional details, continues, and recovers", async () => {
     await expect(browser).toHaveTitle("oneharness");
-    await expect($("nav[aria-label='Conversation history']")).toBeDisplayed();
+    await expect($("aria/Conversation history")).toBeDisplayed();
     await expect(await conversation("plain-session")).toBeDisplayed();
     await expect(await conversation("stopped-tool-session")).toBeDisplayed();
     await expect(await conversation("recoverable-failure")).toBeDisplayed();
 
     await (await conversation("plain-session")).click();
-    await expect($("//main//h1[normalize-space()='plain-session']")).toBeDisplayed();
-    await expect($("//main//*[normalize-space()='A concise answer']")).toBeDisplayed();
-    expect(await $$("//main//summary[normalize-space()='Reasoning']")).toHaveLength(0);
+    await expect($("aria/plain-session")).toBeDisplayed();
+    await expect($("aria/A concise answer")).toBeDisplayed();
+    expect(await $$("aria/Reasoning")).toHaveLength(0);
 
     await (await conversation("stopped-tool-session")).click();
-    await expect($("//main//h1[normalize-space()='stopped-tool-session']")).toBeDisplayed();
-    await expect($("//main//*[normalize-space()='Stopped']")).toBeDisplayed();
-    const reasoning = await $("//main//details[summary[normalize-space()='Reasoning']]");
-    expect(await reasoning.getAttribute("open")).toBeNull();
-    await reasoning.$("summary").click();
-    await expect(
-      $("//main//*[normalize-space()='I checked the native command boundary before answering.']"),
-    ).toBeDisplayed();
-    const tool = await $("//main//details[summary//*[normalize-space()='Bash']]");
-    expect(await tool.getAttribute("open")).toBeNull();
-    await tool.$("summary").click();
-    expect(await tool.$("pre").getText()).toContain('"command": "pwd"');
+    await expect($("aria/stopped-tool-session")).toBeDisplayed();
+    await expect($("aria/Stopped")).toBeDisplayed();
+    const reasoningText = await $("aria/I checked the native command boundary before answering.");
+    await expect(reasoningText).not.toBeDisplayed();
+    await $("aria/Reasoning").click();
+    await expect(reasoningText).toBeDisplayed();
+    const toolDetail = await $("aria/Bash tool input and output");
+    await expect(toolDetail).not.toBeDisplayed();
+    await $("aria/Bash tool details").click();
+    await expect(toolDetail).toBeDisplayed();
+    expect(await toolDetail.getText()).toContain('"command": "pwd"');
 
     const before = await browser.getUrl();
-    await $("#reply").setValue("Continue through the native stack");
-    await $("button[aria-label='Send reply']").click();
-    await expect($("//main//*[normalize-space()='Native continuation succeeded']")).toBeDisplayed();
-    await expect($("//main//*[normalize-space()='Completed']")).toBeDisplayed();
+    await $("aria/Continue this session").setValue("Continue through the native stack");
+    await $("aria/Send reply").click();
+    await expect($("aria/Native continuation succeeded")).toBeDisplayed();
+    await expect($("aria/Completed")).toBeDisplayed();
     expect(await browser.getUrl()).not.toBe(before);
     await expectExactResume("native-stopped-session");
 
     await (await conversation("recoverable-failure")).click();
-    await expect($("//main//h1[normalize-space()='recoverable-failure']")).toBeDisplayed();
-    await expect($("//main//*[normalize-space()='Failure: rate_limit']")).toBeDisplayed();
-    await $("button[aria-label='Send reply']").click();
-    await expect(
-      $("//*[@role='alert' and normalize-space()='Write a message first']"),
-    ).toBeDisplayed();
-    await $("#reply").setValue("Retry through the deterministic provider");
-    await $("button[aria-label='Send reply']").click();
-    await expect($("//main//*[normalize-space()='Native continuation succeeded']")).toBeDisplayed();
-    await expect($("//main//*[normalize-space()='Completed']")).toBeDisplayed();
+    await expect($("aria/recoverable-failure")).toBeDisplayed();
+    await expect($("aria/Failure: rate_limit")).toBeDisplayed();
+    await $("aria/Send reply").click();
+    await expect($("aria/Write a message first")).toBeDisplayed();
+    await $("aria/Continue this session").setValue("Retry through the deterministic provider");
+    await $("aria/Send reply").click();
+    await expect($("aria/Native continuation succeeded")).toBeDisplayed();
+    await expect($("aria/Completed")).toBeDisplayed();
     await expectExactResume("native-failed-session");
   });
 });
