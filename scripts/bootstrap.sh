@@ -51,6 +51,15 @@ install_cargo_tool deny cargo-deny 0.20.2
 install_cargo_tool machete cargo-machete 0.9.2
 install_cargo_tool llvm-cov cargo-llvm-cov 0.8.7
 
+case "$(uname -s)" in
+  Linux | MINGW* | MSYS* | CYGWIN*)
+    if ! cargo install --list | grep -Fxq "tauri-driver v2.0.6:"; then
+      cargo install --locked --quiet tauri-driver --version 2.0.6 \
+        || fail "could not install tauri-driver 2.0.6; verify crates.io access, then rerun just bootstrap"
+    fi
+    ;;
+esac
+
 if [ "${CI:-}" != "true" ]; then
   "$ROOT/scripts/setup-llmlint.sh" >/dev/null 2>&1 || true
 fi

@@ -33,6 +33,7 @@ smaller application view model validated on both sides of IPC. See
 - `curl` and the native [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/)
 - On Linux: WebKitGTK 4.1, GTK 3, appindicator, librsvg, `pkg-config`, and
   `patchelf`
+- For native desktop E2E on Linux: `webkit2gtk-driver` and a display (or `xvfb`)
 
 From a clean clone:
 
@@ -92,6 +93,13 @@ Start the desktop app during development:
 just dev
 ```
 
+Run the focused browser journey with `just test-e2e`. On Linux or Windows, run
+the additional packaged Tauri journey with `just test-desktop-e2e`; it builds
+the platform installer and drives that release application through
+WebdriverIO and the pinned official `tauri-driver`. See
+[native desktop E2E](docs/native-desktop-e2e.md) for platform prerequisites and
+the precise macOS limitation.
+
 The app discovers the same layered oneharness config and platform history
 directory as the CLI. `ONEHARNESS_BIN` selects an explicit executable and
 `ONEHARNESS_UI_HISTORY_DIR` selects an explicit history directory. Errors name
@@ -126,6 +134,10 @@ static export, Rust checks, dependency policy, and audits. Tests replace only
 paid model execution with oneharness's own deterministic provider fixture; the
 SDK, CLI, filesystem history, subprocess, bridge, HTTP/Tauri transport, and UI
 remain real.
+
+The separately required native desktop CI gate runs the packaged WebDriverIO
+journey on Linux and Windows. macOS keeps a native DMG build/install smoke
+because upstream official `tauri-driver` has no WKWebView driver.
 
 Rust coverage excludes only `src/main.rs`, the two-line native GUI event-loop
 entrypoint that cannot return under a headless coverage runner; its runtime

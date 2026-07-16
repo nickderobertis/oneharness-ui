@@ -1,0 +1,91 @@
+#!/usr/bin/env bun
+import { existsSync, rmSync } from "node:fs";
+import { resolve } from "node:path";
+import { createDesktopFixture } from "../apps/desktop-shell/tests/e2e/fixture.ts";
+
+const root = resolve(import.meta.dir, "..");
+const artifacts = resolve(root, "test-results/desktop-e2e");
+const driverVersion = "tauri-driver v2.0.6:";
+
+function run(command, environment = process.env) {
+  const result = Bun.spawnSync(command, {
+    cwd: root,
+    env: environment,
+    stderr: "inherit",
+    stdin: "inherit",
+    stdout: "inherit",
+  });
+  return result.exitCode;
+}
+
+function appBinary() {
+  const suffix = process.platform === "win32" ? ".exe" : "";
+  const path = resolve(root, `target/release/oneharness-ui${suffix}`);
+  if (!existsSync(path)) {
+    throw new Error(`built Tauri application is missing at ${path}`);
+  }
+  return path;
+}
+
+async function main() {
+  if (process.platform === "darwin") {
+    throw new Error(
+      "official tauri-driver cannot drive WKWebView on macOS; use the macOS native build/install smoke in CI",
+    );
+  }
+  if (process.platform !== "linux" && process.platform !== "win32") {
+    throw new Error(`official tauri-driver is unsupported on ${process.platform}`);
+  }
+  if (process.platform === "linux") {
+    if (!Bun.which("pkg-config") || !Bun.which("WebKitWebDriver")) {
+      throw new Error(
+        "Linux requires pkg-config and WebKitWebDriver; install webkit2gtk-driver and the documented Tauri prerequisites",
+      );
+    }
+    const webkit = Bun.spawnSync(["pkg-config", "--exists", "webkit2gtk-4.1"], { cwd: root });
+    if (webkit.exitCode !== 0) {
+      throw new Error("Linux requires the WebKitGTK 4.1 development package");
+    }
+    if (!process.env.DISPLAY) {
+      throw new Error("Linux requires a display; rerun with xvfb-run -a just test-desktop-e2e");
+    }
+  }
+
+  const installed = Bun.spawnSync(["cargo", "install", "--list"], { cwd: root });
+  if (
+    installed.exitCode !== 0 ||
+    !installed.stdout.toString().split("\n").includes(driverVersion)
+  ) {
+    throw new Error("tauri-driver 2.0.6 is required; run just bootstrap");
+  }
+
+  rmSync(artifacts, { force: true, recursive: true });
+  const format = process.platform === "win32" ? "msi" : "deb";
+  if (run(["bun", "scripts/build-native.mjs", format]) !== 0) {
+    throw new Error(`could not build the ${format} package used by the native desktop E2E`);
+  }
+
+  const fixture = await createDesktopFixture();
+  let exitCode = 1;
+  try {
+    exitCode = run(["bun", "run", "--cwd", "apps/desktop-shell", "test:e2e"], {
+      ...process.env,
+      ...fixture.environment,
+      ONEHARNESS_UI_E2E_APP_BINARY: appBinary(),
+    });
+  } finally {
+    await fixture.cleanup();
+  }
+  if (exitCode === 0) rmSync(artifacts, { force: true, recursive: true });
+  return exitCode;
+}
+
+try {
+  process.exitCode = await main();
+} catch (error) {
+  const detail = error instanceof Error ? error.message : String(error);
+  console.error(
+    `native desktop E2E: ${detail}; correct the prerequisite and rerun just test-desktop-e2e`,
+  );
+  process.exitCode = 1;
+}
