@@ -1,11 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import {
   createDesktopFixture,
   deterministicDesktopEnvironment,
   fixtureOneHarnessCli,
+  fixtureProvider,
   packagedOneHarnessCli,
   validateFixtureHistoryFile,
 } from "./fixture.ts";
@@ -129,13 +130,47 @@ describe("native desktop fixture", () => {
     try {
       await mkdir(historyDir);
       await Promise.all([writeFile(inside, "{}\n"), writeFile(outside, "{}\n")]);
-      await expect(validateFixtureHistoryFile(historyDir, inside)).resolves.toBe(inside);
+      await expect(validateFixtureHistoryFile(historyDir, inside)).resolves.toBe(
+        await realpath(inside),
+      );
       await expect(validateFixtureHistoryFile(historyDir, outside)).rejects.toThrow(
         "outside its isolated directory",
       );
     } finally {
       await rm(root, { force: true, recursive: true });
     }
+  });
+
+  test("rejects a provider argv path outside the isolated desktop fixture", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "oneharness-ui-provider-boundary-"));
+    const outside = resolve(root, "provider-argv.txt");
+    try {
+      await writeFile(outside, "");
+      const child = Bun.spawn([fixtureProvider], {
+        env: deterministicDesktopEnvironment({ MOCK_ARGV_FILE: outside }),
+        stderr: "pipe",
+        stdout: "pipe",
+      });
+      const [exitCode, stderr] = await Promise.all([
+        child.exited,
+        new Response(child.stderr).text(),
+      ]);
+      expect(exitCode).not.toBe(0);
+      expect(stderr).toContain("MOCK_ARGV_FILE must be the isolated desktop fixture argv file");
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  test("rejects invalid deterministic provider controls", async () => {
+    const child = Bun.spawn([fixtureProvider], {
+      env: deterministicDesktopEnvironment({ MOCK_EXIT: "bad" }),
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+    const [exitCode, stderr] = await Promise.all([child.exited, new Response(child.stderr).text()]);
+    expect(exitCode).not.toBe(0);
+    expect(stderr).toContain("MOCK_EXIT must be an integer between 0 and 255");
   });
 
   test("scrubs ambient oneharness and provider overrides before deterministic subprocesses", () => {

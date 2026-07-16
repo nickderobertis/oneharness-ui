@@ -3,7 +3,7 @@ use serde_json::Value;
 use tauri::{AppHandle, Runtime};
 use tauri_plugin_shell::{
     ShellExt,
-    process::{Command, CommandEvent},
+    process::{Command, CommandChild, CommandEvent},
 };
 
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
@@ -30,6 +30,17 @@ fn append_bounded(target: &mut Vec<u8>, chunk: &[u8]) -> Result<(), String> {
     Ok(())
 }
 
+fn sanitized_cleanup_result<E>(primary: String, cleanup: Result<(), E>) -> String {
+    match cleanup {
+        Ok(()) => primary,
+        Err(_) => format!("{primary}; the local bridge process could not be stopped"),
+    }
+}
+
+fn stop_after_error(child: CommandChild, primary: String) -> String {
+    sanitized_cleanup_result(primary, child.kill())
+}
+
 async fn run_bridge_command(
     command: Command,
     input: &[u8],
@@ -39,10 +50,8 @@ async fn run_bridge_command(
         .spawn()
         .map_err(|error| format!("Could not start the bundled local bridge: {error}"))?;
     if let Err(error) = child.write(input) {
-        let _ = child.kill();
-        return Err(format!(
-            "Could not send the request to the local bridge: {error}"
-        ));
+        let primary = format!("Could not send the request to the local bridge: {error}");
+        return Err(stop_after_error(child, primary));
     }
 
     let mut child = Some(child);
@@ -62,7 +71,7 @@ async fn run_bridge_command(
         };
         if let Err(error) = result {
             if let Some(running) = child.take() {
-                let _ = running.kill();
+                return Err(stop_after_error(running, error));
             }
             return Err(error);
         }
@@ -195,6 +204,21 @@ mod tests {
         ));
         let error = require_packaged_bridge(&missing).expect_err("missing sidecar was accepted");
         assert!(error.to_string().contains("tauri-build did not stage"));
+    }
+
+    #[test]
+    fn reports_cleanup_failure_without_leaking_process_details() {
+        let primary = "Local bridge response exceeded 4 MiB".to_string();
+        assert_eq!(
+            super::sanitized_cleanup_result(primary.clone(), Ok::<(), &str>(())),
+            primary
+        );
+        let failure = super::sanitized_cleanup_result(
+            primary,
+            Err::<(), _>("sensitive operating-system detail"),
+        );
+        assert!(failure.contains("local bridge process could not be stopped"));
+        assert!(!failure.contains("sensitive operating-system detail"));
     }
 
     #[test]

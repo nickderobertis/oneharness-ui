@@ -38,7 +38,7 @@ if (
   throw new Error("ONEHARNESS_UI_TEST_CLI_BIN must be an existing absolute executable path");
 }
 export const fixtureOneHarnessCli = cliOverride ?? packagedOneHarnessCli;
-const provider = resolve(
+export const fixtureProvider = resolve(
   repository,
   `target/oneharness-ui-test/oneharness-mock-harness${executableSuffix}`,
 );
@@ -232,7 +232,9 @@ export type DesktopFixture = {
   };
 };
 
-export async function createDesktopFixture(providerPath = provider): Promise<DesktopFixture> {
+export async function createDesktopFixture(
+  providerPath = fixtureProvider,
+): Promise<DesktopFixture> {
   for (const [label, path] of [
     [
       cliOverride ? "configured oneharness test CLI" : "@oneharness/sdk 0.3.23 packaged CLI",

@@ -12,7 +12,7 @@ async function expectExactResume(sessionId: string): Promise<void> {
   await browser.waitUntil(
     async () => {
       try {
-        const args = (await readFile(providerArgv, "utf8")).trim().split("\n");
+        const args = (await readFile(providerArgv, "utf8")).split("\0");
         const resume = args.indexOf("--resume");
         return resume >= 0 && args[resume + 1] === sessionId;
       } catch {
