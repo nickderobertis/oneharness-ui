@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { basename, dirname, resolve } from "node:path";
 import {
   createDesktopFixture,
   deterministicDesktopEnvironment,
@@ -56,10 +56,21 @@ describe("native desktop fixture", () => {
     const fixture = await createDesktopFixture();
     try {
       expect(Object.hasOwn(fixture.environment, "ONEHARNESS_BIN")).toBe(false);
-      expect(fixture.environment.WEBVIEW2_USER_DATA_FOLDER).toBe(
-        fixture.environment.ONEHARNESS_UI_E2E_WEBVIEW2_USER_DATA_DIR,
-      );
       const historyDir = fixture.environment.ONEHARNESS_UI_HISTORY_DIR;
+      const fixtureRoot = dirname(historyDir);
+      const expectedWebView2Directory =
+        process.platform === "win32"
+          ? resolve(
+              process.env.LOCALAPPDATA ?? "",
+              "main",
+              basename(fixtureRoot),
+              "webview2-user-data",
+            )
+          : resolve(fixtureRoot, "webview2-user-data");
+      expect(fixture.environment.ONEHARNESS_UI_E2E_WEBVIEW2_USER_DATA_DIR).toBe(
+        expectedWebView2Directory,
+      );
+      expect(Object.hasOwn(fixture.environment, "WEBVIEW2_USER_DATA_FOLDER")).toBe(false);
       const listed = await invoke([
         "history",
         "list",

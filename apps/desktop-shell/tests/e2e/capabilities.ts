@@ -46,10 +46,39 @@ function validateFixtureEntry(
 export function validateWebView2UserDataFolder(
   input: string | undefined,
   platform: NodeJS.Platform,
+  localAppData = process.env.LOCALAPPDATA,
 ): string | undefined {
-  return platform === "win32"
-    ? validateFixtureEntry(input, "webview2-user-data", "directory")
-    : undefined;
+  if (platform !== "win32") return undefined;
+  if (!input || !localAppData || !isAbsolute(localAppData)) {
+    throw new Error(
+      "desktop fixture webview2-user-data must match Tauri's isolated automation directory",
+    );
+  }
+  let localRoot: string;
+  let entry: string;
+  try {
+    localRoot = realpathSync(localAppData);
+    entry = realpathSync(input);
+    accessSync(entry, constants.R_OK | constants.W_OK);
+  } catch {
+    throw new Error("desktop fixture webview2-user-data must be an existing writable directory");
+  }
+  const localPath = relative(localRoot, entry);
+  const components = localPath.split(sep);
+  if (
+    !statSync(entry).isDirectory() ||
+    components.length !== 3 ||
+    components[0] !== "main" ||
+    !components[1]?.startsWith(FIXTURE_ROOT_PREFIX) ||
+    components[1].length === FIXTURE_ROOT_PREFIX.length ||
+    components[2] !== "webview2-user-data" ||
+    isAbsolute(localPath)
+  ) {
+    throw new Error(
+      "desktop fixture webview2-user-data must match Tauri's isolated automation directory",
+    );
+  }
+  return entry;
 }
 
 export function validateProviderArgvPath(input: string | undefined): string {

@@ -9,6 +9,105 @@ use tauri_plugin_shell::{
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
 const MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
 const BRIDGE_SIDECAR: &str = "oneharness-ui-bridge";
+#[cfg(any(windows, test))]
+const FIXTURE_ROOT_PREFIX: &str = "oneharness-ui-desktop-e2e-";
+
+#[cfg(any(windows, test))]
+fn automation_data_directory(
+    automation: Option<&std::ffi::OsStr>,
+    user_data_directory: Option<&std::ffi::OsStr>,
+    local_app_data: Option<&std::ffi::OsStr>,
+) -> std::io::Result<Option<std::path::PathBuf>> {
+    use std::path::{Component, Path, PathBuf};
+
+    if automation != Some(std::ffi::OsStr::new("true")) {
+        return Ok(None);
+    }
+    let user_data_directory = user_data_directory.ok_or_else(|| {
+        std::io::Error::other("Windows WebView2 automation profile was not configured")
+    })?;
+    let local_app_data = local_app_data.ok_or_else(|| {
+        std::io::Error::other("Windows WebView2 automation profile root was not configured")
+    })?;
+    let local_app_data = std::fs::canonicalize(Path::new(local_app_data))?;
+    let user_data_directory = std::fs::canonicalize(Path::new(user_data_directory))?;
+    if !user_data_directory.is_dir() {
+        return Err(std::io::Error::other(
+            "Windows WebView2 automation profile is not a directory",
+        ));
+    }
+    let relative = user_data_directory
+        .strip_prefix(&local_app_data)
+        .map_err(|_| {
+            std::io::Error::other("Windows WebView2 automation profile escaped its root")
+        })?;
+    let mut components = relative.components();
+    let valid_label =
+        matches!(components.next(), Some(Component::Normal(label)) if label == "main");
+    let fixture_name = match components.next() {
+        Some(Component::Normal(name))
+            if name.to_str().is_some_and(|name| {
+                name.starts_with(FIXTURE_ROOT_PREFIX) && name.len() > FIXTURE_ROOT_PREFIX.len()
+            }) =>
+        {
+            name
+        }
+        _ => {
+            return Err(std::io::Error::other(
+                "Windows WebView2 automation profile did not belong to the desktop fixture",
+            ));
+        }
+    };
+    let valid_directory =
+        matches!(components.next(), Some(Component::Normal(name)) if name == "webview2-user-data");
+    if !valid_label || !valid_directory || components.next().is_some() {
+        return Err(std::io::Error::other(
+            "Windows WebView2 automation profile did not match Tauri's window directory",
+        ));
+    }
+    Ok(Some(PathBuf::from(fixture_name).join("webview2-user-data")))
+}
+
+#[cfg(any(windows, test))]
+fn apply_automation_data_directory<R: Runtime>(
+    context: &mut tauri::Context<R>,
+    directory: Option<std::path::PathBuf>,
+) -> std::io::Result<()> {
+    let Some(directory) = directory else {
+        return Ok(());
+    };
+    let window = context
+        .config_mut()
+        .app
+        .windows
+        .iter_mut()
+        .find(|window| window.label == "main")
+        .ok_or_else(|| {
+            std::io::Error::other("Tauri's main automation window was not configured")
+        })?;
+    window.data_directory = Some(directory);
+    Ok(())
+}
+
+/// Give Tauri and EdgeDriver the same isolated WebView2 profile during the
+/// explicitly enabled Windows WebDriver journey. Normal application launches
+/// retain Tauri's identifier-based profile.
+pub fn configure_context<R: Runtime>(context: &mut tauri::Context<R>) -> std::io::Result<()> {
+    #[cfg(windows)]
+    {
+        let directory = automation_data_directory(
+            std::env::var_os("TAURI_WEBVIEW_AUTOMATION").as_deref(),
+            std::env::var_os("ONEHARNESS_UI_E2E_WEBVIEW2_USER_DATA_DIR").as_deref(),
+            std::env::var_os("LOCALAPPDATA").as_deref(),
+        )?;
+        apply_automation_data_directory(context, directory)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = context;
+        Ok(())
+    }
+}
 
 /// Opaque transport envelope. The sidecar's SDK-owned schema validates its
 /// contents; Rust owns only the privilege boundary and cannot construct SDK
@@ -139,6 +238,28 @@ mod tests {
     };
     use tauri_plugin_shell::ShellExt;
 
+    struct TestDirectory(PathBuf);
+
+    impl TestDirectory {
+        fn create(name: &str) -> Result<Self, std::io::Error> {
+            let path =
+                std::env::temp_dir().join(format!("oneharness-ui-{name}-{}", std::process::id()));
+            let _ = std::fs::remove_dir_all(&path);
+            std::fs::create_dir_all(&path)?;
+            Ok(Self(path))
+        }
+
+        fn path(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for TestDirectory {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
     fn packaged_bridge_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
         let executable = std::env::current_exe()?;
         let sidecar = executable
@@ -165,6 +286,129 @@ mod tests {
     #[test]
     fn constructs_the_scoped_runtime() {
         let _builder = super::builder();
+    }
+
+    #[test]
+    fn isolates_the_windows_automation_profile_for_tauri_and_edgedriver()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let local_app_data = TestDirectory::create("webview2-profile")?;
+        let fixture_name = "oneharness-ui-desktop-e2e-profile";
+        let user_data_directory = local_app_data
+            .path()
+            .join("main")
+            .join(fixture_name)
+            .join("webview2-user-data");
+        std::fs::create_dir_all(&user_data_directory)?;
+
+        assert_eq!(
+            super::automation_data_directory(
+                Some(std::ffi::OsStr::new("true")),
+                Some(user_data_directory.as_os_str()),
+                Some(local_app_data.path().as_os_str()),
+            )?,
+            Some(PathBuf::from(fixture_name).join("webview2-user-data")),
+        );
+        assert_eq!(
+            super::automation_data_directory(
+                Some(std::ffi::OsStr::new("false")),
+                Some(std::ffi::OsStr::new("untrusted")),
+                None,
+            )?,
+            None,
+        );
+        let expected = PathBuf::from(fixture_name).join("webview2-user-data");
+        let mut context = tauri::generate_context!();
+        super::apply_automation_data_directory(&mut context, Some(expected.clone()))?;
+        assert_eq!(
+            context
+                .config()
+                .app
+                .windows
+                .iter()
+                .find(|window| window.label == "main")
+                .and_then(|window| window.data_directory.as_ref()),
+            Some(&expected),
+        );
+        assert!(
+            super::automation_data_directory(
+                Some(std::ffi::OsStr::new("true")),
+                Some(local_app_data.path().as_os_str()),
+                Some(local_app_data.path().as_os_str()),
+            )
+            .is_err()
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_unscoped_windows_automation_profiles() -> Result<(), Box<dyn std::error::Error>> {
+        let local_app_data = TestDirectory::create("webview2-profile-boundary")?;
+        let outside = TestDirectory::create("webview2-profile-outside")?;
+        let file = local_app_data.path().join("profile-file");
+        std::fs::write(&file, b"")?;
+
+        for (input, root, expected) in [
+            (None, Some(local_app_data.path()), "was not configured"),
+            (
+                Some(local_app_data.path()),
+                None,
+                "profile root was not configured",
+            ),
+            (
+                Some(file.as_path()),
+                Some(local_app_data.path()),
+                "is not a directory",
+            ),
+            (
+                Some(outside.path()),
+                Some(local_app_data.path()),
+                "escaped its root",
+            ),
+        ] {
+            let error = super::automation_data_directory(
+                Some(std::ffi::OsStr::new("true")),
+                input.map(Path::as_os_str),
+                root.map(Path::as_os_str),
+            )
+            .expect_err("unscoped automation profile was accepted");
+            assert!(error.to_string().contains(expected));
+        }
+
+        let invalid_fixture = local_app_data
+            .path()
+            .join("main")
+            .join("untrusted")
+            .join("webview2-user-data");
+        let invalid_label = local_app_data
+            .path()
+            .join("other")
+            .join("oneharness-ui-desktop-e2e-profile")
+            .join("webview2-user-data");
+        std::fs::create_dir_all(&invalid_fixture)?;
+        std::fs::create_dir_all(&invalid_label)?;
+        for (input, expected) in [
+            (invalid_fixture.as_path(), "did not belong"),
+            (invalid_label.as_path(), "did not match"),
+        ] {
+            let error = super::automation_data_directory(
+                Some(std::ffi::OsStr::new("true")),
+                Some(input.as_os_str()),
+                Some(local_app_data.path().as_os_str()),
+            )
+            .expect_err("malformed automation profile was accepted");
+            assert!(error.to_string().contains(expected));
+        }
+
+        let mut context = tauri::generate_context!();
+        super::apply_automation_data_directory(&mut context, None)?;
+        context.config_mut().app.windows.clear();
+        let error = super::apply_automation_data_directory(
+            &mut context,
+            Some(PathBuf::from("webview2-user-data")),
+        )
+        .expect_err("missing main automation window was accepted");
+        assert!(error.to_string().contains("main automation window"));
+        Ok(())
     }
 
     #[test]

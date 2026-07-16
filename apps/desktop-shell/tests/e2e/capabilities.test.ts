@@ -70,21 +70,33 @@ describe("native desktop capabilities", () => {
 
   test("accepts only writable paths owned by the isolated desktop fixture", () => {
     const fixtureRoot = mkdtempSync(resolve(tmpdir(), "oneharness-ui-desktop-e2e-"));
+    const localAppData = mkdtempSync(resolve(tmpdir(), "oneharness-ui-local-app-data-"));
     const providerArgv = resolve(fixtureRoot, "provider-argv.txt");
-    const webview2Data = resolve(fixtureRoot, "webview2-user-data");
+    const webview2Data = resolve(
+      localAppData,
+      "main",
+      "oneharness-ui-desktop-e2e-profile",
+      "webview2-user-data",
+    );
+    const misplacedWebview2Data = resolve(fixtureRoot, "webview2-user-data");
     try {
       writeFileSync(providerArgv, "");
-      mkdirSync(webview2Data);
+      mkdirSync(webview2Data, { recursive: true });
+      mkdirSync(misplacedWebview2Data);
       expect(validateProviderArgvPath(providerArgv)).toBe(realpathSync(providerArgv));
-      expect(validateWebView2UserDataFolder(webview2Data, "win32")).toBe(
+      expect(validateWebView2UserDataFolder(webview2Data, "win32", localAppData)).toBe(
         realpathSync(webview2Data),
       );
       expect(validateWebView2UserDataFolder(undefined, "linux")).toBeUndefined();
+      expect(() =>
+        validateWebView2UserDataFolder(misplacedWebview2Data, "win32", localAppData),
+      ).toThrow("must match Tauri's isolated automation directory");
       expect(() => validateProviderArgvPath(process.execPath)).toThrow(
         "must stay inside its isolated directory",
       );
     } finally {
       rmSync(fixtureRoot, { force: true, recursive: true });
+      rmSync(localAppData, { force: true, recursive: true });
     }
   });
 });

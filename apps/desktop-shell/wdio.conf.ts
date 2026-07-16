@@ -17,6 +17,7 @@ const appBinary = validateDesktopAppBinary(process.env.ONEHARNESS_UI_E2E_APP_BIN
 const webview2UserDataFolder = validateWebView2UserDataFolder(
   process.env.ONEHARNESS_UI_E2E_WEBVIEW2_USER_DATA_DIR,
   process.platform,
+  process.env.LOCALAPPDATA,
 );
 const capabilities = createDesktopCapabilities(appBinary, process.platform, webview2UserDataFolder);
 
@@ -58,6 +59,7 @@ export const config: WebdriverIO.Config = {
     );
   },
   onPrepare: async () => {
+    await recordDesktopStage(desktopE2eStageLog, "webdriver profile configuration", "pass");
     await recordDesktopStage(desktopE2eStageLog, "webdriver launcher setup", "start");
   },
   outputDir: artifacts,

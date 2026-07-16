@@ -2,7 +2,7 @@ import { existsSync, realpathSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 const repository = resolve(import.meta.dir, "../../../..");
 const executableSuffix = process.platform === "win32" ? ".exe" : "";
@@ -42,6 +42,7 @@ export const fixtureProvider = resolve(
   repository,
   `target/oneharness-ui-test/oneharness-mock-harness${executableSuffix}`,
 );
+const FIXTURE_ROOT_PREFIX = "oneharness-ui-desktop-e2e-";
 
 type SeedOptions = {
   exit?: number;
@@ -229,9 +230,26 @@ export type DesktopFixture = {
     ONEHARNESS_UI_HISTORY_DIR: string;
     ONEHARNESS_UI_PROVIDER_BIN: string;
     ONEHARNESS_UI_PROVIDER_HARNESS: string;
-    WEBVIEW2_USER_DATA_FOLDER: string;
   };
 };
+
+export function resolveFixtureWebView2UserDataDirectory(
+  root: string,
+  platform: NodeJS.Platform,
+  localAppData = process.env.LOCALAPPDATA,
+): string {
+  if (platform !== "win32") return resolve(root, "webview2-user-data");
+  const fixtureName = basename(root);
+  if (
+    !localAppData ||
+    !isAbsolute(localAppData) ||
+    !fixtureName.startsWith(FIXTURE_ROOT_PREFIX) ||
+    fixtureName.length === FIXTURE_ROOT_PREFIX.length
+  ) {
+    throw new Error("Windows desktop E2E requires an absolute LOCALAPPDATA fixture directory");
+  }
+  return resolve(localAppData, "main", fixtureName, "webview2-user-data");
+}
 
 export async function createDesktopFixture(
   providerPath = fixtureProvider,
@@ -251,9 +269,23 @@ export async function createDesktopFixture(
   const root = await mkdtemp(resolve(tmpdir(), "oneharness-ui-desktop-e2e-"));
   const historyDir = resolve(root, "history");
   const providerArgv = resolve(root, "provider-argv.txt");
-  const webview2UserDataDir = resolve(root, "webview2-user-data");
+  const webview2UserDataDir = resolveFixtureWebView2UserDataDirectory(root, process.platform);
+  const webview2Root = dirname(webview2UserDataDir);
+  const cleanup = async (): Promise<void> => {
+    if (process.platform === "win32") {
+      await Promise.all([
+        rm(root, { force: true, recursive: true }),
+        rm(webview2Root, { force: true, recursive: true }),
+      ]);
+    } else {
+      await rm(root, { force: true, recursive: true });
+    }
+  };
   try {
-    await Promise.all([mkdir(webview2UserDataDir), writeFile(providerArgv, "")]);
+    await Promise.all([
+      mkdir(webview2UserDataDir, { recursive: true }),
+      writeFile(providerArgv, ""),
+    ]);
     await seed(historyDir, providerPath, {
       name: "plain-session",
       prompt: "Answer without optional thinking",
@@ -283,7 +315,7 @@ export async function createDesktopFixture(
     });
 
     return {
-      cleanup: async () => await rm(root, { force: true, recursive: true }),
+      cleanup,
       environment: {
         MOCK_ARGV_FILE: providerArgv,
         MOCK_EXIT: "0",
@@ -296,11 +328,10 @@ export async function createDesktopFixture(
         ONEHARNESS_UI_HISTORY_DIR: historyDir,
         ONEHARNESS_UI_PROVIDER_BIN: providerPath,
         ONEHARNESS_UI_PROVIDER_HARNESS: "claude-code",
-        WEBVIEW2_USER_DATA_FOLDER: webview2UserDataDir,
       },
     };
   } catch (error) {
-    await rm(root, { force: true, recursive: true });
+    await cleanup();
     throw error;
   }
 }
