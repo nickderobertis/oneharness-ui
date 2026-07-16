@@ -2,7 +2,15 @@ import { spawn } from "node:child_process";
 import { timingSafeEqual } from "node:crypto";
 import { createRequire } from "node:module";
 import { basename, extname } from "node:path";
-import { type HistoryRecord, OneHarness, type RunOptions } from "@oneharness/sdk";
+import {
+  HistoryListSchema,
+  type HistoryRecord,
+  HistoryRecordsSchema,
+  type HistorySessionSummary,
+  OneHarness,
+  RunOptionsSchema,
+  RunReportSchema,
+} from "@oneharness/sdk";
 import {
   type BridgeRequest,
   type BridgeResponse,
@@ -14,9 +22,30 @@ import {
 import { z } from "zod";
 import type { BridgeEnvironment } from "./environment.ts";
 
-const discoverySchema = z.array(z.object({ id: z.string().min(1).max(240) }).passthrough());
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 export const authorizationSchema = z.string().min(32).max(256);
+const environmentValueSchema = z.string().max(32_768);
+const CLI_ENVIRONMENT_KEYS = [
+  "APPDATA",
+  "HOME",
+  "LOCALAPPDATA",
+  "NODE_EXTRA_CA_CERTS",
+  "ONEHARNESS_CONFIG",
+  "ONEHARNESS_NO_CONFIG",
+  "PATH",
+  "PATHEXT",
+  "Path",
+  "SSL_CERT_DIR",
+  "SSL_CERT_FILE",
+  "SystemRoot",
+  "TEMP",
+  "TMP",
+  "TMPDIR",
+  "USERPROFILE",
+  "XDG_CONFIG_HOME",
+  "XDG_DATA_HOME",
+  "XDG_STATE_HOME",
+] as const;
 const knownRecordKeys = new Set([
   "duration_ms",
   "events",
@@ -42,6 +71,17 @@ const knownRecordKeys = new Set([
 
 type Executable = { command: string; prefix: string[] };
 
+function discoveryEnvironment(
+  input: Readonly<Record<string, string | undefined>>,
+): NodeJS.ProcessEnv {
+  const environment: NodeJS.ProcessEnv = {};
+  for (const key of CLI_ENVIRONMENT_KEYS) {
+    const value = input[key];
+    if (value !== undefined) environment[key] = environmentValueSchema.parse(value);
+  }
+  return environment;
+}
+
 function resolveExecutable(environment: BridgeEnvironment): Executable {
   if (environment.executable) return { command: environment.executable, prefix: [] };
   const sdkRequire = createRequire(import.meta.resolve("@oneharness/sdk"));
@@ -51,13 +91,13 @@ function resolveExecutable(environment: BridgeEnvironment): Executable {
   };
 }
 
-async function invokeDiscovery(environment: BridgeEnvironment): Promise<unknown> {
+async function invokeDiscovery(environment: BridgeEnvironment): Promise<HistorySessionSummary[]> {
   const executable = resolveExecutable(environment);
   const args = [...executable.prefix, "history", "list", "--compact", "--all-projects"];
   if (environment.historyDir) args.push("--history-dir", environment.historyDir);
   return await new Promise((resolve, reject) => {
     const child = spawn(executable.command, args, {
-      env: process.env,
+      env: discoveryEnvironment(process.env),
       shell: false,
       windowsHide: true,
     });
@@ -81,7 +121,7 @@ async function invokeDiscovery(environment: BridgeEnvironment): Promise<unknown>
         return;
       }
       try {
-        resolve(JSON.parse(stdout));
+        resolve(HistoryListSchema.parse(JSON.parse(stdout)));
       } catch {
         reject(new Error("oneharness history discovery returned malformed JSON"));
       }
@@ -254,15 +294,17 @@ export class BridgeService {
   }
 
   async #history(session: string): Promise<HistoryRecord[]> {
-    return await this.#client.history({
-      allProjects: true,
-      ...(this.environment.historyDir ? { historyDir: this.environment.historyDir } : {}),
-      session,
-    });
+    return HistoryRecordsSchema.parse(
+      await this.#client.history({
+        allProjects: true,
+        ...(this.environment.historyDir ? { historyDir: this.environment.historyDir } : {}),
+        session,
+      }),
+    );
   }
 
   async #list(): Promise<ConversationSummary[]> {
-    const discovered = discoverySchema.parse(await invokeDiscovery(this.environment));
+    const discovered = await invokeDiscovery(this.environment);
     const conversations = await Promise.all(
       discovered.map(async ({ id }) => toConversation(await this.#history(id))),
     );
@@ -275,7 +317,7 @@ export class BridgeService {
     if (!latest?.session_id || ["planned", "skipped", "spawn-error"].includes(latest.status)) {
       throw new Error("the selected conversation has no eligible native continuation session");
     }
-    const options: RunOptions = {
+    const options = RunOptionsSchema.parse({
       cwd: latest.project,
       events: true,
       harnesses: [latest.harness],
@@ -292,8 +334,8 @@ export class BridgeService {
             },
           }
         : {}),
-    };
-    const report = await this.#client.run(options);
+    });
+    const report = RunReportSchema.parse(await this.#client.run(options));
     if (!report.history_file) throw new Error("continued run did not create a history session");
     const filename = basename(report.history_file);
     const nextId = filename.slice(0, filename.length - extname(filename).length);

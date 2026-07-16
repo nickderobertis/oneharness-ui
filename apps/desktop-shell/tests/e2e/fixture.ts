@@ -1,14 +1,46 @@
-import { existsSync } from "node:fs";
+import { existsSync, realpathSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 
 const repository = resolve(import.meta.dir, "../../../..");
 const executableSuffix = process.platform === "win32" ? ".exe" : "";
-const cli = resolve(repository, `.cache/upstream-target/debug/oneharness${executableSuffix}`);
+const platformPackages: Readonly<Record<string, string>> = {
+  "darwin-arm64": "@oneharness/cli-darwin-arm64",
+  "darwin-x64": "@oneharness/cli-darwin-x64",
+  "linux-arm64": "@oneharness/cli-linux-arm64",
+  "linux-x64": "@oneharness/cli-linux-x64",
+  "win32-x64": "@oneharness/cli-win32-x64",
+};
+const platformPackage = platformPackages[`${process.platform}-${process.arch}`];
+if (!platformPackage) throw new Error("the packaged oneharness CLI does not support this platform");
+const sdkRequire = createRequire(
+  resolve(
+    realpathSync(resolve(repository, "packages/oneharness-bridge/node_modules/@oneharness/sdk")),
+    "dist/index.js",
+  ),
+);
+const cliRequire = createRequire(sdkRequire.resolve("oneharness-cli/bin/oneharness.js"));
+export const packagedOneHarnessCli = resolve(
+  dirname(cliRequire.resolve(`${platformPackage}/package.json`)),
+  "bin",
+  `oneharness${executableSuffix}`,
+);
+const cliOverride = process.env.ONEHARNESS_UI_TEST_CLI_BIN;
+if (
+  cliOverride !== undefined &&
+  (cliOverride.length === 0 ||
+    cliOverride.length > 4096 ||
+    !isAbsolute(cliOverride) ||
+    !existsSync(cliOverride))
+) {
+  throw new Error("ONEHARNESS_UI_TEST_CLI_BIN must be an existing absolute executable path");
+}
+export const fixtureOneHarnessCli = cliOverride ?? packagedOneHarnessCli;
 const provider = resolve(
   repository,
-  `.cache/upstream-target/debug/oneharness-mock-harness${executableSuffix}`,
+  `target/oneharness-ui-test/oneharness-mock-harness${executableSuffix}`,
 );
 
 type SeedOptions = {
@@ -121,7 +153,7 @@ async function seed(
 ): Promise<string> {
   const child = Bun.spawn(
     [
-      cli,
+      fixtureOneHarnessCli,
       "run",
       "--harness",
       "claude-code",
@@ -202,7 +234,10 @@ export type DesktopFixture = {
 
 export async function createDesktopFixture(providerPath = provider): Promise<DesktopFixture> {
   for (const [label, path] of [
-    ["pinned oneharness CLI", cli],
+    [
+      cliOverride ? "configured oneharness test CLI" : "@oneharness/sdk 0.3.23 packaged CLI",
+      fixtureOneHarnessCli,
+    ],
     ["deterministic provider", providerPath],
   ] as const) {
     if (!existsSync(path)) {

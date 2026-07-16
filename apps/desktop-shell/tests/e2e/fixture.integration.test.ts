@@ -5,14 +5,12 @@ import { resolve } from "node:path";
 import {
   createDesktopFixture,
   deterministicDesktopEnvironment,
+  fixtureOneHarnessCli,
+  packagedOneHarnessCli,
   validateFixtureHistoryFile,
 } from "./fixture.ts";
 
 const repository = resolve(import.meta.dir, "../../../..");
-const cli = resolve(
-  repository,
-  `.cache/upstream-target/debug/oneharness${process.platform === "win32" ? ".exe" : ""}`,
-);
 
 type JsonObject = Record<string, unknown>;
 
@@ -29,7 +27,7 @@ function requiredString(record: JsonObject, field: string): string {
 }
 
 async function invoke(args: string[]): Promise<JsonObject[]> {
-  const child = Bun.spawn([cli, ...args], {
+  const child = Bun.spawn([fixtureOneHarnessCli, ...args], {
     cwd: repository,
     stderr: "pipe",
     stdout: "pipe",
@@ -118,7 +116,7 @@ describe("native desktop fixture", () => {
   test("removes temporary history when the real provider process cannot run", async () => {
     const prefix = "oneharness-ui-desktop-e2e-";
     const before = (await readdir(tmpdir())).filter((name) => name.startsWith(prefix)).sort();
-    await expect(createDesktopFixture(cli)).rejects.toThrow("fixture CLI exited");
+    await expect(createDesktopFixture(packagedOneHarnessCli)).rejects.toThrow("fixture CLI exited");
     const after = (await readdir(tmpdir())).filter((name) => name.startsWith(prefix)).sort();
     expect(after).toEqual(before);
   });

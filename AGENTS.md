@@ -37,7 +37,7 @@ with `just setup-llmlint`.
   another. Nx project tags and the TypeScript linter enforce the graph.
 - TypeScript stays at 5.9 until Next/Nx support the package-layout changes in 7.
 - Never copy, generate, or maintain oneharness contract types here. Import SDK
-  types and validators from the reproducibly pinned `@oneharness/sdk` source.
+  types and validators from the reproducibly pinned public `@oneharness/sdk` package.
 - Treat URL state, IPC, sidecar IO, executable/config discovery, CLI output,
   and persisted history as hostile. Validate at each boundary and preserve
   unknown upstream values without rendering HTML.

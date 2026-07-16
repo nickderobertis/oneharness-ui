@@ -16,8 +16,6 @@ for tool in bun cargo node rustup curl uv; do
   }
 done
 
-"$ROOT/scripts/fetch-sdk.sh" \
-  || fail "SDK materialization failed; follow the fetch-sdk remedy above, then rerun just bootstrap"
 cd "$ROOT"
 if [ -f bun.lock ]; then
   bun install --frozen-lockfile >/dev/null \
@@ -26,6 +24,8 @@ else
   bun install >/dev/null \
     || fail "workspace install failed; restore bun.lock or resolve the Bun diagnostic, then rerun just bootstrap"
 fi
+bun "$ROOT/scripts/build-test-provider.mjs" \
+  || fail "deterministic provider build failed; follow the build-test-provider remedy above, then rerun just bootstrap"
 bun "$ROOT/scripts/build-sidecar.mjs" \
   || fail "sidecar assembly failed; follow the build-sidecar remedy above, then rerun just bootstrap"
 bunx playwright install chromium >/dev/null \
