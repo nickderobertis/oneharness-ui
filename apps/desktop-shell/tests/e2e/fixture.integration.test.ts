@@ -1,8 +1,12 @@
 import { describe, expect, test } from "bun:test";
-import { readdir } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { createDesktopFixture } from "./fixture.ts";
+import {
+  createDesktopFixture,
+  deterministicDesktopEnvironment,
+  validateFixtureHistoryFile,
+} from "./fixture.ts";
 
 const repository = resolve(import.meta.dir, "../../../..");
 const cli = resolve(
@@ -10,7 +14,21 @@ const cli = resolve(
   `.cache/upstream-target/debug/oneharness${process.platform === "win32" ? ".exe" : ""}`,
 );
 
-async function invoke(args: string[]): Promise<unknown> {
+type JsonObject = Record<string, unknown>;
+
+function isJsonObject(value: unknown): value is JsonObject {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function requiredString(record: JsonObject, field: string): string {
+  const value = record[field];
+  if (typeof value !== "string") {
+    throw new Error(`fixture inspection record has invalid ${field}`);
+  }
+  return value;
+}
+
+async function invoke(args: string[]): Promise<JsonObject[]> {
   const child = Bun.spawn([cli, ...args], {
     cwd: repository,
     stderr: "pipe",
@@ -22,7 +40,16 @@ async function invoke(args: string[]): Promise<unknown> {
     new Response(child.stdout).text(),
   ]);
   if (exitCode !== 0) throw new Error(`fixture inspection exited ${exitCode}: ${stderr.trim()}`);
-  return JSON.parse(stdout) as unknown;
+  let value: unknown;
+  try {
+    value = JSON.parse(stdout);
+  } catch {
+    throw new Error("fixture inspection returned malformed JSON");
+  }
+  if (!Array.isArray(value) || !value.every(isJsonObject)) {
+    throw new Error("fixture inspection returned an invalid record collection");
+  }
+  return value;
 }
 
 describe("native desktop fixture", () => {
@@ -31,31 +58,33 @@ describe("native desktop fixture", () => {
     try {
       expect(Object.hasOwn(fixture.environment, "ONEHARNESS_BIN")).toBe(false);
       const historyDir = fixture.environment.ONEHARNESS_UI_HISTORY_DIR;
-      const listed = (await invoke([
+      const listed = await invoke([
         "history",
         "list",
         "--compact",
         "--all-projects",
         "--history-dir",
         historyDir,
-      ])) as Array<{ id: string; name: string }>;
-      expect(listed.map(({ name }) => name).sort()).toEqual([
+      ]);
+      expect(listed.map((record) => requiredString(record, "name")).sort()).toEqual([
         "plain-session",
         "recoverable-failure",
         "stopped-tool-session",
       ]);
 
-      const stoppedId = listed.find(({ name }) => name === "stopped-tool-session")?.id;
-      if (!stoppedId) throw new Error("stopped fixture was not listed");
-      const stopped = (await invoke([
+      const stoppedSummary = listed.find(
+        (record) => requiredString(record, "name") === "stopped-tool-session",
+      );
+      if (!stoppedSummary) throw new Error("stopped fixture was not listed");
+      const stopped = await invoke([
         "history",
         "show",
-        stoppedId,
+        requiredString(stoppedSummary, "id"),
         "--compact",
         "--all-projects",
         "--history-dir",
         historyDir,
-      ])) as Array<Record<string, unknown>>;
+      ]);
       expect(stopped).toHaveLength(1);
       expect(stopped[0]).toMatchObject({
         session_id: "native-stopped-session",
@@ -63,17 +92,19 @@ describe("native desktop fixture", () => {
         thinking: "I checked the native command boundary before answering.",
       });
 
-      const failedId = listed.find(({ name }) => name === "recoverable-failure")?.id;
-      if (!failedId) throw new Error("recoverable fixture was not listed");
-      const failed = (await invoke([
+      const failedSummary = listed.find(
+        (record) => requiredString(record, "name") === "recoverable-failure",
+      );
+      if (!failedSummary) throw new Error("recoverable fixture was not listed");
+      const failed = await invoke([
         "history",
         "show",
-        failedId,
+        requiredString(failedSummary, "id"),
         "--compact",
         "--all-projects",
         "--history-dir",
         historyDir,
-      ])) as Array<Record<string, unknown>>;
+      ]);
       expect(failed[0]).toMatchObject({
         failure_kind: "rate_limit",
         session_id: "native-failed-session",
@@ -90,5 +121,42 @@ describe("native desktop fixture", () => {
     await expect(createDesktopFixture(cli)).rejects.toThrow("fixture CLI exited");
     const after = (await readdir(tmpdir())).filter((name) => name.startsWith(prefix)).sort();
     expect(after).toEqual(before);
+  });
+
+  test("rejects a CLI history path outside the isolated fixture directory", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "oneharness-ui-history-boundary-"));
+    const historyDir = resolve(root, "history");
+    const inside = resolve(historyDir, "session.jsonl");
+    const outside = resolve(root, "outside.jsonl");
+    try {
+      await mkdir(historyDir);
+      await Promise.all([writeFile(inside, "{}\n"), writeFile(outside, "{}\n")]);
+      await expect(validateFixtureHistoryFile(historyDir, inside)).resolves.toBe(inside);
+      await expect(validateFixtureHistoryFile(historyDir, outside)).rejects.toThrow(
+        "outside its isolated directory",
+      );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  test("scrubs ambient oneharness and provider overrides before deterministic subprocesses", () => {
+    process.env.ONEHARNESS_UI_UNTRUSTED_TEST = "ambient";
+    process.env.MOCK_UNTRUSTED_TEST = "ambient";
+    process.env.UNRELATED_DESKTOP_E2E_TEST = "ambient";
+    try {
+      const environment = deterministicDesktopEnvironment({
+        MOCK_STDOUT: "controlled",
+        ONEHARNESS_NO_CONFIG: "1",
+      });
+      expect(environment.ONEHARNESS_UI_UNTRUSTED_TEST).toBeUndefined();
+      expect(environment.MOCK_UNTRUSTED_TEST).toBeUndefined();
+      expect(environment.UNRELATED_DESKTOP_E2E_TEST).toBeUndefined();
+      expect(environment).toMatchObject({ MOCK_STDOUT: "controlled", ONEHARNESS_NO_CONFIG: "1" });
+    } finally {
+      delete process.env.ONEHARNESS_UI_UNTRUSTED_TEST;
+      delete process.env.MOCK_UNTRUSTED_TEST;
+      delete process.env.UNRELATED_DESKTOP_E2E_TEST;
+    }
   });
 });

@@ -8,6 +8,7 @@ use tauri_plugin_shell::{
 
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
 const MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
+const BRIDGE_SIDECAR: &str = "oneharness-ui-bridge";
 
 /// Opaque transport envelope. The sidecar's SDK-owned schema validates its
 /// contents; Rust owns only the privilege boundary and cannot construct SDK
@@ -102,7 +103,7 @@ async fn invoke_bridge<R: Runtime>(
 
     let command = app
         .shell()
-        .sidecar("binaries/oneharness-ui-bridge")
+        .sidecar(BRIDGE_SIDECAR)
         .map_err(|error| format!("Could not resolve the bundled local bridge: {error}"))?;
     let (exit_code, stdout, stderr) = run_bridge_command(command, &input).await?;
     decode_bridge_response(exit_code, &stdout, &stderr)
@@ -118,7 +119,7 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
 
 #[cfg(test)]
 mod tests {
-    use std::{fs, path::PathBuf};
+    use std::path::PathBuf;
 
     use serde_json::json;
     use tauri::{
@@ -129,32 +130,16 @@ mod tests {
     };
     use tauri_plugin_shell::ShellExt;
 
-    fn install_bridge_fixture() -> Result<PathBuf, Box<dyn std::error::Error>> {
-        let source_directory = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("binaries");
-        let source = fs::read_dir(source_directory)?
-            .filter_map(Result::ok)
-            .map(|entry| entry.path())
-            .find(|path| {
-                path.file_name()
-                    .and_then(|name| name.to_str())
-                    .is_some_and(|name| {
-                        name.starts_with("oneharness-ui-bridge-")
-                            && (cfg!(windows) == name.ends_with(".exe"))
-                    })
-            })
-            .ok_or_else(|| std::io::Error::other("bootstrap did not build the bridge fixture"))?;
+    fn packaged_bridge_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
         let executable = std::env::current_exe()?;
-        let target_directory = executable
+        let sidecar = executable
             .parent()
             .and_then(|directory| directory.parent())
             .ok_or_else(|| std::io::Error::other("test executable has no target directory"))?
-            .join("binaries");
-        fs::create_dir_all(&target_directory)?;
-        let destination = target_directory.join("oneharness-ui-bridge");
+            .join(super::BRIDGE_SIDECAR);
         #[cfg(windows)]
-        let destination = destination.with_extension("exe");
-        fs::copy(source, &destination)?;
-        Ok(destination)
+        let sidecar = sidecar.with_extension("exe");
+        Ok(sidecar)
     }
 
     #[test]
@@ -165,7 +150,14 @@ mod tests {
     #[test]
     fn transports_validated_json_through_the_real_bridge() -> Result<(), Box<dyn std::error::Error>>
     {
-        let fixture = install_bridge_fixture()?;
+        let sidecar = packaged_bridge_path()?;
+        if !sidecar.is_file() {
+            return Err(std::io::Error::other(format!(
+                "tauri-build did not stage the bridge beside the application at {}",
+                sidecar.display()
+            ))
+            .into());
+        }
         let app = tauri::test::mock_builder()
             .plugin(tauri_plugin_shell::init())
             .invoke_handler(tauri::generate_handler![super::invoke_bridge])
@@ -187,7 +179,6 @@ mod tests {
         .deserialize::<serde_json::Value>()?;
         assert_eq!(response["ok"], false);
         assert_eq!(response["error"]["code"], "INVALID_REQUEST");
-        fs::remove_file(fixture)?;
         Ok(())
     }
 

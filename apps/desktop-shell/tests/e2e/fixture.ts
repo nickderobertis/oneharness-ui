@@ -1,7 +1,7 @@
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 
 const repository = resolve(import.meta.dir, "../../../..");
 const executableSuffix = process.platform === "win32" ? ".exe" : "";
@@ -19,7 +19,100 @@ type SeedOptions = {
   stdout: string;
 };
 
-type CliReport = { history_file?: unknown };
+function isJsonObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+const INHERITED_ENVIRONMENT_KEYS = [
+  "APPDATA",
+  "AR",
+  "CARGO_HOME",
+  "CARGO_TARGET_DIR",
+  "CC",
+  "CFLAGS",
+  "CI",
+  "ComSpec",
+  "CXX",
+  "CXXFLAGS",
+  "DBUS_SESSION_BUS_ADDRESS",
+  "DISPLAY",
+  "DYLD_LIBRARY_PATH",
+  "HOME",
+  "HTTP_PROXY",
+  "HTTPS_PROXY",
+  "LANG",
+  "LC_ALL",
+  "LD_LIBRARY_PATH",
+  "LDFLAGS",
+  "LOCALAPPDATA",
+  "NODE_EXTRA_CA_CERTS",
+  "NO_PROXY",
+  "OS",
+  "PATH",
+  "PATHEXT",
+  "Path",
+  "PKG_CONFIG_PATH",
+  "ProgramData",
+  "ProgramFiles",
+  "ProgramFiles(x86)",
+  "RUSTFLAGS",
+  "RUSTUP_HOME",
+  "SSL_CERT_DIR",
+  "SSL_CERT_FILE",
+  "SystemRoot",
+  "TEMP",
+  "TMP",
+  "TMPDIR",
+  "TZ",
+  "USERPROFILE",
+  "WAYLAND_DISPLAY",
+  "WINDIR",
+  "XAUTHORITY",
+  "XDG_RUNTIME_DIR",
+  "http_proxy",
+  "https_proxy",
+  "no_proxy",
+] as const;
+
+export function deterministicDesktopEnvironment(
+  overrides: Readonly<Record<string, string | undefined>>,
+): Record<string, string> {
+  const environment: Record<string, string> = {};
+  for (const key of INHERITED_ENVIRONMENT_KEYS) {
+    const value = process.env[key];
+    if (typeof value === "string") environment[key] = value;
+  }
+  for (const [key, value] of Object.entries(overrides)) {
+    if (typeof value === "string") environment[key] = value;
+  }
+  return environment;
+}
+
+export async function validateFixtureHistoryFile(
+  historyDir: string,
+  input: unknown,
+): Promise<string> {
+  if (typeof input !== "string") {
+    throw new Error("fixture CLI did not return a history file");
+  }
+  let historyRoot: string;
+  let historyFile: string;
+  try {
+    [historyRoot, historyFile] = await Promise.all([realpath(historyDir), realpath(input)]);
+  } catch {
+    throw new Error("fixture CLI returned a history file that does not exist");
+  }
+  const localPath = relative(historyRoot, historyFile);
+  if (
+    !localPath ||
+    localPath === ".." ||
+    localPath.startsWith(`..${sep}`) ||
+    isAbsolute(localPath)
+  ) {
+    throw new Error("fixture CLI returned a history file outside its isolated directory");
+  }
+  return historyFile;
+}
 
 async function seed(
   historyDir: string,
@@ -48,12 +141,11 @@ async function seed(
     ],
     {
       cwd: repository,
-      env: {
-        ...process.env,
+      env: deterministicDesktopEnvironment({
         MOCK_EXIT: String(options.exit ?? 0),
         MOCK_STDERR: options.stderr ?? "",
         MOCK_STDOUT: options.stdout,
-      },
+      }),
       stderr: "pipe",
       stdout: "pipe",
     },
@@ -66,16 +158,16 @@ async function seed(
   if (exitCode !== 0 && (options.exit ?? 0) === 0) {
     throw new Error(`fixture CLI exited ${exitCode}: ${stderr.trim()}`);
   }
-  let report: CliReport;
+  let report: unknown;
   try {
-    report = JSON.parse(stdout) as CliReport;
+    report = JSON.parse(stdout);
   } catch {
     throw new Error(`fixture CLI returned malformed JSON: ${stdout.slice(0, 200)}`);
   }
-  if (typeof report.history_file !== "string") {
+  if (!isJsonObject(report)) {
     throw new Error(`fixture CLI did not create history for ${options.name}`);
   }
-  return report.history_file;
+  return await validateFixtureHistoryFile(historyDir, report.history_file);
 }
 
 async function patchRecord(
@@ -85,7 +177,10 @@ async function patchRecord(
   const lines = (await readFile(historyFile, "utf8")).trim().split("\n");
   const first = lines[0];
   if (!first) throw new Error(`fixture history is empty: ${historyFile}`);
-  const record = JSON.parse(first) as Record<string, unknown>;
+  const record: unknown = JSON.parse(first);
+  if (!isJsonObject(record)) {
+    throw new Error(`fixture history record is not an object: ${historyFile}`);
+  }
   await writeFile(historyFile, `${JSON.stringify({ ...record, ...changes })}\n`);
 }
 
@@ -118,7 +213,9 @@ export async function createDesktopFixture(providerPath = provider): Promise<Des
   const root = await mkdtemp(resolve(tmpdir(), "oneharness-ui-desktop-e2e-"));
   const historyDir = resolve(root, "history");
   const providerArgv = resolve(root, "provider-argv.txt");
+  const webview2UserDataDir = resolve(root, "webview2-user-data");
   try {
+    await Promise.all([mkdir(webview2UserDataDir), writeFile(providerArgv, "")]);
     await seed(historyDir, providerPath, {
       name: "plain-session",
       prompt: "Answer without optional thinking",
@@ -157,7 +254,7 @@ export async function createDesktopFixture(providerPath = provider): Promise<Des
           '{"result":"Native continuation succeeded","session_id":"native-continued-session"}',
         ONEHARNESS_NO_CONFIG: "1",
         ONEHARNESS_UI_E2E_PROVIDER_ARGV: providerArgv,
-        ONEHARNESS_UI_E2E_WEBVIEW2_USER_DATA_DIR: resolve(root, "webview2-user-data"),
+        ONEHARNESS_UI_E2E_WEBVIEW2_USER_DATA_DIR: webview2UserDataDir,
         ONEHARNESS_UI_HISTORY_DIR: historyDir,
         ONEHARNESS_UI_PROVIDER_BIN: providerPath,
         ONEHARNESS_UI_PROVIDER_HARNESS: "claude-code",

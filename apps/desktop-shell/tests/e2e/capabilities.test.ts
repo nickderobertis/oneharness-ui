@@ -1,5 +1,21 @@
 import { describe, expect, test } from "bun:test";
-import { createDesktopCapabilities } from "./capabilities.ts";
+import {
+  chmodSync,
+  copyFileSync,
+  mkdirSync,
+  mkdtempSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, resolve } from "node:path";
+import {
+  createDesktopCapabilities,
+  validateDesktopAppBinary,
+  validateProviderArgvPath,
+  validateWebView2UserDataFolder,
+} from "./capabilities.ts";
 
 describe("native desktop capabilities", () => {
   test("gives EdgeDriver and Tauri one isolated WebView2 profile on Windows", () => {
@@ -29,5 +45,46 @@ describe("native desktop capabilities", () => {
       browserName: "tauri",
       "tauri:options": { application: "/workspace/target/release/oneharness-ui" },
     });
+  });
+
+  test("accepts only the real packaged executable at the release boundary", () => {
+    const repository = mkdtempSync(resolve(tmpdir(), "oneharness-ui-app-binary-"));
+    const executable = process.platform === "win32" ? "oneharness-ui.exe" : "oneharness-ui";
+    const packaged = resolve(repository, "target", "release", executable);
+    try {
+      mkdirSync(dirname(packaged), { recursive: true });
+      copyFileSync(process.execPath, packaged);
+      chmodSync(packaged, 0o755);
+      expect(validateDesktopAppBinary(packaged, repository)).toBe(packaged);
+      expect(() => validateDesktopAppBinary(process.execPath, repository)).toThrow(
+        "must be the packaged application from target/release",
+      );
+      rmSync(packaged);
+      expect(() => validateDesktopAppBinary(packaged, repository)).toThrow(
+        "must be an existing executable file",
+      );
+    } finally {
+      rmSync(repository, { force: true, recursive: true });
+    }
+  });
+
+  test("accepts only writable paths owned by the isolated desktop fixture", () => {
+    const fixtureRoot = mkdtempSync(resolve(tmpdir(), "oneharness-ui-desktop-e2e-"));
+    const providerArgv = resolve(fixtureRoot, "provider-argv.txt");
+    const webview2Data = resolve(fixtureRoot, "webview2-user-data");
+    try {
+      writeFileSync(providerArgv, "");
+      mkdirSync(webview2Data);
+      expect(validateProviderArgvPath(providerArgv)).toBe(realpathSync(providerArgv));
+      expect(validateWebView2UserDataFolder(webview2Data, "win32")).toBe(
+        realpathSync(webview2Data),
+      );
+      expect(validateWebView2UserDataFolder(undefined, "linux")).toBeUndefined();
+      expect(() => validateProviderArgvPath(process.execPath)).toThrow(
+        "must stay inside its isolated directory",
+      );
+    } finally {
+      rmSync(fixtureRoot, { force: true, recursive: true });
+    }
   });
 });

@@ -25,6 +25,10 @@ oneharness:
 agents:
   default:
     batch_size: 4
+rules:
+  - name: live_tier_compiles_and_requires_credential
+    override: true
+    relevance: the target files define a test tier that connects to a credentialed external service
 plugins:
   - "https://raw.githubusercontent.com/nickderobertis/llmlint/main/assets/config_lint.yml@1"
   - "https://raw.githubusercontent.com/nickderobertis/dero-skills/main/skills/bootstrap/create-repo/assets/llmlint/base.llmlint.yml@1"

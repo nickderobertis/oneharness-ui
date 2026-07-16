@@ -17,9 +17,14 @@ defaults:
     shell: bash
 
 jobs:
+  # This is a deterministic, credential-free packaged journey: bootstrap builds
+  # oneharness's local provider fixture and ONEHARNESS_NO_CONFIG prevents paid or
+  # developer-configured providers from entering the test boundary.
   desktop-e2e:
     name: desktop-e2e (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    env:
+      ONEHARNESS_NO_CONFIG: "1"
     strategy:
       fail-fast: false
       matrix:
@@ -46,10 +51,10 @@ jobs:
         run: cargo install just --locked --version 1.42.4
       - name: Bootstrap clean checkout
         run: just bootstrap
-      - name: Packaged desktop journey (Linux)
+      - name: Deterministic packaged desktop journey (Linux)
         if: runner.os == 'Linux'
         run: xvfb-run -a just test-desktop-e2e
-      - name: Packaged desktop journey (Windows)
+      - name: Deterministic packaged desktop journey (Windows)
         if: runner.os == 'Windows'
         run: just test-desktop-e2e
       - name: Upload desktop failure evidence
@@ -85,9 +90,24 @@ jobs:
         run: just bundle
       - name: Mount, install, and verify native application
         run: |
-          image="$(find . -name '*.dmg' -print -quit)"
-          test -n "$image"
+          shopt -s nullglob
+          images=(target/release/bundle/dmg/*.dmg)
+          if (( ${#images[@]} != 1 )); then
+            echo "Expected one DMG under target/release/bundle/dmg; inspect the bundle output and rerun the macOS smoke" >&2
+            exit 1
+          fi
+          image="${images[0]}"
           mount="$(hdiutil attach "$image" -nobrowse | tail -1 | sed 's#^.*\(/Volumes/.*\)#\1#')"
+          case "$mount" in
+            /Volumes/*) ;;
+            *) echo "DMG mount did not resolve under /Volumes; inspect hdiutil output and rerun the macOS smoke" >&2; exit 1 ;;
+          esac
+          trap 'hdiutil detach "$mount"' EXIT
           sudo ditto "$mount/oneharness.app" /Applications/oneharness.app
           hdiutil detach "$mount"
+          trap - EXIT
           test -x /Applications/oneharness.app/Contents/MacOS/oneharness
+          bridge=/Applications/oneharness.app/Contents/MacOS/oneharness-ui-bridge
+          test -x "$bridge"
+          response="$(printf '{"kind":"unknown"}\n' | "$bridge")"
+          node -e 'const value=JSON.parse(process.argv[1]); if(value.ok!==false||value.error?.code!=="INVALID_REQUEST") process.exit(1)' "$response"

@@ -1,17 +1,18 @@
 import { readFile } from "node:fs/promises";
 import { $, $$, browser, expect } from "@wdio/globals";
+import { validateProviderArgvPath } from "./capabilities.ts";
+
+const providerArgv = validateProviderArgvPath(process.env.ONEHARNESS_UI_E2E_PROVIDER_ARGV);
 
 async function conversation(name: string) {
   return await $(`aria/Open conversation ${name}`);
 }
 
 async function expectExactResume(sessionId: string): Promise<void> {
-  const path = process.env.ONEHARNESS_UI_E2E_PROVIDER_ARGV;
-  if (!path) throw new Error("native E2E provider argv path was not configured");
   await browser.waitUntil(
     async () => {
       try {
-        const args = (await readFile(path, "utf8")).trim().split("\n");
+        const args = (await readFile(providerArgv, "utf8")).trim().split("\n");
         const resume = args.indexOf("--resume");
         return resume >= 0 && args[resume + 1] === sessionId;
       } catch {

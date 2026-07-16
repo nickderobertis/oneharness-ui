@@ -1,19 +1,20 @@
 import { mkdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createDesktopCapabilities } from "./tests/e2e/capabilities.ts";
+import {
+  createDesktopCapabilities,
+  validateDesktopAppBinary,
+  validateWebView2UserDataFolder,
+} from "./tests/e2e/capabilities.ts";
 
 const repository = resolve(fileURLToPath(new URL(".", import.meta.url)), "../..");
 const artifacts = resolve(repository, "test-results/desktop-e2e");
-const appBinary = process.env.ONEHARNESS_UI_E2E_APP_BINARY;
-if (!appBinary) {
-  throw new Error("ONEHARNESS_UI_E2E_APP_BINARY is required; run just test-desktop-e2e");
-}
-const capabilities = createDesktopCapabilities(
-  appBinary,
-  process.platform,
+const appBinary = validateDesktopAppBinary(process.env.ONEHARNESS_UI_E2E_APP_BINARY, repository);
+const webview2UserDataFolder = validateWebView2UserDataFolder(
   process.env.ONEHARNESS_UI_E2E_WEBVIEW2_USER_DATA_DIR,
+  process.platform,
 );
+const capabilities = createDesktopCapabilities(appBinary, process.platform, webview2UserDataFolder);
 
 export const config: WebdriverIO.Config = {
   afterTest: async (_test, _context, result) => {

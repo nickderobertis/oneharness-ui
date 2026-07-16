@@ -1,7 +1,10 @@
 #!/usr/bin/env bun
 import { existsSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
-import { createDesktopFixture } from "../apps/desktop-shell/tests/e2e/fixture.ts";
+import {
+  createDesktopFixture,
+  deterministicDesktopEnvironment,
+} from "../apps/desktop-shell/tests/e2e/fixture.ts";
 
 const root = resolve(import.meta.dir, "..");
 const artifacts = resolve(root, "test-results/desktop-e2e");
@@ -10,7 +13,7 @@ const driverVersion = "tauri-driver v2.0.6:";
 function run(command, environment, label, remedy) {
   const result = Bun.spawnSync(command, {
     cwd: root,
-    env: environment ?? process.env,
+    env: environment,
   });
   if (result.exitCode === 0) return;
   process.stderr.write(result.stdout);
@@ -22,7 +25,9 @@ function appBinary() {
   const suffix = process.platform === "win32" ? ".exe" : "";
   const path = resolve(root, `target/release/oneharness-ui${suffix}`);
   if (!existsSync(path)) {
-    throw new Error(`built Tauri application is missing at ${path}`);
+    throw new Error(
+      `built Tauri application is missing at ${path}; inspect the native package build and rerun just test-desktop-e2e`,
+    );
   }
   return path;
 }
@@ -34,7 +39,9 @@ async function main() {
     );
   }
   if (process.platform !== "linux" && process.platform !== "win32") {
-    throw new Error(`official tauri-driver is unsupported on ${process.platform}`);
+    throw new Error(
+      `official tauri-driver is unsupported on ${process.platform}; run the journey on Linux or Windows, or use the macOS native smoke in CI`,
+    );
   }
   if (process.platform === "linux") {
     if (!Bun.which("pkg-config") || !Bun.which("WebKitWebDriver")) {
@@ -42,16 +49,25 @@ async function main() {
         "Linux requires pkg-config and WebKitWebDriver; install webkit2gtk-driver and the documented Tauri prerequisites",
       );
     }
-    const webkit = Bun.spawnSync(["pkg-config", "--exists", "webkit2gtk-4.1"], { cwd: root });
+    const environment = deterministicDesktopEnvironment({});
+    const webkit = Bun.spawnSync(["pkg-config", "--exists", "webkit2gtk-4.1"], {
+      cwd: root,
+      env: environment,
+    });
     if (webkit.exitCode !== 0) {
-      throw new Error("Linux requires the WebKitGTK 4.1 development package");
+      throw new Error(
+        "Linux requires the WebKitGTK 4.1 development package; install libwebkit2gtk-4.1-dev and rerun just test-desktop-e2e",
+      );
     }
-    if (!process.env.DISPLAY) {
+    if (!/^(?:[A-Za-z0-9_.-]+)?:\d+(?:\.\d+)?$/.test(environment.DISPLAY ?? "")) {
       throw new Error("Linux requires a display; rerun with xvfb-run -a just test-desktop-e2e");
     }
   }
 
-  const installed = Bun.spawnSync(["cargo", "install", "--list"], { cwd: root });
+  const installed = Bun.spawnSync(["cargo", "install", "--list"], {
+    cwd: root,
+    env: deterministicDesktopEnvironment({}),
+  });
   if (
     installed.exitCode !== 0 ||
     !installed.stdout.toString().split("\n").includes(driverVersion)
@@ -63,7 +79,7 @@ async function main() {
   const format = process.platform === "win32" ? "msi" : "deb";
   run(
     ["just", "bundle"],
-    { ...process.env, BUNDLE_FORMATS: format },
+    deterministicDesktopEnvironment({ BUNDLE_FORMATS: format }),
     `native ${format} package build`,
     "install the reported Tauri prerequisite and rerun just test-desktop-e2e",
   );
@@ -72,14 +88,13 @@ async function main() {
   try {
     run(
       ["bun", "run", "--cwd", "apps/desktop-shell", "test:e2e"],
-      {
-        ...process.env,
+      deterministicDesktopEnvironment({
         ...fixture.environment,
         ONEHARNESS_UI_E2E_APP_BINARY: appBinary(),
         // Node 26 must provide the fetch primitives as one compatible set. The
         // mixed global/bundled Undici path fails before reaching tauri-driver.
         WDIO_USE_NATIVE_FETCH: "1",
-      },
+      }),
       "WebdriverIO native journey",
       "inspect test-results/desktop-e2e and rerun just test-desktop-e2e",
     );
