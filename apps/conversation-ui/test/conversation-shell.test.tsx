@@ -90,6 +90,7 @@ describe("ConversationShell", () => {
       turns: [
         {
           ...conversation.turns[0],
+          failureKind: "rate_limit",
           reasoning: "Checked the redirect boundary before answering.",
           unknown: { future_payload: { preserved: true } },
         },
@@ -109,6 +110,7 @@ describe("ConversationShell", () => {
     await user.click(item);
     expect(await screen.findByRole("heading", { name: "inspect-login" })).toBeTruthy();
     expect(screen.getByText("The redirect drops the return path.")).toBeTruthy();
+    expect(screen.getByRole("note", { name: "Failure: rate_limit" })).toBeTruthy();
     expect(screen.getByText("0")).toBeTruthy();
     expect(screen.getByText("Not reported")).toBeTruthy();
 

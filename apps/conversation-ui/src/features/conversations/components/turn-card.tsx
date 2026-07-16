@@ -87,7 +87,11 @@ export function TurnCard({ turn }: { turn: Turn }) {
           ) : (
             <p className="muted">No assistant text was captured for this run.</p>
           )}
-          {turn.failureKind ? <p className="failure-note">Failure: {turn.failureKind}</p> : null}
+          {turn.failureKind ? (
+            <p aria-label={`Failure: ${turn.failureKind}`} className="failure-note" role="note">
+              Failure: {turn.failureKind}
+            </p>
+          ) : null}
           <Usage usage={turn.usage} />
           {hasUnknown ? (
             <details className="disclosure unknown">
