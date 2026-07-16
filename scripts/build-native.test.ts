@@ -4,6 +4,14 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { appImageOverride, stageAppImageSidecar } from "./build-native.mjs";
 
+test("reports invalid bundle input with a concrete command-surface remedy", () => {
+  const root = resolve(import.meta.dir, "..");
+  const result = Bun.spawnSync(["bun", "scripts/build-native.mjs", "invalid"], { cwd: root });
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr.toString()).toContain("provide a comma-separated list");
+  expect(result.stderr.toString()).toContain("rerun just bundle");
+});
+
 test.skipIf(process.platform !== "linux")(
   "stages the real bridge outside linuxdeploy's mutable directories",
   () => {
