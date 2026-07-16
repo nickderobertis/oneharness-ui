@@ -1,6 +1,6 @@
 import { accessSync, constants, realpathSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { basename, dirname, isAbsolute, relative, resolve, sep, win32 } from "node:path";
 import type { TauriCapabilities } from "@wdio/tauri-service";
 
 type TauriOptions = Omit<NonNullable<TauriCapabilities["tauri:options"]>, "webviewOptions"> & {
@@ -12,6 +12,7 @@ type DesktopTauriCapabilities = Omit<TauriCapabilities, "tauri:options"> & {
 };
 
 const FIXTURE_ROOT_PREFIX = "oneharness-ui-desktop-e2e-";
+const AUTOMATION_PROFILE_ARGUMENT = "--oneharness-webdriver-profile=";
 
 function validateFixtureEntry(
   input: string | undefined,
@@ -114,6 +115,15 @@ export function createDesktopCapabilities(
         "ONEHARNESS_UI_E2E_WEBVIEW2_USER_DATA_DIR is required on Windows; run just test-desktop-e2e",
       );
     }
+    const fixtureName = win32.basename(win32.dirname(webview2UserDataFolder));
+    if (
+      win32.basename(webview2UserDataFolder) !== "webview2-user-data" ||
+      !fixtureName.startsWith(FIXTURE_ROOT_PREFIX) ||
+      fixtureName.length === FIXTURE_ROOT_PREFIX.length
+    ) {
+      throw new Error("Windows WebView2 profile must belong to the isolated desktop fixture");
+    }
+    tauriOptions.args = [`${AUTOMATION_PROFILE_ARGUMENT}${webview2UserDataFolder}`];
     tauriOptions.webviewOptions = { userDataFolder: webview2UserDataFolder };
   }
 

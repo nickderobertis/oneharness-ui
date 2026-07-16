@@ -16,13 +16,16 @@ xvfb-run -a just test-desktop-e2e
 Windows uses WebView2; the pinned WebdriverIO Tauri service downloads the Edge
 driver matching the installed runtime. The session gives EdgeDriver and Tauri
 the same isolated, writable WebView2 user-data folder through the driver
-capability and an automation-only Tauri window configuration, so the driver can
-discover the application's DevTools endpoint without touching the user's normal
-application profile. Only the service's launcher runs:
+capability and EdgeDriver's documented host-application argument channel. An
+automation-only Tauri window configuration validates that argument before use,
+so the driver can discover the application's DevTools endpoint without touching
+the user's normal application profile. Only the service's launcher runs:
 its worker APIs require the test-only Tauri WDIO plugin, while this journey uses
 standard WebDriver operations and keeps the release application uninstrumented.
 Failure screenshots, driver logs, and an ordered `stages.log` stay under
-`test-results/desktop-e2e`; successful runs remove them.
+`test-results/desktop-e2e`; pre-session failures also record whether Tauri
+accepted the profile and whether WebView2 created `DevToolsActivePort`.
+Successful runs remove the diagnostics.
 
 The fixture replaces only paid model execution with oneharness's own
 deterministic provider binary. History creation, the packaged UI, Tauri command,

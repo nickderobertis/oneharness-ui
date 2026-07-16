@@ -23,13 +23,18 @@ describe("native desktop capabilities", () => {
       createDesktopCapabilities(
         "D:\\workspace\\target\\release\\oneharness-ui.exe",
         "win32",
-        "D:\\temp\\oneharness-ui-webview2",
+        "D:\\temp\\main\\oneharness-ui-desktop-e2e-profile\\webview2-user-data",
       ),
     ).toEqual({
       browserName: "tauri",
       "tauri:options": {
         application: "D:\\workspace\\target\\release\\oneharness-ui.exe",
-        webviewOptions: { userDataFolder: "D:\\temp\\oneharness-ui-webview2" },
+        args: [
+          "--oneharness-webdriver-profile=D:\\temp\\main\\oneharness-ui-desktop-e2e-profile\\webview2-user-data",
+        ],
+        webviewOptions: {
+          userDataFolder: "D:\\temp\\main\\oneharness-ui-desktop-e2e-profile\\webview2-user-data",
+        },
       },
     });
   });

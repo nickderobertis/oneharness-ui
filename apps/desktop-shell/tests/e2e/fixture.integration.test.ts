@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdir, mkdtemp, readdir, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, resolve } from "node:path";
 import {
@@ -8,6 +8,7 @@ import {
   fixtureOneHarnessCli,
   fixtureProvider,
   packagedOneHarnessCli,
+  recordWebView2ProfileDiagnostics,
   validateFixtureHistoryFile,
 } from "./fixture.ts";
 
@@ -149,6 +150,24 @@ describe("native desktop fixture", () => {
       );
       await expect(validateFixtureHistoryFile(historyDir, outside)).rejects.toThrow(
         "outside its isolated directory",
+      );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  test("distinguishes Tauri profile setup from WebView2 bridge readiness", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "oneharness-ui-webview-diagnostics-"));
+    const userDataDirectory = resolve(root, "fixture", "webview2-user-data");
+    const output = resolve(root, "webview2-profile.log");
+    try {
+      await mkdir(userDataDirectory, { recursive: true });
+      await writeFile(resolve(root, "fixture", "tauri-profile-ready"), "ready\n");
+      await writeFile(resolve(userDataDirectory, "DevToolsActivePort"), "1234\n");
+      await recordWebView2ProfileDiagnostics(userDataDirectory, output, "win32");
+      expect(await readFile(output, "utf8")).toBe(
+        "PASS\tTauri accepted WebView2 profile argument\n" +
+          "PASS\tWebView2 created DevToolsActivePort\n",
       );
     } finally {
       await rm(root, { force: true, recursive: true });

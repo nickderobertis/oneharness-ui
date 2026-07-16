@@ -1,5 +1,5 @@
 import { existsSync, realpathSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
@@ -231,6 +231,7 @@ export type DesktopFixture = {
     ONEHARNESS_UI_PROVIDER_BIN: string;
     ONEHARNESS_UI_PROVIDER_HARNESS: string;
   };
+  recordWebView2Diagnostics: (output: string) => Promise<void>;
 };
 
 export function resolveFixtureWebView2UserDataDirectory(
@@ -249,6 +250,34 @@ export function resolveFixtureWebView2UserDataDirectory(
     throw new Error("Windows desktop E2E requires an absolute LOCALAPPDATA fixture directory");
   }
   return resolve(localAppData, "main", fixtureName, "webview2-user-data");
+}
+
+export async function recordWebView2ProfileDiagnostics(
+  userDataDirectory: string,
+  output: string,
+  platform: NodeJS.Platform = process.platform,
+): Promise<void> {
+  if (platform !== "win32") {
+    await writeFile(output, "PASS\tWebView2 profile diagnostics not applicable\n", { mode: 0o600 });
+    return;
+  }
+  let entries: string[] = [];
+  try {
+    entries = await readdir(userDataDirectory, { recursive: true });
+  } catch {
+    // Report the absent directory through the bounded diagnostic below.
+  }
+  const profileReady = existsSync(resolve(dirname(userDataDirectory), "tauri-profile-ready"));
+  const devToolsReady = entries.some((entry) => basename(entry) === "DevToolsActivePort");
+  await writeFile(
+    output,
+    [
+      `${profileReady ? "PASS" : "FAIL"}\tTauri accepted WebView2 profile argument`,
+      `${devToolsReady ? "PASS" : "FAIL"}\tWebView2 created DevToolsActivePort`,
+      "",
+    ].join("\n"),
+    { mode: 0o600 },
+  );
 }
 
 export async function createDesktopFixture(
@@ -329,6 +358,8 @@ export async function createDesktopFixture(
         ONEHARNESS_UI_PROVIDER_BIN: providerPath,
         ONEHARNESS_UI_PROVIDER_HARNESS: "claude-code",
       },
+      recordWebView2Diagnostics: async (output) =>
+        await recordWebView2ProfileDiagnostics(webview2UserDataDir, output),
     };
   } catch (error) {
     await cleanup();

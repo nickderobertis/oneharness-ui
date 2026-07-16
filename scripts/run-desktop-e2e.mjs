@@ -115,6 +115,16 @@ async function main() {
         "inspect test-results/desktop-e2e and rerun just test-desktop-e2e",
       ),
     );
+  } catch (error) {
+    try {
+      await runDesktopStage(desktopE2eStageLog, "webdriver profile diagnostics", () =>
+        fixture.recordWebView2Diagnostics(resolve(artifacts, "webview2-profile.log")),
+      );
+    } catch (diagnosticError) {
+      const detail = diagnosticError instanceof Error ? diagnosticError.message : "unknown error";
+      console.error(`native desktop E2E profile diagnostics failed: ${detail}`);
+    }
+    throw error;
   } finally {
     await runDesktopStage(desktopE2eStageLog, "desktop fixture cleanup", fixture.cleanup);
   }
