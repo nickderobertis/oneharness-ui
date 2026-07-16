@@ -119,7 +119,7 @@ pub fn builder() -> tauri::Builder<tauri::Wry> {
 
 #[cfg(test)]
 mod tests {
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
 
     use serde_json::json;
     use tauri::{
@@ -142,6 +142,17 @@ mod tests {
         Ok(sidecar)
     }
 
+    fn require_packaged_bridge(sidecar: &Path) -> Result<(), Box<dyn std::error::Error>> {
+        if sidecar.is_file() {
+            return Ok(());
+        }
+        Err(std::io::Error::other(format!(
+            "tauri-build did not stage the bridge beside the application at {}",
+            sidecar.display()
+        ))
+        .into())
+    }
+
     #[test]
     fn constructs_the_scoped_runtime() {
         let _builder = super::builder();
@@ -151,13 +162,7 @@ mod tests {
     fn transports_validated_json_through_the_real_bridge() -> Result<(), Box<dyn std::error::Error>>
     {
         let sidecar = packaged_bridge_path()?;
-        if !sidecar.is_file() {
-            return Err(std::io::Error::other(format!(
-                "tauri-build did not stage the bridge beside the application at {}",
-                sidecar.display()
-            ))
-            .into());
-        }
+        require_packaged_bridge(&sidecar)?;
         let app = tauri::test::mock_builder()
             .plugin(tauri_plugin_shell::init())
             .invoke_handler(tauri::generate_handler![super::invoke_bridge])
@@ -180,6 +185,16 @@ mod tests {
         assert_eq!(response["ok"], false);
         assert_eq!(response["error"]["code"], "INVALID_REQUEST");
         Ok(())
+    }
+
+    #[test]
+    fn reports_a_missing_packaged_bridge() {
+        let missing = std::env::temp_dir().join(format!(
+            "oneharness-ui-bridge-that-does-not-exist-{}",
+            std::process::id()
+        ));
+        let error = require_packaged_bridge(&missing).expect_err("missing sidecar was accepted");
+        assert!(error.to_string().contains("tauri-build did not stage"));
     }
 
     #[test]
