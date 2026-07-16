@@ -1,7 +1,11 @@
 import { appendFile, mkdir } from "node:fs/promises";
 import { dirname, isAbsolute, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
-export const desktopE2eArtifacts = resolve(import.meta.dir, "../../../../test-results/desktop-e2e");
+export const desktopE2eArtifacts = resolve(
+  fileURLToPath(new URL(".", import.meta.url)),
+  "../../../../test-results/desktop-e2e",
+);
 export const desktopE2eStageLog = resolve(desktopE2eArtifacts, "stages.log");
 
 type StageStatus = "fail" | "pass" | "start";
