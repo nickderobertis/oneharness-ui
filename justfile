@@ -64,7 +64,7 @@ build:
 
 bundle:
     @[[ "${BUNDLE_FORMATS:-}" =~ ^(deb|appimage|app|dmg|msi|nsis)(,(deb|appimage|app|dmg|msi|nsis))*$ ]] || { echo "native bundle: set BUNDLE_FORMATS to a comma-separated platform bundle list" >&2; exit 2; }
-    @./scripts/run-quiet.sh "native bundle" "Install the platform's Tauri prerequisites, fix the reported packaging error, and rerun 'just bundle'." -- bunx tauri build --verbose --config apps/desktop-shell/tauri.conf.json --bundles "$BUNDLE_FORMATS"
+    @./scripts/run-quiet.sh "native bundle" "Install the platform's Tauri prerequisites, fix the reported packaging error, and rerun 'just bundle'." -- bun scripts/build-native.mjs "$BUNDLE_FORMATS"
 
 checksums:
     @./scripts/run-quiet.sh "release checksums" "Set BUNDLE_DIRECTORY and CHECKSUM_OUTPUT after building the platform bundles, then rerun 'just checksums'." -- bun scripts/checksums.mjs "${BUNDLE_DIRECTORY:-}" "${CHECKSUM_OUTPUT:-}"
