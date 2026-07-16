@@ -76,6 +76,9 @@ async function main() {
         ...process.env,
         ...fixture.environment,
         ONEHARNESS_UI_E2E_APP_BINARY: appBinary(),
+        // Node 26 must provide the fetch primitives as one compatible set. The
+        // mixed global/bundled Undici path fails before reaching tauri-driver.
+        WDIO_USE_NATIVE_FETCH: "1",
       },
       "WebdriverIO native journey",
       "inspect test-results/desktop-e2e and rerun just test-desktop-e2e",
