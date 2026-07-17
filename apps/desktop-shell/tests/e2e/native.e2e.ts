@@ -38,6 +38,7 @@ type ScrollRegion = ReturnType<typeof $>;
 
 const maxWheelInputsPerPage = 20;
 const maxAutomaticPages = 3;
+const paginationIdlePollInterval = 250;
 const scrollEndTolerance = 1;
 
 async function scrollSnapshot(region: ScrollRegion): Promise<ScrollSnapshot> {
@@ -53,6 +54,13 @@ async function scrollSnapshot(region: ScrollRegion): Promise<ScrollSnapshot> {
 
 function isAtScrollEnd(snapshot: ScrollSnapshot): boolean {
   return snapshot.scrollTop >= snapshot.scrollHeight - snapshot.clientHeight - scrollEndTolerance;
+}
+
+async function waitForPaginationIdle(region: ScrollRegion): Promise<void> {
+  await browser.waitUntil(async () => (await region.getAttribute("aria-busy")) === "false", {
+    interval: paginationIdlePollInterval,
+    timeoutMsg: "automatic pagination did not become idle after appending a page",
+  });
 }
 
 async function wheelUntilNextPage(
@@ -79,7 +87,8 @@ async function wheelUntilNextPage(
 
     const after = await scrollSnapshot(region);
     if ((await completedStatus.isDisplayed()) || after.scrollHeight > pageStart.scrollHeight) {
-      return after;
+      await waitForPaginationIdle(region);
+      return await scrollSnapshot(region);
     }
     if (isAtScrollEnd(after)) {
       await browser.waitUntil(
@@ -87,9 +96,11 @@ async function wheelUntilNextPage(
           (await completedStatus.isDisplayed()) ||
           (await scrollSnapshot(region)).scrollHeight > pageStart.scrollHeight,
         {
+          interval: paginationIdlePollInterval,
           timeoutMsg: "automatic pagination did not append a page after wheel scrolling to the end",
         },
       );
+      await waitForPaginationIdle(region);
       return await scrollSnapshot(region);
     }
   }
