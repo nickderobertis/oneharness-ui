@@ -117,7 +117,11 @@ export function ConversationList({
                   : "Load more conversations"}
             </button>
           ) : conversations.length > 0 ? (
-            <p className="pagination__status" role="status">
+            <p
+              aria-label={`All ${totalCount} conversations loaded`}
+              className="pagination__status"
+              role="status"
+            >
               All {totalCount} conversations loaded
             </p>
           ) : null}

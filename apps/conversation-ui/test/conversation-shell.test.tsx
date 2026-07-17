@@ -278,7 +278,7 @@ describe("ConversationShell", () => {
         totalCount: 3,
       }),
     );
-    expect(await screen.findByText("All 3 conversations loaded")).toBeTruthy();
+    expect(await screen.findByRole("status", { name: "All 3 conversations loaded" })).toBeTruthy();
     expect(
       screen
         .getAllByRole("listitem", { name: /Session ID/ })
@@ -386,7 +386,7 @@ describe("ConversationShell", () => {
     );
     const turnHistory = await screen.findByRole("region", { name: "Conversation turns" });
     TestIntersectionObserver.intersect(turnHistory);
-    expect(await screen.findByText("All 3 turns loaded")).toBeTruthy();
+    expect(await screen.findByRole("status", { name: "All 3 turns loaded" })).toBeTruthy();
     expect(screen.getAllByRole("article").map((item) => item.getAttribute("aria-label"))).toEqual([
       "Turn session-1-0 from claude-code",
       "Turn session-1-1 from claude-code",

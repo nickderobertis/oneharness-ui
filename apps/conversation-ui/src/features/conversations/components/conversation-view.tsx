@@ -91,7 +91,11 @@ export function ConversationView({
                   : "Load more turns"}
             </button>
           ) : (
-            <p className="pagination__status" role="status">
+            <p
+              aria-label={`All ${totalTurnCount} turns loaded`}
+              className="pagination__status"
+              role="status"
+            >
               All {totalTurnCount} turns loaded
             </p>
           )}
