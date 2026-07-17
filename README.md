@@ -60,15 +60,18 @@ curl -fsSL https://raw.githubusercontent.com/nickderobertis/oneharness-ui/main/s
 It detects Linux `x86_64`/`aarch64`, macOS Apple Silicon, or Windows `x86_64`
 under a POSIX shell; downloads the matching GitHub release asset and companion
 `.sha256`; and refuses to install unless SHA-256 verification succeeds. Linux
-uses the AppImage without root at `~/.local/bin/oneharness-ui`, macOS installs
-to `~/Applications`, and Windows runs the MSI quietly.
+keeps the verified AppImage and one cached extraction under `~/.local/bin`, then
+installs `~/.local/bin/oneharness-ui` as a launcher. The launcher uses the
+AppImage on accessible-FUSE hosts and the cached `AppRun` when `/dev/fuse` is
+unavailable or `APPIMAGE_EXTRACT_AND_RUN=1` is set. macOS installs to
+`~/Applications`, and Windows runs the MSI quietly.
 
 Pin a release or choose the Linux/macOS destination (flags override
 `ONEHARNESS_UI_VERSION` and `ONEHARNESS_UI_INSTALL_DIR`):
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/nickderobertis/oneharness-ui/main/scripts/install.sh \
-  | sh -s -- --version v0.2.0 --to ~/.local/bin
+  | sh -s -- --version v0.2.1 --to ~/.local/bin
 ```
 
 Set `GITHUB_TOKEN` if unauthenticated API rate limiting prevents latest-release
@@ -104,8 +107,9 @@ directory as the CLI. `ONEHARNESS_BIN` selects an explicit executable and
 `ONEHARNESS_UI_HISTORY_DIR` selects an explicit history directory. Errors name
 the failing path and suggest the relevant setting.
 
-Linux builds target Ubuntu 24.04 or another distribution with glibc 2.39 or
-newer, matching the published oneharness 0.3.23 CLI binaries.
+Linux `aarch64` Tauri and AppImage artifacts are built natively on Ubuntu 22.04
+so the desktop startup ABI remains compatible with glibc 2.35. Linux `x86_64`
+artifacts continue to build on Ubuntu 24.04.
 
 Selection is durable in `?session=<id>`. A conversation is continuable only
 when its latest SDK-validated record holds an eligible native `session_id`.
@@ -150,8 +154,10 @@ the version job reconciles a separate release workflow with the repository's
 built-in token. That workflow accepts only a published semver release whose tag
 is reachable from `main`, materializes the version in its build checkout, and
 builds native Tauri installers and companion checksums on Linux `x86_64` and
-`aarch64`, macOS Apple Silicon, and Windows `x86_64`. The release-like CI journey
-uses the same public installer contract, while the packaged Tauri E2E remains a
+`aarch64`, macOS Apple Silicon, and Windows `x86_64`. The release-like ARM64 CI
+journey runs natively on Ubuntu 22.04, checksum-verifies and installs the
+AppImage, forces the FUSE-free cached extraction path, and drives the rendered
+application through official `tauri-driver`. The packaged Tauri E2E remains a
 separate required gate. There is no manual dispatch or hand-edited version.
 
 MIT licensed. Security reports follow [SECURITY.md](SECURITY.md).

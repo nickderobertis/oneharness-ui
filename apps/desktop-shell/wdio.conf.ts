@@ -20,6 +20,10 @@ const webview2UserDataFolder = validateWebView2UserDataFolder(
   process.env.LOCALAPPDATA,
 );
 const capabilities = createDesktopCapabilities(appBinary, process.platform, webview2UserDataFolder);
+const startupOnly = process.env.ONEHARNESS_UI_E2E_STARTUP_ONLY;
+if (startupOnly !== undefined && startupOnly !== "1") {
+  throw new Error("ONEHARNESS_UI_E2E_STARTUP_ONLY must be 1 when set");
+}
 
 export const config: WebdriverIO.Config = {
   afterTest: async (_test, _context, result) => {
@@ -80,7 +84,7 @@ export const config: WebdriverIO.Config = {
       },
     ],
   ],
-  specs: ["./tests/e2e/native.e2e.ts"],
+  specs: [startupOnly ? "./tests/e2e/native-startup.e2e.ts" : "./tests/e2e/native.e2e.ts"],
   tsConfigPath: "./tsconfig.json",
   waitforTimeout: 20_000,
 };
