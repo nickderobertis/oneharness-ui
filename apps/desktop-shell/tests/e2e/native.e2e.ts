@@ -36,6 +36,10 @@ type ScrollSnapshot = {
 };
 type ScrollRegion = ReturnType<typeof $>;
 
+const maxWheelInputsPerPage = 20;
+const maxAutomaticPages = 3;
+const scrollEndTolerance = 1;
+
 async function scrollSnapshot(region: ScrollRegion): Promise<ScrollSnapshot> {
   return await browser.execute((element) => {
     const scrollRegion = element as HTMLElement;
@@ -47,21 +51,52 @@ async function scrollSnapshot(region: ScrollRegion): Promise<ScrollSnapshot> {
   }, region);
 }
 
-async function wheelToEnd(region: ScrollRegion, firstItem: ScrollRegion): Promise<ScrollSnapshot> {
-  const before = await scrollSnapshot(region);
-  const firstItemTop = await firstItem.getLocation("y");
-  expect(before.scrollHeight).toBeGreaterThan(before.clientHeight);
-  await browser
-    .action("wheel")
-    .scroll({ deltaY: 100_000, duration: 250, origin: region, x: 0, y: 0 })
-    .perform();
-  await browser.waitUntil(async () => (await scrollSnapshot(region)).scrollTop > before.scrollTop, {
-    timeoutMsg: "wheel input did not move the independent history scroll region",
-  });
-  const after = await scrollSnapshot(region);
-  expect(after.scrollTop).toBeGreaterThan(before.scrollTop);
-  expect(await firstItem.getLocation("y")).toBeLessThan(firstItemTop);
-  return after;
+function isAtScrollEnd(snapshot: ScrollSnapshot): boolean {
+  return snapshot.scrollTop >= snapshot.scrollHeight - snapshot.clientHeight - scrollEndTolerance;
+}
+
+async function wheelUntilNextPage(
+  region: ScrollRegion,
+  completedStatus: ScrollRegion,
+  pageStart: ScrollSnapshot,
+): Promise<ScrollSnapshot> {
+  for (let wheelInputs = 0; wheelInputs < maxWheelInputsPerPage; wheelInputs += 1) {
+    const before = await scrollSnapshot(region);
+    await browser
+      .action("wheel")
+      .scroll({ deltaY: 100_000, duration: 250, origin: region, x: 0, y: 0 })
+      .perform();
+    await browser.waitUntil(
+      async () => {
+        if (await completedStatus.isDisplayed()) return true;
+        const current = await scrollSnapshot(region);
+        return (
+          current.scrollHeight > pageStart.scrollHeight || current.scrollTop > before.scrollTop
+        );
+      },
+      { timeoutMsg: "wheel input neither moved the history region nor loaded its next page" },
+    );
+
+    const after = await scrollSnapshot(region);
+    if ((await completedStatus.isDisplayed()) || after.scrollHeight > pageStart.scrollHeight) {
+      return after;
+    }
+    if (isAtScrollEnd(after)) {
+      await browser.waitUntil(
+        async () =>
+          (await completedStatus.isDisplayed()) ||
+          (await scrollSnapshot(region)).scrollHeight > pageStart.scrollHeight,
+        {
+          timeoutMsg: "automatic pagination did not append a page after wheel scrolling to the end",
+        },
+      );
+      return await scrollSnapshot(region);
+    }
+  }
+
+  throw new Error(
+    `wheel input did not reach the page boundary after ${maxWheelInputsPerPage} attempts`,
+  );
 }
 
 async function wheelThroughAutomaticPages(
@@ -69,19 +104,21 @@ async function wheelThroughAutomaticPages(
   firstItem: ScrollRegion,
   completedStatus: ScrollRegion,
 ): Promise<void> {
-  for (let wheelInputs = 0; wheelInputs < 3; wheelInputs += 1) {
-    if (await completedStatus.isDisplayed()) return;
-    const after = await wheelToEnd(region, firstItem);
-    await browser.waitUntil(
-      async () => {
-        if (await completedStatus.isDisplayed()) return true;
-        const current = await scrollSnapshot(region);
-        const scrollEnd = current.scrollHeight - current.clientHeight;
-        return current.scrollHeight > after.scrollHeight && current.scrollTop < scrollEnd - 1;
-      },
-      { timeoutMsg: "automatic pagination neither completed nor exposed more history to scroll" },
-    );
+  const initial = await scrollSnapshot(region);
+  const firstItemTop = await firstItem.getLocation("y");
+  expect(initial.scrollHeight).toBeGreaterThan(initial.clientHeight);
+
+  let appendedPages = 0;
+  for (let automaticPages = 0; automaticPages < maxAutomaticPages; automaticPages += 1) {
+    if (await completedStatus.isDisplayed()) break;
+    const pageStart = await scrollSnapshot(region);
+    const after = await wheelUntilNextPage(region, completedStatus, pageStart);
+    expect(after.scrollHeight).toBeGreaterThan(pageStart.scrollHeight);
+    appendedPages += 1;
   }
+
+  expect(await firstItem.getLocation("y")).toBeLessThan(firstItemTop);
+  expect(appendedPages).toBeGreaterThanOrEqual(2);
 }
 
 async function expectUniqueAccessibleIds(
