@@ -5,14 +5,11 @@ import userEvent from "@testing-library/user-event";
 import { ConversationShell } from "../src/features/conversations/components/conversation-shell";
 
 const summary: ConversationSummary = {
-  canContinue: true,
   harnesses: ["claude-code"],
   id: "session-1",
   name: "inspect-login",
-  preview: "Inspect the login issue",
   project: "/workspace/product",
   startedAt: "2026-07-15T10:00:00Z",
-  state: "completed",
   turnCount: 1,
 };
 
@@ -56,6 +53,32 @@ function success(data: unknown) {
   return { data, ok: true };
 }
 
+function listPage(
+  conversations: ConversationSummary[],
+  options: {
+    nextCursor?: { sessionId: string; startedAt: string } | null;
+    totalCount?: number;
+  } = {},
+) {
+  return success({
+    conversations,
+    kind: "list",
+    nextCursor: options.nextCursor ?? null,
+    totalCount: options.totalCount ?? conversations.length,
+  });
+}
+
+function detailPage(
+  value: Conversation,
+  options: { nextTurnOffset?: number | null; totalTurnCount?: number } = {},
+) {
+  return {
+    ...value,
+    nextTurnOffset: options.nextTurnOffset ?? null,
+    totalTurnCount: options.totalTurnCount ?? value.turns.length,
+  };
+}
+
 afterEach(() => {
   cleanup();
   window.history.replaceState(null, "", "/");
@@ -71,13 +94,13 @@ describe("ConversationShell", () => {
     installBridge((request) => {
       if (request.kind !== "list") throw new Error("unexpected detail request");
       listCalls += 1;
-      return listCalls === 1 ? firstList : success({ conversations: [], kind: "list" });
+      return listCalls === 1 ? firstList : listPage([]);
     });
     const user = userEvent.setup();
     render(<ConversationShell />);
 
     expect(screen.getByRole("status", { name: "Loading conversations" })).toBeTruthy();
-    finishFirstList(success({ conversations: [], kind: "list" }));
+    finishFirstList(listPage([]));
     expect(await screen.findByRole("heading", { name: "No history yet" })).toBeTruthy();
     expect(screen.getByText("No recorded sessions yet.")).toBeTruthy();
     await user.click(screen.getByRole("button", { name: "Refresh conversations" }));
@@ -98,8 +121,8 @@ describe("ConversationShell", () => {
     };
     installBridge((request) =>
       request.kind === "list"
-        ? success({ conversations: [summary], kind: "list" })
-        : success({ conversation: detailedConversation, kind: "get" }),
+        ? listPage([summary])
+        : success({ conversation: detailPage(detailedConversation), kind: "get" }),
     );
     const user = userEvent.setup();
     render(<ConversationShell />);
@@ -123,6 +146,76 @@ describe("ConversationShell", () => {
     expect(window.location.search).toBe("?session=session-1");
   });
 
+  test("loads more conversations by keyboard and resets pagination when history changes", async () => {
+    const older = { ...summary, id: "session-0", name: "older-session" };
+    const newest = { ...summary, id: "session-2", name: "newest-session" };
+    let firstPageCalls = 0;
+    installBridge((request) => {
+      if (request.kind !== "list") throw new Error("unexpected detail request");
+      if (request.cursor) return listPage([older], { totalCount: 2 });
+      firstPageCalls += 1;
+      return firstPageCalls === 1
+        ? listPage([summary], {
+            nextCursor: { sessionId: summary.id, startedAt: summary.startedAt },
+            totalCount: 2,
+          })
+        : listPage([newest]);
+    });
+    const user = userEvent.setup();
+    render(<ConversationShell />);
+
+    expect(await screen.findByText("1 of 2")).toBeTruthy();
+    expect(screen.getByRole("status", { name: "1 of 2 conversations loaded" })).toBeTruthy();
+    const loadMore = screen.getByRole("button", { name: "Load more conversations" });
+    loadMore.focus();
+    await user.keyboard("{Enter}");
+    expect(
+      await screen.findByRole("button", { name: "Open conversation older-session" }),
+    ).toBeTruthy();
+    expect(screen.getByText("2", { exact: true })).toBeTruthy();
+    expect(screen.getByRole("status", { name: "2 of 2 conversations loaded" })).toBeTruthy();
+
+    await user.click(screen.getByRole("button", { name: "Refresh conversations" }));
+    expect(
+      await screen.findByRole("button", { name: "Open conversation newest-session" }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Open conversation older-session" })).toBeNull();
+    expect(firstPageCalls).toBe(2);
+  });
+
+  test("loads additional turns by keyboard for the selected conversation", async () => {
+    const secondTurn = {
+      ...conversation.turns[0],
+      assistant: "The second bounded page.",
+      id: "session-1-1",
+      user: "Continue reading",
+    };
+    const offsets: unknown[] = [];
+    installBridge((request) => {
+      if (request.kind === "list") return listPage([summary]);
+      offsets.push(request.turnOffset);
+      return success({
+        conversation:
+          request.turnOffset === 1
+            ? detailPage({ ...conversation, turns: [secondTurn] }, { totalTurnCount: 2 })
+            : detailPage(conversation, { nextTurnOffset: 1, totalTurnCount: 2 }),
+        kind: "get",
+      });
+    });
+    const user = userEvent.setup();
+    render(<ConversationShell />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Open conversation inspect-login" }),
+    );
+    const loadMore = await screen.findByRole("button", { name: "Load more turns" });
+    loadMore.focus();
+    await user.keyboard("{Enter}");
+    expect(await screen.findByText("The second bounded page.")).toBeTruthy();
+    expect(screen.getByText("The redirect drops the return path.")).toBeTruthy();
+    expect(offsets).toEqual([undefined, 1]);
+  });
+
   test("restores a deep link, continues, and selects the refreshed session", async () => {
     window.history.replaceState(null, "", "/?session=session-1");
     const continued: Conversation = {
@@ -142,9 +235,9 @@ describe("ConversationShell", () => {
       finishContinuation = resolve;
     });
     installBridge((request) => {
-      if (request.kind === "list") return success({ conversations: [summary], kind: "list" });
+      if (request.kind === "list") return listPage([summary]);
       if (request.kind === "continue") return continuation;
-      return success({ conversation, kind: "get" });
+      return success({ conversation: detailPage(conversation), kind: "get" });
     });
     const user = userEvent.setup();
     render(<ConversationShell />);
@@ -157,7 +250,7 @@ describe("ConversationShell", () => {
     expect((reply as HTMLTextAreaElement).disabled).toBe(true);
     finishContinuation(
       success({
-        conversation: continued,
+        conversation: detailPage(continued),
         kind: "continue",
         selectedSessionId: "session-2",
       }),
@@ -169,7 +262,7 @@ describe("ConversationShell", () => {
   test("keeps a failed reply visible for recovery", async () => {
     window.history.replaceState(null, "", "/?session=session-1");
     installBridge((request) => {
-      if (request.kind === "list") return success({ conversations: [summary], kind: "list" });
+      if (request.kind === "list") return listPage([summary]);
       if (request.kind === "continue") {
         return {
           error: {
@@ -179,7 +272,10 @@ describe("ConversationShell", () => {
           ok: false,
         };
       }
-      return success({ conversation: { ...conversation, state: "future-paused" }, kind: "get" });
+      return success({
+        conversation: detailPage({ ...conversation, state: "future-paused" }),
+        kind: "get",
+      });
     });
     const user = userEvent.setup();
     render(<ConversationShell />);
@@ -196,7 +292,7 @@ describe("ConversationShell", () => {
     window.history.replaceState(null, "", "/?session=session-1");
     let getCalls = 0;
     installBridge((request) => {
-      if (request.kind === "list") return success({ conversations: [summary], kind: "list" });
+      if (request.kind === "list") return listPage([summary]);
       getCalls += 1;
       if (getCalls === 1) {
         return {
@@ -208,7 +304,7 @@ describe("ConversationShell", () => {
           ok: false,
         };
       }
-      return success({ conversation, kind: "get" });
+      return success({ conversation: detailPage(conversation), kind: "get" });
     });
     const user = userEvent.setup();
     render(<ConversationShell />);
@@ -226,13 +322,10 @@ describe("ConversationShell", () => {
     installBridge((request) => {
       if (fail) throw "connection refused";
       if (request.kind === "list") {
-        return success({
-          conversations: [{ ...summary, canContinue: false, state: "failed" }],
-          kind: "list",
-        });
+        return listPage([summary]);
       }
       return success({
-        conversation: { ...conversation, canContinue: false, state: "failed" },
+        conversation: detailPage({ ...conversation, canContinue: false, state: "failed" }),
         kind: "get",
       });
     });

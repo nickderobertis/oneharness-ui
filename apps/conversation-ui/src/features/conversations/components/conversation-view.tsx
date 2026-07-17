@@ -19,12 +19,18 @@ function ConversationTitle({ name }: { name: string }) {
 export function ConversationView({
   conversation,
   continueError,
+  hasMoreTurns,
+  loadingMoreTurns,
   onContinue,
+  onLoadMoreTurns,
   pending,
 }: {
   conversation: Conversation;
   continueError: Error | null;
+  hasMoreTurns: boolean;
+  loadingMoreTurns: boolean;
   onContinue: (message: string) => Promise<void>;
+  onLoadMoreTurns: () => void;
   pending: boolean;
 }) {
   const state = pending ? "running" : conversation.state;
@@ -40,10 +46,20 @@ export function ConversationView({
         </div>
         <StatusBadge state={state} />
       </header>
-      <section aria-label="Conversation turns" className="turns">
+      <section aria-busy={loadingMoreTurns} aria-label="Conversation turns" className="turns">
         {conversation.turns.map((turn) => (
           <TurnCard key={turn.id} turn={turn} />
         ))}
+        {hasMoreTurns ? (
+          <button
+            className="load-more"
+            disabled={loadingMoreTurns}
+            onClick={onLoadMoreTurns}
+            type="button"
+          >
+            {loadingMoreTurns ? "Loading more turns…" : "Load more turns"}
+          </button>
+        ) : null}
       </section>
       <footer className="composer-area">
         {conversation.canContinue ? (

@@ -191,14 +191,14 @@ button:disabled {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.conversation-link__preview {
+.conversation-link__project {
   color: var(--muted);
-  display: -webkit-box;
+  display: block;
   font-size: 12px;
   line-height: 1.45;
   overflow: hidden;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .conversation-link__meta {
   color: var(--subtle);
@@ -222,6 +222,19 @@ button:disabled {
   color: var(--subtle);
   font-size: 11px;
   line-height: 1.5;
+}
+.load-more {
+  background: var(--panel-soft);
+  border: 1px solid var(--line-strong);
+  border-radius: 9px;
+  color: var(--muted);
+  display: block;
+  font-size: 11px;
+  margin: 14px auto 0;
+  padding: 9px 14px;
+}
+.load-more:hover:not(:disabled) {
+  color: var(--text);
 }
 .sidebar__footer {
   border-top: 1px solid var(--line);

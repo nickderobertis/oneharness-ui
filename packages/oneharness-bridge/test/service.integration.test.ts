@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, isAbsolute, resolve } from "node:path";
+import { basename, dirname, isAbsolute, resolve } from "node:path";
 import { HistoryRecordSchema, OneHarness, RunOptionsSchema, type RunReport } from "@oneharness/sdk";
 import { BridgeService } from "../src/service.ts";
 import { readFixtureHistoryRecord } from "./history-fixture.ts";
@@ -166,6 +166,10 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
 
     const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
     expect(listed.ok && listed.data.kind === "list" && listed.data.conversations).toHaveLength(1);
+    expect(listed).toMatchObject({
+      data: { nextCursor: null, totalCount: 1 },
+      ok: true,
+    });
     const sessionId =
       listed.ok && listed.data.kind === "list" ? listed.data.conversations[0]?.id : "";
     const selected = await service().handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
@@ -200,10 +204,13 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
     const firstId =
       listed.ok && listed.data.kind === "list" ? listed.data.conversations[0]?.id : "";
-    expect(listed.ok && listed.data.kind === "list" && listed.data.conversations[0]).toMatchObject({
-      canContinue: true,
-      state: "stopped",
-    });
+    const selected = await service().handle(
+      { kind: "get", sessionId: firstId },
+      TEST_AUTHORIZATION,
+    );
+    expect(
+      selected.ok && selected.data.kind === "get" ? selected.data.conversation : undefined,
+    ).toMatchObject({ canContinue: true, state: "stopped" });
     const continued = await service().handle(
       {
         kind: "continue",
@@ -307,7 +314,15 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       resolve(malformedDirectory, "broken-session.jsonl"),
       '{"session":"broken-session","name":"Broken","timestamp":"2026-07-15T00:00:00Z"}\n',
     );
-    const malformed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
+    const malformedList = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
+    const malformedId =
+      malformedList.ok && malformedList.data.kind === "list"
+        ? malformedList.data.conversations[0]?.id
+        : undefined;
+    const malformed = await service().handle(
+      { kind: "get", sessionId: malformedId ?? "" },
+      TEST_AUTHORIZATION,
+    );
     expect(malformed).toMatchObject({ ok: false, error: { code: "MALFORMED_HISTORY" } });
 
     const missingExecutable = await new BridgeService(
@@ -330,5 +345,111 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     ).handle({ kind: "list" }, TEST_AUTHORIZATION);
     expect(storage.ok).toBe(false);
     if (!storage.ok) expect(storage.error.detail).toContain("not-a-directory");
+  });
+
+  test("pages SDK summaries without loading every conversation detail", async () => {
+    const report = await seed(
+      "page-template",
+      '{"result":"Page template answer","session_id":"native-page-template"}',
+      { prompt: "summary pages must not include this detail prompt" },
+    );
+    const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
+    await Promise.all(
+      Array.from({ length: 26 }, async (_, index) => {
+        const session = `page-session-${String(index).padStart(2, "0")}`;
+        const copy = HistoryRecordSchema.parse({
+          ...record,
+          name: `page-${String(index).padStart(2, "0")}`,
+          session,
+        });
+        await writeFile(
+          resolve(dirname(historyFile), `${session}.jsonl`),
+          `${JSON.stringify(copy)}\n`,
+        );
+      }),
+    );
+
+    const first = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
+    if (!first.ok || first.data.kind !== "list") throw new Error(JSON.stringify(first));
+    expect(first.data.conversations).toHaveLength(25);
+    expect(first.data.totalCount).toBe(27);
+    expect(first.data.nextCursor).not.toBeNull();
+    expect(JSON.stringify(first)).not.toContain(
+      "summary pages must not include this detail prompt",
+    );
+
+    const inserted = HistoryRecordSchema.parse({
+      ...record,
+      name: "inserted-after-first-page",
+      session: "inserted-after-first-page",
+      timestamp: "9999-12-31T23:59:59Z",
+    });
+    await writeFile(
+      resolve(dirname(historyFile), "inserted-after-first-page.jsonl"),
+      `${JSON.stringify(inserted)}\n`,
+    );
+
+    const second = await service().handle(
+      { cursor: first.data.nextCursor ?? undefined, kind: "list" },
+      TEST_AUTHORIZATION,
+    );
+    if (!second.ok || second.data.kind !== "list") throw new Error(JSON.stringify(second));
+    expect(second.data).toMatchObject({ nextCursor: null, totalCount: 28 });
+    expect(second.data.conversations).toHaveLength(2);
+    expect(second.data.conversations.map(({ name }) => name)).not.toContain(
+      "inserted-after-first-page",
+    );
+
+    const refreshed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
+    expect(
+      refreshed.ok && refreshed.data.kind === "list"
+        ? refreshed.data.conversations[0]?.name
+        : undefined,
+    ).toBe("inserted-after-first-page");
+
+    const selected = await service().handle(
+      { kind: "get", sessionId: second.data.conversations[0]?.id ?? "" },
+      TEST_AUTHORIZATION,
+    );
+    expect(selected.ok && selected.data.kind === "get").toBe(true);
+  });
+
+  test("keeps each on-demand turn page under the response byte budget", async () => {
+    const report = await seed(
+      "large-conversation",
+      '{"result":"Bounded detail answer","session_id":"native-large-conversation"}',
+    );
+    const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
+    const largePrompt = "bounded conversation detail ".repeat(6_500);
+    const records = Array.from({ length: 5 }, (_, index) =>
+      HistoryRecordSchema.parse({
+        ...record,
+        prompt: `${index}:${largePrompt}`,
+        timestamp: `2026-07-17T00:00:0${index}Z`,
+      }),
+    );
+    await writeFile(historyFile, `${records.map((item) => JSON.stringify(item)).join("\n")}\n`);
+
+    const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
+    const id =
+      listed.ok && listed.data.kind === "list"
+        ? listed.data.conversations.find(({ name }) => name === "large-conversation")?.id
+        : undefined;
+    const first = await service().handle({ kind: "get", sessionId: id ?? "" }, TEST_AUTHORIZATION);
+    if (!first.ok || first.data.kind !== "get") throw new Error(JSON.stringify(first));
+    expect(Buffer.byteLength(JSON.stringify(first))).toBeLessThan(512 * 1024);
+    expect(first.data.conversation).toMatchObject({ totalTurnCount: 5 });
+    expect(first.data.conversation.nextTurnOffset).not.toBeNull();
+
+    const second = await service().handle(
+      {
+        kind: "get",
+        sessionId: id ?? "",
+        turnOffset: first.data.conversation.nextTurnOffset ?? undefined,
+      },
+      TEST_AUTHORIZATION,
+    );
+    expect(Buffer.byteLength(JSON.stringify(second))).toBeLessThan(512 * 1024);
+    expect(second.ok && second.data.kind === "get").toBe(true);
   });
 });

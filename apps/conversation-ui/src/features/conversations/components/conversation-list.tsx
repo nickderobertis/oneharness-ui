@@ -1,19 +1,26 @@
 import type { ConversationSummary } from "@oneharness-ui/ipc-contract";
 import { RefreshIcon, TerminalIcon } from "@/components/ui/icons";
-import { StatusBadge } from "./status-badge";
 
 export function ConversationList({
   conversations,
+  hasMore,
+  loadingMore,
+  onLoadMore,
   onRefresh,
   onSelect,
   refreshing,
   selectedId,
+  totalCount,
 }: {
   conversations: ConversationSummary[];
+  hasMore: boolean;
+  loadingMore: boolean;
+  onLoadMore: () => void;
   onRefresh: () => void;
   onSelect: (id: string) => void;
   refreshing: boolean;
   selectedId: string | null;
+  totalCount: number;
 }) {
   return (
     <aside className="sidebar">
@@ -37,9 +44,17 @@ export function ConversationList({
           <RefreshIcon className={refreshing ? "spin" : undefined} />
         </button>
       </header>
-      <nav aria-label="Conversation history" className="conversation-nav">
+      <nav aria-busy={loadingMore} aria-label="Conversation history" className="conversation-nav">
         <p className="conversation-nav__label">
-          History <span>{conversations.length}</span>
+          History
+          <span
+            aria-label={`${conversations.length} of ${totalCount} conversations loaded`}
+            role="status"
+          >
+            {conversations.length < totalCount
+              ? `${conversations.length} of ${totalCount}`
+              : conversations.length}
+          </span>
         </p>
         {conversations.length === 0 ? (
           <div className="sidebar-empty">
@@ -59,10 +74,9 @@ export function ConversationList({
                 >
                   <span className="conversation-link__top">
                     <strong>{conversation.name}</strong>
-                    <StatusBadge state={conversation.state} />
                   </span>
-                  <span className="conversation-link__preview">
-                    {conversation.preview || "No prompt captured"}
+                  <span className="conversation-link__project" title={conversation.project}>
+                    {conversation.project || "Project not recorded"}
                   </span>
                   <span className="conversation-link__meta">
                     {conversation.harnesses.join(", ")} · {conversation.turnCount}{" "}
@@ -73,6 +87,11 @@ export function ConversationList({
             ))}
           </ul>
         )}
+        {hasMore ? (
+          <button className="load-more" disabled={loadingMore} onClick={onLoadMore} type="button">
+            {loadingMore ? "Loading more conversations…" : "Load more conversations"}
+          </button>
+        ) : null}
       </nav>
       <footer className="sidebar__footer">Runs stay on this machine</footer>
     </aside>

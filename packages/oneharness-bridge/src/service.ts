@@ -16,13 +16,19 @@ import {
   type BridgeResponse,
   bridgeRequestSchema,
   bridgeResponseSchema,
-  type Conversation,
+  type ConversationCursor,
+  type ConversationPage,
   type ConversationSummary,
+  type ConversationTurn,
 } from "@oneharness-ui/ipc-contract";
 import { z } from "zod";
 import type { BridgeEnvironment } from "./environment.ts";
 
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
+const CONVERSATION_LIST_PAGE_SIZE = 25;
+const CONVERSATION_TURN_PAGE_SIZE = 20;
+const MAX_CONVERSATION_PAGE_BYTES = 512 * 1024;
+const MAX_ERROR_DETAIL_CHARACTERS = 16_384;
 export const authorizationSchema = z.string().min(32).max(256);
 const environmentValueSchema = z.string().max(32_768);
 const CLI_ENVIRONMENT_KEYS = [
@@ -150,15 +156,60 @@ function reasoningFrom(record: HistoryRecord): string | null {
   return null;
 }
 
-function toConversation(records: HistoryRecord[]): Conversation {
+function toTurn(record: HistoryRecord, index: number): ConversationTurn {
+  const unknown = Object.fromEntries(
+    Object.entries(record).filter(([key]) => !knownRecordKeys.has(key)),
+  );
+  return {
+    assistant: record.text ?? null,
+    failureKind: record.failure_kind ?? null,
+    harness: record.harness,
+    id: `${record.session}-${index}`,
+    model: record.model ?? null,
+    reasoning: reasoningFrom(record),
+    status: stateFor(record.status),
+    timestamp: record.timestamp,
+    tools: (record.events ?? []).map((event) => ({
+      index: event.index,
+      ...(event.input !== undefined ? { input: event.input } : {}),
+      kind: event.kind,
+      ...(event.name !== undefined ? { name: event.name } : {}),
+      ...(event.output !== undefined ? { output: event.output } : {}),
+    })),
+    unknown,
+    usage: {
+      ...(record.usage.cache_read_tokens !== undefined
+        ? { cacheReadTokens: optionalNumber(record.usage.cache_read_tokens) }
+        : {}),
+      ...(record.usage.cache_write_tokens !== undefined
+        ? { cacheWriteTokens: optionalNumber(record.usage.cache_write_tokens) }
+        : {}),
+      ...(record.usage.cost_usd !== undefined
+        ? { costUsd: optionalNumber(record.usage.cost_usd) }
+        : {}),
+      ...(record.usage.input_tokens !== undefined
+        ? { inputTokens: optionalNumber(record.usage.input_tokens) }
+        : {}),
+      ...(record.usage.output_tokens !== undefined
+        ? { outputTokens: optionalNumber(record.usage.output_tokens) }
+        : {}),
+    },
+    user: record.prompt,
+  };
+}
+
+function toConversationPage(records: HistoryRecord[], requestedOffset = 0): ConversationPage {
   const first = records[0];
   const last = records.at(-1);
   if (!first || !last) throw new Error("history session contains no valid SDK records");
+  if (requestedOffset >= records.length && requestedOffset !== 0) {
+    throw new Error("conversation turn offset is outside the history session");
+  }
   const harnesses = [...new Set(records.map(({ harness }) => harness))];
   const state = stateFor(last.status);
   const canContinue =
     Boolean(last.session_id) && !["planned", "skipped", "spawn-error"].includes(last.status);
-  return {
+  const conversation: ConversationPage = {
     canContinue,
     harnesses,
     id: first.session,
@@ -166,67 +217,59 @@ function toConversation(records: HistoryRecord[]): Conversation {
     project: first.project,
     startedAt: first.timestamp,
     state,
-    turns: records.map((record, index) => {
-      const unknown = Object.fromEntries(
-        Object.entries(record).filter(([key]) => !knownRecordKeys.has(key)),
-      );
-      return {
-        assistant: record.text ?? null,
-        failureKind: record.failure_kind ?? null,
-        harness: record.harness,
-        id: `${record.session}-${index}`,
-        model: record.model ?? null,
-        reasoning: reasoningFrom(record),
-        status: stateFor(record.status),
-        timestamp: record.timestamp,
-        tools: (record.events ?? []).map((event) => ({
-          index: event.index,
-          ...(event.input !== undefined ? { input: event.input } : {}),
-          kind: event.kind,
-          ...(event.name !== undefined ? { name: event.name } : {}),
-          ...(event.output !== undefined ? { output: event.output } : {}),
-        })),
-        unknown,
-        usage: {
-          ...(record.usage.cache_read_tokens !== undefined
-            ? { cacheReadTokens: optionalNumber(record.usage.cache_read_tokens) }
-            : {}),
-          ...(record.usage.cache_write_tokens !== undefined
-            ? { cacheWriteTokens: optionalNumber(record.usage.cache_write_tokens) }
-            : {}),
-          ...(record.usage.cost_usd !== undefined
-            ? { costUsd: optionalNumber(record.usage.cost_usd) }
-            : {}),
-          ...(record.usage.input_tokens !== undefined
-            ? { inputTokens: optionalNumber(record.usage.input_tokens) }
-            : {}),
-          ...(record.usage.output_tokens !== undefined
-            ? { outputTokens: optionalNumber(record.usage.output_tokens) }
-            : {}),
-        },
-        user: record.prompt,
-      };
-    }),
+    turns: [],
+    nextTurnOffset: null,
+    totalTurnCount: records.length,
+  };
+  for (
+    let index = requestedOffset;
+    index < records.length && index < requestedOffset + CONVERSATION_TURN_PAGE_SIZE;
+    index += 1
+  ) {
+    const record = records[index];
+    if (!record) break;
+    const turn = toTurn(record, index);
+    const candidate = { ...conversation, turns: [...conversation.turns, turn] };
+    if (Buffer.byteLength(JSON.stringify(candidate)) > MAX_CONVERSATION_PAGE_BYTES) {
+      if (conversation.turns.length === 0) {
+        throw new Error("history turn exceeds the bounded conversation page contract");
+      }
+      break;
+    }
+    conversation.turns.push(turn);
+  }
+  const nextOffset = requestedOffset + conversation.turns.length;
+  conversation.nextTurnOffset = nextOffset < records.length ? nextOffset : null;
+  return conversation;
+}
+
+function toSummary(summary: HistorySessionSummary): ConversationSummary {
+  return {
+    harnesses: summary.harnesses,
+    id: summary.id,
+    name: summary.name,
+    project: summary.project,
+    startedAt: summary.started,
+    turnCount: summary.record_count,
   };
 }
 
-function toSummary(conversation: Conversation): ConversationSummary {
-  const latest = conversation.turns.at(-1);
-  return {
-    canContinue: conversation.canContinue,
-    harnesses: conversation.harnesses,
-    id: conversation.id,
-    name: conversation.name,
-    preview: latest?.user ?? "",
-    project: conversation.project,
-    startedAt: conversation.startedAt,
-    state: conversation.state,
-    turnCount: conversation.turns.length,
-  };
+function summaryOrder(left: HistorySessionSummary, right: HistorySessionSummary): number {
+  return right.started.localeCompare(left.started) || right.id.localeCompare(left.id);
+}
+
+function followsCursor(summary: HistorySessionSummary, cursor: ConversationCursor): boolean {
+  return (
+    summary.started < cursor.startedAt ||
+    (summary.started === cursor.startedAt && summary.id < cursor.sessionId)
+  );
 }
 
 function publicError(error: unknown): BridgeResponse {
-  const detail = error instanceof Error ? error.message : String(error);
+  const detail = (error instanceof Error ? error.message : String(error)).slice(
+    0,
+    MAX_ERROR_DETAIL_CHARACTERS,
+  );
   if (/ENOENT|not found|cannot find|spawn/i.test(detail)) {
     return {
       error: {
@@ -303,15 +346,28 @@ export class BridgeService {
     );
   }
 
-  async #list(): Promise<ConversationSummary[]> {
-    const discovered = await invokeDiscovery(this.environment);
-    const conversations = await Promise.all(
-      discovered.map(async ({ id }) => toConversation(await this.#history(id))),
-    );
-    return conversations.map(toSummary);
+  async #list(cursor?: ConversationCursor): Promise<{
+    conversations: ConversationSummary[];
+    nextCursor: ConversationCursor | null;
+    totalCount: number;
+  }> {
+    const discovered = (await invokeDiscovery(this.environment)).sort(summaryOrder);
+    const remaining = cursor
+      ? discovered.filter((summary) => followsCursor(summary, cursor))
+      : discovered;
+    const page = remaining.slice(0, CONVERSATION_LIST_PAGE_SIZE);
+    const last = page.at(-1);
+    return {
+      conversations: page.map(toSummary),
+      nextCursor:
+        remaining.length > page.length && last
+          ? { sessionId: last.id, startedAt: last.started }
+          : null,
+      totalCount: discovered.length,
+    };
   }
 
-  async #continue(sessionId: string, message: string): Promise<Conversation> {
+  async #continue(sessionId: string, message: string): Promise<ConversationPage> {
     const current = await this.#history(sessionId);
     const latest = current.at(-1);
     if (!latest?.session_id || ["planned", "skipped", "spawn-error"].includes(latest.status)) {
@@ -339,7 +395,7 @@ export class BridgeService {
     if (!report.history_file) throw new Error("continued run did not create a history session");
     const filename = basename(report.history_file);
     const nextId = filename.slice(0, filename.length - extname(filename).length);
-    return toConversation(await this.#history(nextId));
+    return toConversationPage(await this.#history(nextId));
   }
 
   async handle(input: unknown, presentedAuthorization: unknown): Promise<BridgeResponse> {
@@ -366,12 +422,15 @@ export class BridgeService {
       const request: BridgeRequest = parsedRequest.data;
       const response: BridgeResponse = await (async () => {
         if (request.kind === "list") {
-          return { data: { conversations: await this.#list(), kind: "list" }, ok: true };
+          return { data: { ...(await this.#list(request.cursor)), kind: "list" }, ok: true };
         }
         if (request.kind === "get") {
           return {
             data: {
-              conversation: toConversation(await this.#history(request.sessionId)),
+              conversation: toConversationPage(
+                await this.#history(request.sessionId),
+                request.turnOffset,
+              ),
               kind: "get",
             },
             ok: true,

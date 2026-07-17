@@ -4,6 +4,10 @@ import { validateProviderArgvPath } from "./capabilities.ts";
 import { desktopE2eStageLog, runDesktopStage } from "./stage-log.ts";
 
 const providerArgv = validateProviderArgvPath(process.env.ONEHARNESS_UI_E2E_PROVIDER_ARGV);
+const legacyHistoryBytes = Number(process.env.ONEHARNESS_UI_E2E_LEGACY_HISTORY_BYTES);
+if (!Number.isSafeInteger(legacyHistoryBytes) || legacyHistoryBytes <= 4 * 1024 * 1024) {
+  throw new Error("native oversized history fixture must exceed the legacy 4 MiB bridge response");
+}
 
 async function conversation(name: string) {
   return await $(`aria/Open conversation ${name}`);
@@ -25,13 +29,28 @@ async function expectExactResume(sessionId: string): Promise<void> {
 }
 
 describe("packaged native desktop journey", () => {
-  it("loads real history, reveals optional details, continues, and recovers", async () => {
+  it("pages a legacy-overflow history, opens details, continues, and recovers", async () => {
     await runDesktopStage(desktopE2eStageLog, "journey history load", async () => {
       await expect(browser).toHaveTitle("oneharness");
-      await expect($("aria/Conversation history")).toBeDisplayed();
-      await expect(await conversation("plain-session")).toBeDisplayed();
+      const history = await $("aria/Conversation history");
+      await expect(history).toBeDisplayed();
+      await expect($("aria/25 of 33 conversations loaded")).toBeDisplayed();
       await expect(await conversation("stopped-tool-session")).toBeDisplayed();
       await expect(await conversation("recoverable-failure")).toBeDisplayed();
+      await expect($("aria/Load more conversations")).toBeDisplayed();
+      await expect(await conversation("oversized-session-00")).not.toExist();
+      expect(legacyHistoryBytes).toBeGreaterThan(4 * 1024 * 1024);
+    });
+
+    await runDesktopStage(desktopE2eStageLog, "journey oversized history pagination", async () => {
+      const loadMore = await $("aria/Load more conversations");
+      await loadMore.click();
+      await expect(await conversation("oversized-session-00")).toBeDisplayed();
+      await expect(await conversation("plain-session")).toBeDisplayed();
+      await expect($("aria/33 of 33 conversations loaded")).toBeDisplayed();
+      await (await conversation("oversized-session-00")).click();
+      await expect($("aria/oversized-session-00")).toBeDisplayed();
+      await expect($("aria/A concise answer")).toBeDisplayed();
     });
 
     await runDesktopStage(desktopE2eStageLog, "journey plain session", async () => {
