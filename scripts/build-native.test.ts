@@ -2,7 +2,14 @@ import { expect, test } from "bun:test";
 import { lstatSync, mkdtempSync, readlinkSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { appImageOverride, stageAppImageSidecar } from "./build-native.mjs";
+import { appImageOverride, requiresSourceBuiltCli, stageAppImageSidecar } from "./build-native.mjs";
+
+test("builds the pinned CLI from source only for Linux ARM64 bundles", () => {
+  expect(requiresSourceBuiltCli("linux", "arm64")).toBe(true);
+  expect(requiresSourceBuiltCli("linux", "x64")).toBe(false);
+  expect(requiresSourceBuiltCli("darwin", "arm64")).toBe(false);
+  expect(requiresSourceBuiltCli("win32", "arm64")).toBe(false);
+});
 
 test("reports invalid bundle input with a concrete command-surface remedy", () => {
   const root = resolve(import.meta.dir, "..");

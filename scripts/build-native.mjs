@@ -80,6 +80,10 @@ export function appImageOverride(layoutRoot) {
   });
 }
 
+export function requiresSourceBuiltCli(platform, architecture) {
+  return platform === "linux" && architecture === "arm64";
+}
+
 function tauriBuild(formats, extraConfig) {
   const command = ["bunx", "tauri", "build", "--verbose", "--config", tauriConfig];
   if (extraConfig) {
@@ -93,6 +97,10 @@ function main() {
   const formats = (process.argv[2] ?? "").split(",").filter(Boolean);
   if (formats.length === 0 || formats.some((format) => !supportedFormats.has(format))) {
     throw new Error("provide a comma-separated list of supported platform bundle formats");
+  }
+
+  if (requiresSourceBuiltCli(process.platform, process.arch)) {
+    run(["bash", "scripts/build-compatible-cli.sh"]);
   }
 
   const standardFormats = formats.filter((format) => format !== "appimage");

@@ -32,7 +32,10 @@ layout on a native Ubuntu 22.04 ARM runner. It sets
 `APPIMAGE_EXTRACT_AND_RUN=1`, launches the installer's cached `AppRun` without
 FUSE, and asserts that the real window, local sidecar, empty SDK history, and
 refreshable conversation UI reach the native startup boundary. Release builds
-repeat that journey before uploading the ARM64 assets.
+repeat that journey before uploading the ARM64 assets. The ARM bundle compiles
+the SDK-matched oneharness 0.3.23 CLI from its pinned upstream commit on the
+same Ubuntu 22.04 runner, so initial history discovery crosses the compatible
+CLI boundary too.
 
 The fixture replaces only paid model execution with oneharness's own
 deterministic provider binary. History creation, the packaged UI, Tauri command,
