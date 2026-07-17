@@ -34,7 +34,7 @@ function Workspace() {
         <LoadingState label="Loading conversations" />
       </div>
     );
-  if (list.error)
+  if (list.error && !list.data)
     return (
       <div className="app-state">
         <ErrorState error={list.error} onRetry={() => void list.refetch()} />
@@ -47,8 +47,9 @@ function Workspace() {
       <ConversationList
         conversations={conversations}
         hasMore={list.hasNextPage}
+        loadMoreError={list.isFetchNextPageError ? list.error : null}
         loadingMore={list.isFetchingNextPage}
-        onLoadMore={() => void list.fetchNextPage()}
+        onLoadMore={list.fetchNextPage}
         onRefresh={() => void list.refresh()}
         onSelect={select}
         refreshing={list.isFetching}
@@ -71,7 +72,7 @@ function Workspace() {
         <main className="welcome">
           <LoadingState label="Loading selected conversation" />
         </main>
-      ) : selected.error ? (
+      ) : selected.error && !selected.data ? (
         <main className="welcome">
           <ErrorState error={selected.error} onRetry={() => void selected.refetch()} />
         </main>
@@ -80,12 +81,14 @@ function Workspace() {
           conversation={selected.data}
           continueError={continuation.error}
           hasMoreTurns={selected.hasNextPage}
+          loadMoreTurnsError={selected.isFetchNextPageError ? selected.error : null}
           loadingMoreTurns={selected.isFetchingNextPage}
           onContinue={async (message) => {
             await continuation.mutateAsync({ message, sessionId: selected.data.id });
           }}
-          onLoadMoreTurns={() => void selected.fetchNextPage()}
+          onLoadMoreTurns={selected.fetchNextPage}
           pending={continuation.isPending}
+          totalTurnCount={selected.data.totalTurnCount}
         />
       ) : null}
     </div>

@@ -87,7 +87,13 @@ describe("native desktop fixture", () => {
       expect(names).toContain("plain-session");
       expect(names).toContain("recoverable-failure");
       expect(names).toContain("stopped-tool-session");
-      expect(names.filter((name) => name.startsWith("oversized-session-"))).toHaveLength(30);
+      expect(names.filter((name) => name.startsWith("oversized-session-"))).toHaveLength(55);
+      const sessionIds = JSON.parse(fixture.environment.ONEHARNESS_UI_E2E_SESSION_IDS) as unknown[];
+      expect(sessionIds).toHaveLength(58);
+      expect(new Set(sessionIds).size).toBe(58);
+      const turnIds = JSON.parse(fixture.environment.ONEHARNESS_UI_E2E_TURN_IDS) as unknown[];
+      expect(turnIds).toHaveLength(45);
+      expect(new Set(turnIds).size).toBe(45);
       expect(Number(fixture.environment.ONEHARNESS_UI_E2E_LEGACY_HISTORY_BYTES)).toBeGreaterThan(
         4 * 1024 * 1024,
       );
@@ -105,7 +111,7 @@ describe("native desktop fixture", () => {
         "--history-dir",
         historyDir,
       ]);
-      expect(stopped).toHaveLength(1);
+      expect(stopped).toHaveLength(45);
       expect(stopped[0]).toMatchObject({
         session_id: "native-stopped-session",
         status: "timeout",

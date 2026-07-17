@@ -9,6 +9,69 @@ if (!Number.isSafeInteger(legacyHistoryBytes) || legacyHistoryBytes <= 4 * 1024 
   throw new Error("native oversized history fixture must exceed the legacy 4 MiB bridge response");
 }
 
+function expectedIds(name: string): string[] {
+  const value = process.env[name];
+  if (!value) throw new Error(`${name} is required for the native pagination journey`);
+  const parsed: unknown = JSON.parse(value);
+  if (
+    !Array.isArray(parsed) ||
+    parsed.length === 0 ||
+    parsed.some((item) => typeof item !== "string") ||
+    new Set(parsed).size !== parsed.length
+  ) {
+    throw new Error(`${name} must contain a non-empty JSON array of unique ids`);
+  }
+  return parsed as string[];
+}
+
+const expectedSessionIds = expectedIds("ONEHARNESS_UI_E2E_SESSION_IDS");
+const expectedTurnIds = expectedIds("ONEHARNESS_UI_E2E_TURN_IDS");
+
+type ScrollSnapshot = {
+  clientHeight: number;
+  firstItemTop: number;
+  scrollHeight: number;
+  scrollTop: number;
+};
+type ScrollRegion = ReturnType<typeof $>;
+
+async function scrollSnapshot(region: ScrollRegion): Promise<ScrollSnapshot> {
+  return await browser.execute((element) => {
+    const scrollRegion = element as HTMLElement;
+    const firstItem = scrollRegion.querySelector<HTMLElement>("[data-session-id], [data-turn-id]");
+    return {
+      clientHeight: scrollRegion.clientHeight,
+      firstItemTop: firstItem?.getBoundingClientRect().top ?? 0,
+      scrollHeight: scrollRegion.scrollHeight,
+      scrollTop: scrollRegion.scrollTop,
+    };
+  }, region);
+}
+
+async function wheelToEnd(region: ScrollRegion): Promise<ScrollSnapshot> {
+  const before = await scrollSnapshot(region);
+  expect(before.scrollHeight).toBeGreaterThan(before.clientHeight);
+  await browser
+    .action("wheel")
+    .scroll({ deltaY: 100_000, duration: 250, origin: region, x: 0, y: 0 })
+    .perform();
+  await browser.waitUntil(async () => (await scrollSnapshot(region)).scrollTop > before.scrollTop, {
+    timeoutMsg: "wheel input did not move the independent history scroll region",
+  });
+  const after = await scrollSnapshot(region);
+  expect(after.scrollTop).toBeGreaterThan(before.scrollTop);
+  expect(after.firstItemTop).toBeLessThan(before.firstItemTop);
+  return after;
+}
+
+async function attributeValues(selector: string, attribute: string): Promise<string[]> {
+  const values: string[] = [];
+  for (const element of await $$(selector)) {
+    values.push((await element.getAttribute(attribute)) ?? "");
+  }
+  return values;
+}
+
 async function conversation(name: string) {
   return await $(`aria/Open conversation ${name}`);
 }
@@ -31,10 +94,11 @@ async function expectExactResume(sessionId: string): Promise<void> {
 describe("packaged native desktop journey", () => {
   it("pages a legacy-overflow history, opens details, continues, and recovers", async () => {
     await runDesktopStage(desktopE2eStageLog, "journey history load", async () => {
+      await browser.setWindowSize(900, 560);
       await expect(browser).toHaveTitle("oneharness");
       const history = await $("aria/Conversation history");
       await expect(history).toBeDisplayed();
-      await expect($("aria/25 of 33 conversations loaded")).toBeDisplayed();
+      await expect($("aria/25 of 58 conversations loaded")).toBeDisplayed();
       await expect(await conversation("stopped-tool-session")).toBeDisplayed();
       await expect(await conversation("recoverable-failure")).toBeDisplayed();
       await expect($("aria/Load more conversations")).toBeDisplayed();
@@ -43,11 +107,21 @@ describe("packaged native desktop journey", () => {
     });
 
     await runDesktopStage(desktopE2eStageLog, "journey oversized history pagination", async () => {
-      const loadMore = await $("aria/Load more conversations");
-      await loadMore.click();
+      const history = await $("aria/Conversation history");
+      const firstBoundaryPosition = await wheelToEnd(history);
+      await expect($("aria/50 of 58 conversations loaded")).toBeDisplayed();
+      expect((await scrollSnapshot(history)).scrollTop).toBeGreaterThanOrEqual(
+        firstBoundaryPosition.scrollTop,
+      );
+      await wheelToEnd(history);
+      await expect($("aria/58 of 58 conversations loaded")).toBeDisplayed();
+      await expect($("aria/All 58 conversations loaded")).toBeDisplayed();
+      const sessionIds = await attributeValues("[data-session-id]", "data-session-id");
+      expect(sessionIds).toHaveLength(expectedSessionIds.length);
+      expect(new Set(sessionIds).size).toBe(expectedSessionIds.length);
+      expect(sessionIds.toSorted()).toEqual(expectedSessionIds.toSorted());
       await expect(await conversation("oversized-session-00")).toBeDisplayed();
       await expect(await conversation("plain-session")).toBeDisplayed();
-      await expect($("aria/33 of 33 conversations loaded")).toBeDisplayed();
       await (await conversation("oversized-session-00")).click();
       await expect($("aria/oversized-session-00")).toBeDisplayed();
       await expect($("aria/A concise answer")).toBeDisplayed();
@@ -64,6 +138,23 @@ describe("packaged native desktop journey", () => {
       await (await conversation("stopped-tool-session")).click();
       await expect($("aria/stopped-tool-session")).toBeDisplayed();
       await expect($("aria/Stopped")).toBeDisplayed();
+      await expect($("aria/20 of 45 turns loaded")).toBeDisplayed();
+    });
+
+    await runDesktopStage(desktopE2eStageLog, "journey turn history pagination", async () => {
+      const turns = await $("aria/Conversation turns");
+      const firstBoundaryPosition = await wheelToEnd(turns);
+      await expect($("aria/40 of 45 turns loaded")).toBeDisplayed();
+      expect((await scrollSnapshot(turns)).scrollTop).toBeGreaterThanOrEqual(
+        firstBoundaryPosition.scrollTop,
+      );
+      await wheelToEnd(turns);
+      await expect($("aria/45 of 45 turns loaded")).toBeDisplayed();
+      await expect($("aria/All 45 turns loaded")).toBeDisplayed();
+      const turnIds = await attributeValues("[data-turn-id]", "data-turn-id");
+      expect(turnIds).toHaveLength(expectedTurnIds.length);
+      expect(new Set(turnIds).size).toBe(expectedTurnIds.length);
+      expect(turnIds).toEqual(expectedTurnIds);
     });
 
     await runDesktopStage(desktopE2eStageLog, "journey reasoning disclosure", async () => {

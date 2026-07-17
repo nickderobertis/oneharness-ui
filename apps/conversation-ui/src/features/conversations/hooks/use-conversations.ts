@@ -26,6 +26,7 @@ type ConversationListData = {
   conversations: ConversationSummary[];
   totalCount: number;
 };
+type ConversationData = Conversation & Pick<ConversationPage, "totalTurnCount">;
 
 export function useConversationList() {
   const client = useQueryClient();
@@ -66,7 +67,7 @@ export function useConversation(sessionId: string | null) {
   return useInfiniteQuery<
     ConversationPage,
     Error,
-    Conversation,
+    ConversationData,
     ReturnType<(typeof conversationKeys)["detail"]>,
     number
   >({
@@ -86,7 +87,7 @@ export function useConversation(sessionId: string | null) {
       return data.conversation;
     },
     queryKey: conversationKeys.detail(sessionId ?? "none"),
-    select: (data): Conversation => {
+    select: (data): ConversationData => {
       const first = data.pages[0];
       if (!first) throw new Error("Local bridge returned no conversation pages");
       return {

@@ -4,6 +4,52 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ConversationShell } from "../src/features/conversations/components/conversation-shell";
 
+class TestIntersectionObserver {
+  static observers = new Set<TestIntersectionObserver>();
+  readonly root: Document | Element | null;
+  private readonly callback: IntersectionObserverCallback;
+  private target: Element | null = null;
+
+  constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+    this.callback = callback;
+    this.root = options?.root ?? null;
+    TestIntersectionObserver.observers.add(this);
+  }
+
+  static intersect(root: Element): void {
+    for (const observer of TestIntersectionObserver.observers) {
+      if (observer.root !== root || !observer.target) continue;
+      observer.callback(
+        [{ isIntersecting: true, target: observer.target } as IntersectionObserverEntry],
+        observer as unknown as IntersectionObserver,
+      );
+    }
+  }
+
+  static reset(): void {
+    TestIntersectionObserver.observers.clear();
+  }
+
+  disconnect(): void {
+    TestIntersectionObserver.observers.delete(this);
+  }
+
+  observe(target: Element): void {
+    this.target = target;
+  }
+
+  takeRecords(): IntersectionObserverEntry[] {
+    return [];
+  }
+
+  unobserve(target: Element): void {
+    if (target === this.target) this.target = null;
+  }
+}
+
+globalThis.IntersectionObserver =
+  TestIntersectionObserver as unknown as typeof IntersectionObserver;
+
 const summary: ConversationSummary = {
   harnesses: ["claude-code"],
   id: "session-1",
@@ -81,6 +127,7 @@ function detailPage(
 
 afterEach(() => {
   cleanup();
+  TestIntersectionObserver.reset();
   window.history.replaceState(null, "", "/");
 });
 
@@ -183,6 +230,92 @@ describe("ConversationShell", () => {
     expect(firstPageCalls).toBe(2);
   });
 
+  test("automatically loads every conversation page near the scroll end without duplicates", async () => {
+    const second = { ...summary, id: "session-2", name: "middle-session" };
+    const third = { ...summary, id: "session-3", name: "oldest-session" };
+    let resolveSecondPage: (value: unknown) => void = () => {};
+    const secondPage = new Promise<unknown>((resolve) => {
+      resolveSecondPage = resolve;
+    });
+    const cursors: unknown[] = [];
+    installBridge((request) => {
+      if (request.kind !== "list") throw new Error("unexpected detail request");
+      cursors.push(request.cursor);
+      if (!request.cursor) {
+        return listPage([summary], {
+          nextCursor: { sessionId: summary.id, startedAt: summary.startedAt },
+          totalCount: 3,
+        });
+      }
+      if ((request.cursor as { sessionId: string }).sessionId === summary.id) {
+        return secondPage;
+      }
+      return listPage([third], { totalCount: 3 });
+    });
+    render(<ConversationShell />);
+
+    expect(await screen.findByText("1 of 3")).toBeTruthy();
+    const history = screen.getByRole("navigation", { name: "Conversation history" });
+    TestIntersectionObserver.intersect(history);
+    TestIntersectionObserver.intersect(history);
+    await waitFor(() => expect(cursors).toHaveLength(2));
+    resolveSecondPage(
+      listPage([second], {
+        nextCursor: { sessionId: second.id, startedAt: second.startedAt },
+        totalCount: 3,
+      }),
+    );
+    expect(await screen.findByText("2 of 3")).toBeTruthy();
+
+    TestIntersectionObserver.intersect(history);
+    expect(await screen.findByText("All 3 conversations loaded")).toBeTruthy();
+    const ids = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-session-id]"),
+      (item) => item.dataset.sessionId,
+    );
+    expect(ids).toEqual(["session-1", "session-2", "session-3"]);
+    expect(new Set(ids).size).toBe(3);
+    expect(cursors).toHaveLength(3);
+  });
+
+  test("keeps loaded conversations visible when automatic pagination fails and retries", async () => {
+    let pageCalls = 0;
+    installBridge((request) => {
+      if (request.kind !== "list") throw new Error("unexpected detail request");
+      if (!request.cursor) {
+        return listPage([summary], {
+          nextCursor: { sessionId: summary.id, startedAt: summary.startedAt },
+          totalCount: 2,
+        });
+      }
+      pageCalls += 1;
+      return pageCalls === 1
+        ? {
+            error: { code: "IO_ERROR", message: "History storage is temporarily busy" },
+            ok: false,
+          }
+        : listPage([{ ...summary, id: "session-0", name: "recovered-session" }], {
+            totalCount: 2,
+          });
+    });
+    const user = userEvent.setup();
+    render(<ConversationShell />);
+
+    await screen.findByText("1 of 2");
+    TestIntersectionObserver.intersect(
+      screen.getByRole("navigation", { name: "Conversation history" }),
+    );
+    expect((await screen.findByRole("alert")).textContent).toContain(
+      "Couldn’t load more conversations. History storage is temporarily busy",
+    );
+    expect(screen.getByRole("button", { name: "Open conversation inspect-login" })).toBeTruthy();
+    await user.click(screen.getByRole("button", { name: "Retry loading conversations" }));
+    expect(
+      await screen.findByRole("button", { name: "Open conversation recovered-session" }),
+    ).toBeTruthy();
+    expect(screen.getByText("All 2 conversations loaded")).toBeTruthy();
+  });
+
   test("loads additional turns by keyboard for the selected conversation", async () => {
     const secondTurn = {
       ...conversation.turns[0],
@@ -214,6 +347,46 @@ describe("ConversationShell", () => {
     expect(await screen.findByText("The second bounded page.")).toBeTruthy();
     expect(screen.getByText("The redirect drops the return path.")).toBeTruthy();
     expect(offsets).toEqual([undefined, 1]);
+  });
+
+  test("automatically loads every turn page near the independent turn scroll end", async () => {
+    const turns = Array.from({ length: 3 }, (_, index) => ({
+      ...conversation.turns[0],
+      assistant: `Bounded answer ${index}`,
+      id: `session-1-${index}`,
+      user: `Prompt ${index}`,
+    }));
+    const offsets: unknown[] = [];
+    installBridge((request) => {
+      if (request.kind === "list") return listPage([summary]);
+      offsets.push(request.turnOffset);
+      const offset = typeof request.turnOffset === "number" ? request.turnOffset : 0;
+      return success({
+        conversation: detailPage(
+          { ...conversation, turns: [turns[offset] ?? turns[0]] },
+          { nextTurnOffset: offset < 2 ? offset + 1 : null, totalTurnCount: 3 },
+        ),
+        kind: "get",
+      });
+    });
+    const user = userEvent.setup();
+    render(<ConversationShell />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Open conversation inspect-login" }),
+    );
+    const turnHistory = await screen.findByRole("region", { name: "Conversation turns" });
+    TestIntersectionObserver.intersect(turnHistory);
+    expect(await screen.findByText("Bounded answer 1")).toBeTruthy();
+    TestIntersectionObserver.intersect(turnHistory);
+    expect(await screen.findByText("All 3 turns loaded")).toBeTruthy();
+    const ids = Array.from(
+      document.querySelectorAll<HTMLElement>("[data-turn-id]"),
+      (item) => item.dataset.turnId,
+    );
+    expect(ids).toEqual(["session-1-0", "session-1-1", "session-1-2"]);
+    expect(new Set(ids).size).toBe(3);
+    expect(offsets).toEqual([undefined, 1, 2]);
   });
 
   test("restores a deep link, continues, and selects the refreshed session", async () => {

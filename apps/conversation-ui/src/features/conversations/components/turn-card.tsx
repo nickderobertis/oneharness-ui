@@ -41,7 +41,7 @@ function Usage({ usage }: { usage: Turn["usage"] }) {
 export function TurnCard({ turn }: { turn: Turn }) {
   const hasUnknown = Object.keys(turn.unknown).length > 0;
   return (
-    <article aria-label={`Turn from ${turn.harness}`} className="turn">
+    <article aria-label={`Turn from ${turn.harness}`} className="turn" data-turn-id={turn.id}>
       <div className="message message--user">
         <div className="message__label">You</div>
         <p>{turn.user}</p>
