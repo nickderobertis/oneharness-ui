@@ -37,8 +37,8 @@ type ScrollSnapshot = {
 type ScrollRegion = ReturnType<typeof $>;
 
 const maxWheelInputsPerPage = 20;
-const maxAutomaticPages = 3;
-const paginationIdlePollInterval = 250;
+const paginationPollInterval = 250;
+const requiredAutomaticPageBoundaries = 2;
 const scrollEndTolerance = 1;
 
 async function scrollSnapshot(region: ScrollRegion): Promise<ScrollSnapshot> {
@@ -56,16 +56,8 @@ function isAtScrollEnd(snapshot: ScrollSnapshot): boolean {
   return snapshot.scrollTop >= snapshot.scrollHeight - snapshot.clientHeight - scrollEndTolerance;
 }
 
-async function waitForPaginationIdle(region: ScrollRegion): Promise<void> {
-  await browser.waitUntil(async () => (await region.getAttribute("aria-busy")) === "false", {
-    interval: paginationIdlePollInterval,
-    timeoutMsg: "automatic pagination did not become idle after appending a page",
-  });
-}
-
 async function wheelUntilNextPage(
   region: ScrollRegion,
-  completedStatus: ScrollRegion,
   pageStart: ScrollSnapshot,
 ): Promise<ScrollSnapshot> {
   for (let wheelInputs = 0; wheelInputs < maxWheelInputsPerPage; wheelInputs += 1) {
@@ -76,7 +68,6 @@ async function wheelUntilNextPage(
       .perform();
     await browser.waitUntil(
       async () => {
-        if (await completedStatus.isDisplayed()) return true;
         const current = await scrollSnapshot(region);
         return (
           current.scrollHeight > pageStart.scrollHeight || current.scrollTop > before.scrollTop
@@ -86,21 +77,15 @@ async function wheelUntilNextPage(
     );
 
     const after = await scrollSnapshot(region);
-    if ((await completedStatus.isDisplayed()) || after.scrollHeight > pageStart.scrollHeight) {
-      await waitForPaginationIdle(region);
-      return await scrollSnapshot(region);
-    }
+    if (after.scrollHeight > pageStart.scrollHeight) return after;
     if (isAtScrollEnd(after)) {
       await browser.waitUntil(
-        async () =>
-          (await completedStatus.isDisplayed()) ||
-          (await scrollSnapshot(region)).scrollHeight > pageStart.scrollHeight,
+        async () => (await scrollSnapshot(region)).scrollHeight > pageStart.scrollHeight,
         {
-          interval: paginationIdlePollInterval,
+          interval: paginationPollInterval,
           timeoutMsg: "automatic pagination did not append a page after wheel scrolling to the end",
         },
       );
-      await waitForPaginationIdle(region);
       return await scrollSnapshot(region);
     }
   }
@@ -113,23 +98,25 @@ async function wheelUntilNextPage(
 async function wheelThroughAutomaticPages(
   region: ScrollRegion,
   firstItem: ScrollRegion,
-  completedStatus: ScrollRegion,
 ): Promise<void> {
   const initial = await scrollSnapshot(region);
   const firstItemTop = await firstItem.getLocation("y");
   expect(initial.scrollHeight).toBeGreaterThan(initial.clientHeight);
 
   let appendedPages = 0;
-  for (let automaticPages = 0; automaticPages < maxAutomaticPages; automaticPages += 1) {
-    if (await completedStatus.isDisplayed()) break;
+  for (
+    let automaticPages = 0;
+    automaticPages < requiredAutomaticPageBoundaries;
+    automaticPages += 1
+  ) {
     const pageStart = await scrollSnapshot(region);
-    const after = await wheelUntilNextPage(region, completedStatus, pageStart);
+    const after = await wheelUntilNextPage(region, pageStart);
     expect(after.scrollHeight).toBeGreaterThan(pageStart.scrollHeight);
     appendedPages += 1;
   }
 
   expect(await firstItem.getLocation("y")).toBeLessThan(firstItemTop);
-  expect(appendedPages).toBeGreaterThanOrEqual(2);
+  expect(appendedPages).toBe(requiredAutomaticPageBoundaries);
 }
 
 async function expectUniqueAccessibleIds(
@@ -179,7 +166,7 @@ describe("packaged native desktop journey", () => {
       const history = await $("aria/Conversation history");
       const firstConversation = await conversation("stopped-tool-session");
       const allConversations = await $("aria/All 58 conversations loaded");
-      await wheelThroughAutomaticPages(history, firstConversation, allConversations);
+      await wheelThroughAutomaticPages(history, firstConversation);
       await expect($("aria/58 of 58 conversations loaded")).toBeDisplayed();
       await expect(allConversations).toBeDisplayed();
       await expectUniqueAccessibleIds(expectedSessionIds, (id) => `Session ID ${id}`);
@@ -208,7 +195,7 @@ describe("packaged native desktop journey", () => {
       const turns = await $("aria/Conversation turns");
       const firstTurn = await $(`aria/Turn ${firstExpectedTurnId} from claude-code`);
       const allTurns = await $("aria/All 45 turns loaded");
-      await wheelThroughAutomaticPages(turns, firstTurn, allTurns);
+      await wheelThroughAutomaticPages(turns, firstTurn);
       await expect($("aria/45 of 45 turns loaded")).toBeDisplayed();
       await expect(allTurns).toBeDisplayed();
       await expectUniqueAccessibleIds(expectedTurnIds, (id) => `Turn ${id} from claude-code`);
