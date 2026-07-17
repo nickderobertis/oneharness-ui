@@ -16,10 +16,21 @@ fail() {
 temporary="$(mktemp -d "${TMPDIR:-/tmp}/oneharness-ui-cli.XXXXXX")" \
   || fail "could not create a temporary build directory; set TMPDIR to a writable location and rerun just bundle"
 cleanup() {
+  local status=$?
+  trap - EXIT
   if [ -n "${candidate:-}" ]; then
-    rm -f "$candidate"
+    rm -f "$candidate" \
+      || {
+        printf 'compatible oneharness CLI: could not remove staged file %s; remove it manually before rerunning just bundle\n' "$candidate" >&2
+        status=1
+      }
   fi
-  rm -rf "$temporary"
+  rm -rf "$temporary" \
+    || {
+      printf 'compatible oneharness CLI: could not remove temporary directory %s; remove it manually before rerunning just bundle\n' "$temporary" >&2
+      status=1
+    }
+  exit "$status"
 }
 trap cleanup EXIT
 
@@ -29,6 +40,7 @@ CARGO_TARGET_DIR="$ROOT/target/oneharness-ui-upstream-build" \
   --git "$UPSTREAM_REPOSITORY" \
   --rev "$UPSTREAM_REVISION" \
   --locked \
+  --quiet \
   --root "$install_root" \
   --no-track \
   oneharness \

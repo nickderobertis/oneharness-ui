@@ -64,6 +64,19 @@ if (existsSync(sourceBuiltCli)) {
       `source-built oneharness CLI is not an executable file at ${sourceBuiltCli}; clear target/oneharness-ui-upstream and rerun just bundle`,
     );
   }
+  const version = Bun.spawnSync([sourceBuiltCli, "--version"], { cwd: root });
+  if (version.exitCode !== 0 || version.stdout.toString().trim() !== "oneharness 0.3.23") {
+    const stdout = version.stdout.toString().trim().slice(0, 500);
+    const stderr = version.stderr.toString().trim().slice(0, 500);
+    const observed = [
+      `exit status ${version.exitCode}`,
+      stdout ? `stdout ${JSON.stringify(stdout)}` : "empty stdout",
+      stderr ? `stderr ${JSON.stringify(stderr)}` : "empty stderr",
+    ].join(", ");
+    throw new Error(
+      `source-built oneharness CLI at ${sourceBuiltCli} does not match version 0.3.23 (${observed}); clear target/oneharness-ui-upstream and rerun just bundle`,
+    );
+  }
 } else {
   try {
     const sdkRequire = createRequire(
