@@ -4,7 +4,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { recordDesktopStage, runDesktopStage } from "./stage-log.ts";
 
 describe("native desktop stage diagnostics", () => {
@@ -13,7 +13,9 @@ describe("native desktop stage diagnostics", () => {
     const wdioCliPackage = realpathSync(
       new URL("../../node_modules/@wdio/cli/package.json", import.meta.url),
     );
-    const tsxLoader = createRequire(wdioCliPackage).resolve("tsx");
+    // Node's ESM loader rejects native Windows paths such as `D:\...` because it
+    // reads the drive letter as a URL scheme, so `--import` needs a file URL.
+    const tsxLoader = pathToFileURL(createRequire(wdioCliPackage).resolve("tsx")).href;
     const subprocess = Bun.spawn({
       cmd: [
         "node",

@@ -72,6 +72,9 @@ describe("native desktop fixture", () => {
         expectedWebView2Directory,
       );
       expect(Object.hasOwn(fixture.environment, "WEBVIEW2_USER_DATA_FOLDER")).toBe(false);
+      // Tauri only adopts EdgeDriver's shared profile and debugging port while
+      // the journey opts in, so the driver cannot reach the app without this.
+      expect(fixture.environment.TAURI_WEBVIEW_AUTOMATION).toBe("true");
       const listed = await invoke([
         "history",
         "list",

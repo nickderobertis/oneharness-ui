@@ -15,6 +15,18 @@ const FIXTURE_ROOT_PREFIX: &str = "oneharness-ui-desktop-e2e-";
 const AUTOMATION_PROFILE_ARGUMENT: &str = "--oneharness-webdriver-profile=";
 #[cfg(any(windows, test))]
 const AUTOMATION_PROFILE_READY_MARKER: &str = "tauri-profile-ready";
+#[cfg(windows)]
+const AUTOMATION_BROWSER_ARGUMENTS_VARIABLE: &str = "WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS";
+#[cfg(any(windows, test))]
+const AUTOMATION_DEBUGGING_PORT_ARGUMENT: &str = "--remote-debugging-port=";
+/// wry replaces its own defaults as soon as a webview supplies browser
+/// arguments, so the automation profile has to repeat them verbatim. Tauri
+/// leaves wry's autoplay default enabled and configures no proxy, so these are
+/// the arguments the application would otherwise receive.
+#[cfg(any(windows, test))]
+const WEBVIEW_DEFAULT_BROWSER_ARGUMENTS: &str = "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required";
+#[cfg(any(windows, test))]
+const MAX_AUTOMATION_BROWSER_ARGUMENTS: usize = 2048;
 
 #[cfg(any(windows, test))]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -133,14 +145,76 @@ impl ValidatedAutomationDataDirectory {
     }
 }
 
+/// EdgeDriver starts the packaged application with WebView2's remote debugging
+/// port in `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` and then waits for WebView2
+/// to write `DevToolsActivePort` into the shared profile. WebView2 only reads
+/// that variable while its host leaves `AdditionalBrowserArguments` unset, and
+/// wry always sets it, so Tauri has to forward the driver's arguments itself.
 #[cfg(any(windows, test))]
-fn apply_automation_data_directory<R: Runtime>(
+#[derive(Debug, Eq, PartialEq)]
+struct ValidatedAutomationBrowserArguments(String);
+
+#[cfg(any(windows, test))]
+impl ValidatedAutomationBrowserArguments {
+    fn parse(
+        automation: WebViewAutomation,
+        arguments: Option<&std::ffi::OsStr>,
+    ) -> std::io::Result<Option<Self>> {
+        if automation == WebViewAutomation::Disabled {
+            return Ok(None);
+        }
+        let arguments = arguments
+            .and_then(|arguments| arguments.to_str())
+            .map(str::trim)
+            .filter(|arguments| !arguments.is_empty())
+            .ok_or_else(|| {
+                std::io::Error::other(
+                    "Windows WebView2 automation browser arguments were not configured",
+                )
+            })?;
+        if arguments.len() > MAX_AUTOMATION_BROWSER_ARGUMENTS {
+            return Err(std::io::Error::other(
+                "Windows WebView2 automation browser arguments were too long",
+            ));
+        }
+        let mut debugging_ports = 0usize;
+        for argument in arguments.split_whitespace() {
+            if !argument
+                .strip_prefix("--")
+                .is_some_and(|switch| switch.bytes().all(|byte| byte.is_ascii_graphic()))
+            {
+                return Err(std::io::Error::other(
+                    "Windows WebView2 automation browser arguments held a value that is not a switch",
+                ));
+            }
+            let Some(port) = argument.strip_prefix(AUTOMATION_DEBUGGING_PORT_ARGUMENT) else {
+                continue;
+            };
+            port.parse::<u16>().map_err(|_| {
+                std::io::Error::other("EdgeDriver's WebView2 remote debugging port was invalid")
+            })?;
+            debugging_ports += 1;
+        }
+        if debugging_ports != 1 {
+            return Err(std::io::Error::other(
+                "Windows WebView2 automation browser arguments must carry exactly one EdgeDriver remote debugging port",
+            ));
+        }
+        Ok(Some(Self(format!(
+            "{WEBVIEW_DEFAULT_BROWSER_ARGUMENTS} {arguments}"
+        ))))
+    }
+}
+
+#[cfg(any(windows, test))]
+fn apply_automation_profile<R: Runtime>(
     context: &mut tauri::Context<R>,
     directory: Option<ValidatedAutomationDataDirectory>,
+    browser_arguments: Option<ValidatedAutomationBrowserArguments>,
 ) -> std::io::Result<()> {
-    let Some(directory) = directory else {
+    if directory.is_none() && browser_arguments.is_none() {
         return Ok(());
-    };
+    }
     let window = context
         .config_mut()
         .app
@@ -150,13 +224,19 @@ fn apply_automation_data_directory<R: Runtime>(
         .ok_or_else(|| {
             std::io::Error::other("Tauri's main automation window was not configured")
         })?;
-    window.data_directory = Some(directory.relative);
+    if let Some(directory) = directory {
+        window.data_directory = Some(directory.relative);
+    }
+    if let Some(browser_arguments) = browser_arguments {
+        window.additional_browser_args = Some(browser_arguments.0);
+    }
     Ok(())
 }
 
-/// Give Tauri and EdgeDriver the same isolated WebView2 profile during the
-/// explicitly enabled Windows WebDriver journey. Normal application launches
-/// retain Tauri's identifier-based profile.
+/// Give Tauri and EdgeDriver the same isolated WebView2 profile and remote
+/// debugging port during the explicitly enabled Windows WebDriver journey.
+/// Normal application launches retain Tauri's identifier-based profile and
+/// wry's default browser arguments.
 pub fn configure_context<R: Runtime>(context: &mut tauri::Context<R>) -> std::io::Result<()> {
     #[cfg(windows)]
     {
@@ -167,10 +247,16 @@ pub fn configure_context<R: Runtime>(context: &mut tauri::Context<R>) -> std::io
             std::env::args_os(),
             std::env::var_os("LOCALAPPDATA").as_deref(),
         )?;
+        // Record the accepted profile before reading the driver's arguments so
+        // the diagnostics keep separating profile setup from bridge readiness.
         if let Some(directory) = &directory {
             directory.record_ready()?;
         }
-        apply_automation_data_directory(context, directory)
+        let browser_arguments = ValidatedAutomationBrowserArguments::parse(
+            automation,
+            std::env::var_os(AUTOMATION_BROWSER_ARGUMENTS_VARIABLE).as_deref(),
+        )?;
+        apply_automation_profile(context, directory, browser_arguments)
     }
     #[cfg(not(windows))]
     {
@@ -340,6 +426,22 @@ mod tests {
         arguments
     }
 
+    fn automation_browser_arguments(
+        arguments: &str,
+    ) -> std::io::Result<Option<super::ValidatedAutomationBrowserArguments>> {
+        super::ValidatedAutomationBrowserArguments::parse(
+            super::WebViewAutomation::Enabled,
+            Some(std::ffi::OsStr::new(arguments)),
+        )
+    }
+
+    /// On macOS `generate_context!` embeds the bundle's `Info.plist` through
+    /// `embed_plist`, which defines the fixed `_EMBED_INFO_PLIST` symbol. The
+    /// test crate links one binary, so it may expand the macro only here.
+    fn packaged_context() -> tauri::Context<tauri::Wry> {
+        tauri::generate_context!()
+    }
+
     fn packaged_bridge_path() -> Result<PathBuf, Box<dyn std::error::Error>> {
         let executable = std::env::current_exe()?;
         let sidecar = executable
@@ -441,17 +543,27 @@ mod tests {
             .is_err()
         );
         let expected = PathBuf::from(fixture_name).join("webview2-user-data");
-        let mut context: tauri::Context<tauri::Wry> = tauri::generate_context!();
-        super::apply_automation_data_directory(&mut context, Some(directory))?;
+        let mut context = packaged_context();
+        super::apply_automation_profile(
+            &mut context,
+            Some(directory),
+            automation_browser_arguments("--remote-debugging-port=9222")?,
+        )?;
+        let window = context
+            .config()
+            .app
+            .windows
+            .iter()
+            .find(|window| window.label == "main")
+            .expect("Tauri's main automation window was missing");
+        assert_eq!(window.data_directory.as_ref(), Some(&expected));
+        // EdgeDriver polls the profile for DevToolsActivePort, which WebView2
+        // only writes once wry forwards the driver's debugging port.
         assert_eq!(
-            context
-                .config()
-                .app
-                .windows
-                .iter()
-                .find(|window| window.label == "main")
-                .and_then(|window| window.data_directory.as_ref()),
-            Some(&expected),
+            window.additional_browser_args.as_deref(),
+            Some(
+                "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required --remote-debugging-port=9222"
+            ),
         );
         assert!(
             super::ValidatedAutomationDataDirectory::parse(
@@ -461,6 +573,66 @@ mod tests {
             )
             .is_err()
         );
+        Ok(())
+    }
+
+    #[test]
+    fn forwards_edgedrivers_webview2_remote_debugging_port()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let arguments = automation_browser_arguments("--remote-debugging-port=9222")?
+            .expect("EdgeDriver's remote debugging port was dropped");
+        // Overriding the arguments replaces wry's defaults, so they must survive
+        // alongside the port EdgeDriver needs for DevToolsActivePort.
+        assert_eq!(
+            arguments.0,
+            format!(
+                "{} --remote-debugging-port=9222",
+                super::WEBVIEW_DEFAULT_BROWSER_ARGUMENTS
+            ),
+        );
+        assert_eq!(
+            automation_browser_arguments("  --remote-debugging-port=0 --disable-gpu  ")?,
+            Some(super::ValidatedAutomationBrowserArguments(format!(
+                "{} --remote-debugging-port=0 --disable-gpu",
+                super::WEBVIEW_DEFAULT_BROWSER_ARGUMENTS,
+            ))),
+        );
+        assert_eq!(
+            super::ValidatedAutomationBrowserArguments::parse(
+                super::WebViewAutomation::Disabled,
+                None,
+            )?,
+            None,
+        );
+
+        let oversized = format!(
+            "--remote-debugging-port=9222 --disable-gpu{}",
+            "0".repeat(super::MAX_AUTOMATION_BROWSER_ARGUMENTS),
+        );
+        for (input, expected) in [
+            (None, "were not configured"),
+            (Some("   "), "were not configured"),
+            (Some(oversized.as_str()), "were too long"),
+            (Some("--disable-gpu"), "exactly one"),
+            (
+                Some("--remote-debugging-port=9222 --remote-debugging-port=9333"),
+                "exactly one",
+            ),
+            (Some("--remote-debugging-port=70000"), "port was invalid"),
+            (Some("--remote-debugging-port="), "port was invalid"),
+            (Some("remote-debugging-port=9222"), "is not a switch"),
+            (
+                Some("--remote-debugging-port=9222\nunexpected-value"),
+                "is not a switch",
+            ),
+        ] {
+            let error = super::ValidatedAutomationBrowserArguments::parse(
+                super::WebViewAutomation::Enabled,
+                input.map(std::ffi::OsStr::new),
+            )
+            .expect_err("invalid automation browser arguments were accepted");
+            assert!(error.to_string().contains(expected), "{error}");
+        }
         Ok(())
     }
 
@@ -523,15 +695,16 @@ mod tests {
             assert!(error.to_string().contains(expected));
         }
 
-        let mut context: tauri::Context<tauri::Wry> = tauri::generate_context!();
-        super::apply_automation_data_directory(&mut context, None)?;
+        let mut context = packaged_context();
+        super::apply_automation_profile(&mut context, None, None)?;
         context.config_mut().app.windows.clear();
-        let error = super::apply_automation_data_directory(
+        let error = super::apply_automation_profile(
             &mut context,
             Some(super::ValidatedAutomationDataDirectory {
                 absolute: PathBuf::from("webview2-user-data"),
                 relative: PathBuf::from("webview2-user-data"),
             }),
+            None,
         )
         .expect_err("missing main automation window was accepted");
         assert!(error.to_string().contains("main automation window"));

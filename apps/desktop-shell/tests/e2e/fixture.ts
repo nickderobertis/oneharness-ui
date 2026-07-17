@@ -230,6 +230,7 @@ export type DesktopFixture = {
     ONEHARNESS_UI_HISTORY_DIR: string;
     ONEHARNESS_UI_PROVIDER_BIN: string;
     ONEHARNESS_UI_PROVIDER_HARNESS: string;
+    TAURI_WEBVIEW_AUTOMATION: string;
   };
   recordWebView2Diagnostics: (output: string) => Promise<void>;
 };
@@ -357,6 +358,10 @@ export async function createDesktopFixture(
         ONEHARNESS_UI_HISTORY_DIR: historyDir,
         ONEHARNESS_UI_PROVIDER_BIN: providerPath,
         ONEHARNESS_UI_PROVIDER_HARNESS: "claude-code",
+        // The release application keeps its own WebView2 profile and wry's
+        // browser arguments unless this journey opts in, so EdgeDriver only
+        // reaches the shared profile and debugging port while it is set.
+        TAURI_WEBVIEW_AUTOMATION: "true",
       },
       recordWebView2Diagnostics: async (output) =>
         await recordWebView2ProfileDiagnostics(webview2UserDataDir, output),
