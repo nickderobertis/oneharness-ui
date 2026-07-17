@@ -44,6 +44,12 @@ export const fixtureProvider = resolve(
   `target/oneharness-ui-test/oneharness-mock-harness${executableSuffix}`,
 );
 const FIXTURE_ROOT_PREFIX = "oneharness-ui-desktop-e2e-";
+const FIXTURE_REMOVAL_OPTIONS = {
+  force: true,
+  maxRetries: 10,
+  recursive: true,
+  retryDelay: 100,
+} as const;
 
 type SeedOptions = {
   exit?: number;
@@ -378,13 +384,16 @@ export async function createDesktopFixture(
   const webview2UserDataDir = resolveFixtureWebView2UserDataDirectory(root, process.platform);
   const webview2Root = dirname(webview2UserDataDir);
   const cleanup = async (): Promise<void> => {
+    // WebView2 can retain its profile handles briefly after deleteSession has
+    // returned. fs.rm only retries transient filesystem errors, with this
+    // linear backoff bounded to 5.5 seconds if every attempt is needed.
     if (process.platform === "win32") {
       await Promise.all([
-        rm(root, { force: true, recursive: true }),
-        rm(webview2Root, { force: true, recursive: true }),
+        rm(root, FIXTURE_REMOVAL_OPTIONS),
+        rm(webview2Root, FIXTURE_REMOVAL_OPTIONS),
       ]);
     } else {
-      await rm(root, { force: true, recursive: true });
+      await rm(root, FIXTURE_REMOVAL_OPTIONS);
     }
   };
   try {

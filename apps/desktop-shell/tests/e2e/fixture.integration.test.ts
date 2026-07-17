@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, resolve } from "node:path";
@@ -55,19 +56,20 @@ async function invoke(args: string[]): Promise<JsonObject[]> {
 describe("native desktop fixture", () => {
   test("creates SDK-valid stopped, optional-thinking, and recoverable records", async () => {
     const fixture = await createDesktopFixture();
+    const historyDir = fixture.environment.ONEHARNESS_UI_HISTORY_DIR;
+    const fixtureRoot = dirname(historyDir);
+    const expectedWebView2Directory =
+      process.platform === "win32"
+        ? resolve(
+            process.env.LOCALAPPDATA ?? "",
+            "main",
+            basename(fixtureRoot),
+            "webview2-user-data",
+          )
+        : resolve(fixtureRoot, "webview2-user-data");
+    const webView2Root = dirname(expectedWebView2Directory);
     try {
       expect(Object.hasOwn(fixture.environment, "ONEHARNESS_BIN")).toBe(false);
-      const historyDir = fixture.environment.ONEHARNESS_UI_HISTORY_DIR;
-      const fixtureRoot = dirname(historyDir);
-      const expectedWebView2Directory =
-        process.platform === "win32"
-          ? resolve(
-              process.env.LOCALAPPDATA ?? "",
-              "main",
-              basename(fixtureRoot),
-              "webview2-user-data",
-            )
-          : resolve(fixtureRoot, "webview2-user-data");
       expect(fixture.environment.ONEHARNESS_UI_E2E_WEBVIEW2_USER_DATA_DIR).toBe(
         expectedWebView2Directory,
       );
@@ -139,6 +141,8 @@ describe("native desktop fixture", () => {
     } finally {
       await fixture.cleanup();
     }
+    expect(existsSync(fixtureRoot)).toBe(false);
+    expect(existsSync(webView2Root)).toBe(false);
   });
 
   test("removes temporary history when the real provider process cannot run", async () => {
