@@ -30,7 +30,7 @@
       "options": {
         "commands": [
           "bash scripts/test-rust.sh",
-          "bun test apps/desktop-shell/tests/e2e/fixture.integration.test.ts apps/desktop-shell/tests/e2e/capabilities.test.ts apps/desktop-shell/tests/e2e/stage-log.test.ts apps/desktop-shell/tests/e2e/tauri-launcher-service.test.ts scripts/build-native.test.ts scripts/install.test.ts scripts/release-assets.test.ts"
+          "bun test apps/desktop-shell/tests/e2e/fixture.integration.test.ts apps/desktop-shell/tests/e2e/capabilities.test.ts apps/desktop-shell/tests/e2e/stage-log.test.ts apps/desktop-shell/tests/e2e/tauri-launcher-service.test.ts apps/desktop-shell/tests/e2e/wheel-scroll.test.ts scripts/build-native.test.ts scripts/install.test.ts scripts/release-assets.test.ts"
         ],
         "parallel": false
       }
