@@ -49,34 +49,33 @@ complete command surface. Recipes with release inputs accept validated
 environment values (for example, `BUNDLE_FORMATS=deb just bundle`) so values
 are never interpolated into shell source.
 
-For an end-user install, download the native artifact for your platform from
-the repository's GitHub release and use the platform installer:
+## Install
 
-```console
-# Debian/Ubuntu
-package="$(find . -name '*.deb' -print -quit)"
-test -n "$package"
-sudo dpkg -i "$package"
-dpkg-query -W oneharness
+Install the latest release noninteractively with the public POSIX installer:
 
-# macOS
-image="$(find . -name '*.dmg' -print -quit)"
-test -n "$image"
-mount="$(hdiutil attach "$image" -nobrowse | tail -1 | sed 's#^.*\(/Volumes/.*\)#\1#')"
-sudo ditto "$mount/oneharness.app" /Applications/oneharness.app
-hdiutil detach "$mount"
-test -x /Applications/oneharness.app/Contents/MacOS/oneharness
+```sh
+curl -fsSL https://raw.githubusercontent.com/nickderobertis/oneharness-ui/main/scripts/install.sh | sh
 ```
 
-```powershell
-# Windows PowerShell
-$msi = Get-ChildItem . -Filter *.msi -Recurse | Select-Object -First 1
-if (-not $msi) { throw "No MSI was built" }
-$process = Start-Process msiexec.exe -ArgumentList @('/i', $msi.FullName, '/qn', '/norestart') -Wait -PassThru
-if ($process.ExitCode -ne 0) { throw "MSI install failed: $($process.ExitCode)" }
-$installed = Get-ChildItem $env:ProgramFiles,$env:LOCALAPPDATA -Filter oneharness.exe -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
-if (-not $installed) { throw "Installed oneharness.exe was not found" }
+It detects Linux `x86_64`/`aarch64`, macOS Apple Silicon, or Windows `x86_64`
+under a POSIX shell; downloads the matching GitHub release asset and companion
+`.sha256`; and refuses to install unless SHA-256 verification succeeds. Linux
+uses the AppImage without root at `~/.local/bin/oneharness-ui`, macOS installs
+to `~/Applications`, and Windows runs the MSI quietly.
+
+Pin a release or choose the Linux/macOS destination (flags override
+`ONEHARNESS_UI_VERSION` and `ONEHARNESS_UI_INSTALL_DIR`):
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/nickderobertis/oneharness-ui/main/scripts/install.sh \
+  | sh -s -- --version v0.2.0 --to ~/.local/bin
 ```
+
+Set `GITHUB_TOKEN` if unauthenticated API rate limiting prevents latest-release
+resolution. Direct release downloads remain available as `.deb` and AppImage
+artifacts for Ubuntu/Linux `x86_64` and `aarch64`, a DMG for macOS Apple Silicon,
+and MSI/NSIS installers for Windows `x86_64`; every artifact has its own
+mandatory `.sha256` asset.
 
 ## Use
 
@@ -150,7 +149,9 @@ Conventional commits drive semantic-release on `main`. It creates `vX.Y.Z`, and
 the version job reconciles a separate release workflow with the repository's
 built-in token. That workflow accepts only a published semver release whose tag
 is reachable from `main`, materializes the version in its build checkout, and
-builds native Tauri installers and checksums on Linux, macOS, and Windows. There
-is no manual dispatch or hand-edited version.
+builds native Tauri installers and companion checksums on Linux `x86_64` and
+`aarch64`, macOS Apple Silicon, and Windows `x86_64`. The release-like CI journey
+uses the same public installer contract, while the packaged Tauri E2E remains a
+separate required gate. There is no manual dispatch or hand-edited version.
 
 MIT licensed. Security reports follow [SECURITY.md](SECURITY.md).
