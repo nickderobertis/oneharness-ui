@@ -17,20 +17,36 @@
     },
     "test": {
       "executor": "nx:run-commands",
+      "inputs": [
+        "default",
+        "^production",
+        "{workspaceRoot}/scripts/build-native.mjs",
+        "{workspaceRoot}/scripts/build-native.test.ts",
+        "{workspaceRoot}/scripts/install.sh",
+        "{workspaceRoot}/scripts/install.test.ts",
+        "{workspaceRoot}/scripts/release-assets.mjs",
+        "{workspaceRoot}/scripts/release-assets.test.ts"
+      ],
       "options": {
         "commands": [
           "bash scripts/test-rust.sh",
-          "bun test apps/desktop-shell/tests/e2e/fixture.integration.test.ts apps/desktop-shell/tests/e2e/capabilities.test.ts apps/desktop-shell/tests/e2e/stage-log.test.ts apps/desktop-shell/tests/e2e/tauri-launcher-service.test.ts"
+          "bun test apps/desktop-shell/tests/e2e/fixture.integration.test.ts apps/desktop-shell/tests/e2e/capabilities.test.ts apps/desktop-shell/tests/e2e/stage-log.test.ts apps/desktop-shell/tests/e2e/tauri-launcher-service.test.ts scripts/build-native.test.ts scripts/install.test.ts scripts/release-assets.test.ts"
         ],
         "parallel": false
       }
     },
     "lint": {
       "executor": "nx:run-commands",
+      "inputs": [
+        "default",
+        "{workspaceRoot}/scripts/install.test.ts",
+        "{workspaceRoot}/scripts/release-assets.mjs",
+        "{workspaceRoot}/scripts/release-assets.test.ts"
+      ],
       "options": {
         "commands": [
           "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings",
-          "bunx biome check --error-on-warnings apps/desktop-shell"
+          "bunx biome check --error-on-warnings apps/desktop-shell scripts/install.test.ts scripts/release-assets.mjs scripts/release-assets.test.ts"
         ],
         "parallel": false
       }
@@ -38,7 +54,10 @@
     "format": {
       "executor": "nx:run-commands",
       "options": {
-        "commands": ["cargo fmt --all", "bunx biome format --write apps/desktop-shell"],
+        "commands": [
+          "cargo fmt --all",
+          "bunx biome format --write apps/desktop-shell scripts/install.test.ts scripts/release-assets.mjs scripts/release-assets.test.ts"
+        ],
         "parallel": false
       }
     },
@@ -54,8 +73,17 @@
     },
     "format-check": {
       "executor": "nx:run-commands",
+      "inputs": [
+        "default",
+        "{workspaceRoot}/scripts/install.test.ts",
+        "{workspaceRoot}/scripts/release-assets.mjs",
+        "{workspaceRoot}/scripts/release-assets.test.ts"
+      ],
       "options": {
-        "commands": ["cargo fmt --all -- --check", "bunx biome format apps/desktop-shell"],
+        "commands": [
+          "cargo fmt --all -- --check",
+          "bunx biome format apps/desktop-shell scripts/install.test.ts scripts/release-assets.mjs scripts/release-assets.test.ts"
+        ],
         "parallel": false
       }
     }

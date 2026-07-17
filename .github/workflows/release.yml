@@ -32,10 +32,20 @@ jobs:
         include:
           - os: ubuntu-24.04
             bundles: deb,appimage
+            platform: linux-x86_64
+            assets: appimage,deb
+          - os: ubuntu-24.04-arm
+            bundles: deb,appimage
+            platform: linux-aarch64
+            assets: appimage,deb
           - os: macos-15
             bundles: app,dmg
+            platform: macos-aarch64
+            assets: dmg
           - os: windows-2025
             bundles: msi,nsis
+            platform: windows-x86_64
+            assets: msi,nsis
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -74,15 +84,17 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: just bundle
-      - name: Create checksums
+      - name: Prepare canonical release assets and checksums
         env:
           BUNDLE_DIRECTORY: target/release/bundle
-          CHECKSUM_OUTPUT: checksums-${{ runner.os }}.txt
-        run: just checksums
+          RELEASE_ASSET_DIRECTORY: target/release-assets
+          RELEASE_ASSET_FORMATS: ${{ matrix.assets }}
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: just prepare-release-assets
       - name: Upload native release and checksums
         env:
-          BUNDLE_DIRECTORY: target/release/bundle
-          CHECKSUM_OUTPUT: checksums-${{ runner.os }}.txt
           GH_TOKEN: ${{ github.token }}
+          RELEASE_ASSET_DIRECTORY: target/release-assets
           RELEASE_TAG: ${{ inputs.release_tag }}
         run: just upload-release

@@ -73,6 +73,12 @@ bundle:
 checksums:
     @./scripts/run-quiet.sh "release checksums" "Set BUNDLE_DIRECTORY and CHECKSUM_OUTPUT after building the platform bundles, then rerun 'just checksums'." -- bun scripts/checksums.mjs "${BUNDLE_DIRECTORY:-}" "${CHECKSUM_OUTPUT:-}"
 
+prepare-release-assets:
+    @[[ "${RELEASE_PLATFORM:-}" =~ ^(linux-(x86_64|aarch64)|macos-aarch64|windows-x86_64)$ ]] || { echo "release assets: set RELEASE_PLATFORM to a platform from the release matrix" >&2; exit 2; }
+    @[[ "${RELEASE_TAG:-}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]] || { echo "release assets: set RELEASE_TAG to a v-prefixed semantic version" >&2; exit 2; }
+    @[[ "${RELEASE_ASSET_FORMATS:-}" =~ ^(appimage|deb|dmg|msi|nsis)(,(appimage|deb|dmg|msi|nsis))*$ ]] || { echo "release assets: set RELEASE_ASSET_FORMATS to the platform formats from the release matrix" >&2; exit 2; }
+    @./scripts/run-quiet.sh "release assets" "Build every format in the native release matrix, then rerun 'just prepare-release-assets'." -- bun scripts/release-assets.mjs "${BUNDLE_DIRECTORY:-}" "${RELEASE_ASSET_DIRECTORY:-}" "$RELEASE_PLATFORM" "$RELEASE_TAG" "$RELEASE_ASSET_FORMATS"
+
 set-version:
     @./scripts/run-quiet.sh "version manifests" "Set RELEASE_VERSION to a valid semver, fix any reported manifest error, and rerun 'just set-version'." -- bun scripts/set-version.mjs "${RELEASE_VERSION:-}"
 
@@ -86,7 +92,7 @@ dispatch-release:
     @./scripts/run-quiet.sh "release dispatch" "Verify RELEASE_TAG and built-in GitHub token permissions, then rerun 'just dispatch-release'." -- ./scripts/dispatch-release.sh
 
 upload-release:
-    @./scripts/run-quiet.sh "native release upload" "Verify the built-in GH_TOKEN and validated release environment, then rerun 'just upload-release'." -- ./scripts/upload-release.sh
+    @./scripts/run-quiet.sh "native release upload" "Prepare the canonical checksummed assets and verify the built-in GH_TOKEN, then rerun 'just upload-release'." -- ./scripts/upload-release.sh
 
 supply-chain:
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Rust dependency policy" "Resolve the reported license, advisory, source, or ban finding, then rerun 'just supply-chain'." -- cargo deny check --hide-inclusion-graph

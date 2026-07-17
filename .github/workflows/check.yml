@@ -113,7 +113,9 @@ jobs:
 
   install:
     name: install (${{ matrix.os }})
-    if: github.event_name == 'push'
+    if: >-
+      always() &&
+      (github.event_name == 'pull_request' || needs.full-check.result == 'success')
     needs: full-check
     runs-on: ${{ matrix.os }}
     strategy:
@@ -121,11 +123,21 @@ jobs:
       matrix:
         include:
           - os: ubuntu-24.04
-            bundles: deb
+            bundles: deb,appimage
+            platform: linux-x86_64
+            assets: appimage,deb
+          - os: ubuntu-24.04-arm
+            bundles: deb,appimage
+            platform: linux-aarch64
+            assets: appimage,deb
           - os: macos-15
             bundles: dmg
+            platform: macos-aarch64
+            assets: dmg
           - os: windows-2025
-            bundles: msi
+            bundles: msi,nsis
+            platform: windows-x86_64
+            assets: msi,nsis
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -151,13 +163,22 @@ jobs:
         env:
           BUNDLE_FORMATS: ${{ matrix.bundles }}
         run: just bundle
-      - name: Install Debian artifact
+      - name: Prepare release-like assets and checksums
+        env:
+          BUNDLE_DIRECTORY: target/release/bundle
+          RELEASE_ASSET_DIRECTORY: target/release-assets
+          RELEASE_ASSET_FORMATS: ${{ matrix.assets }}
+          RELEASE_PLATFORM: ${{ matrix.platform }}
+          RELEASE_TAG: v0.1.0
+        run: just prepare-release-assets
+      - name: Select, verify, and install the Linux release asset
         if: runner.os == 'Linux'
         run: |
-          package="$(find . -name '*.deb' -print -quit)"
-          test -n "$package"
-          sudo dpkg -i "$package"
-          dpkg-query -W oneharness
+          install_root="$(mktemp -d)"
+          trap 'rm -rf "$install_root"' EXIT
+          ONEHARNESS_UI_RELEASE_BASE_URL="file://${GITHUB_WORKSPACE}/target/release-assets" \
+            sh scripts/install.sh --version v0.1.0 --to "$install_root"
+          test -x "$install_root/oneharness-ui"
       - name: Mount and verify macOS artifact
         if: runner.os == 'macOS'
         run: |
