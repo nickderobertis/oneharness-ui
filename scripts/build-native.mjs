@@ -53,31 +53,43 @@ function hostTarget() {
   return host;
 }
 
-export function stageAppImageSidecar(source, layoutRoot) {
+export function stageAppImageSidecar(bridgeSource, cliSource, layoutRoot) {
   const binDirectory = join(layoutRoot, "usr/bin");
   const shareDirectory = join(layoutRoot, "usr/share/oneharness");
-  const payload = join(shareDirectory, "oneharness-ui-bridge");
-  const link = join(binDirectory, "oneharness-ui-bridge");
 
   mkdirSync(binDirectory, { recursive: true });
   mkdirSync(shareDirectory, { recursive: true });
-  copyFileSync(source, payload);
-  chmodSync(payload, statSync(source).mode & 0o777);
-  symlinkSync("../share/oneharness/oneharness-ui-bridge", link);
 
-  if (readlinkSync(link) !== "../share/oneharness/oneharness-ui-bridge") {
-    throw new Error("could not stage the AppImage bridge symlink");
-  }
-  return { link, payload };
+  const stage = (source, name) => {
+    const payload = join(shareDirectory, name);
+    const link = join(binDirectory, name);
+    const relativePayload = `../share/oneharness/${name}`;
+    copyFileSync(source, payload);
+    chmodSync(payload, statSync(source).mode & 0o777);
+    symlinkSync(relativePayload, link);
+    if (readlinkSync(link) !== relativePayload) {
+      throw new Error(`could not stage the AppImage ${name} symlink`);
+    }
+    return { link, payload };
+  };
+
+  return {
+    bridge: stage(bridgeSource, "oneharness-ui-bridge"),
+    cli: stage(cliSource, "oneharness"),
+  };
 }
 
 export function appImageOverride(layoutRoot) {
   return JSON.stringify({
     bundle: {
-      externalBin: ["binaries/oneharness"],
+      externalBin: [],
       linux: { appimage: { files: { "/": layoutRoot } } },
     },
   });
+}
+
+export function requiresSourceBuiltCli(platform, architecture) {
+  return platform === "linux" && architecture === "arm64";
 }
 
 function tauriBuild(formats, extraConfig) {
@@ -93,6 +105,10 @@ function main() {
   const formats = (process.argv[2] ?? "").split(",").filter(Boolean);
   if (formats.length === 0 || formats.some((format) => !supportedFormats.has(format))) {
     throw new Error("provide a comma-separated list of supported platform bundle formats");
+  }
+
+  if (requiresSourceBuiltCli(process.platform, process.arch)) {
+    run(["bash", "scripts/build-compatible-cli.sh"]);
   }
 
   const standardFormats = formats.filter((format) => format !== "appimage");
@@ -112,9 +128,10 @@ function main() {
     "apps/desktop-shell/binaries",
     `oneharness-ui-bridge-${hostTarget()}`,
   );
+  const cliSource = resolve(root, "apps/desktop-shell/binaries", `oneharness-${hostTarget()}`);
   const layoutRoot = mkdtempSync(join(tmpdir(), "oneharness-ui-appimage-"));
   try {
-    stageAppImageSidecar(source, layoutRoot);
+    stageAppImageSidecar(source, cliSource, layoutRoot);
     tauriBuild(["appimage"], appImageOverride(layoutRoot));
   } finally {
     rmSync(layoutRoot, { force: true, recursive: true });

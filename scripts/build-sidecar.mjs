@@ -1,5 +1,13 @@
 #!/usr/bin/env bun
-import { copyFileSync, existsSync, mkdirSync, realpathSync } from "node:fs";
+import {
+  accessSync,
+  constants,
+  copyFileSync,
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  realpathSync,
+} from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 
@@ -45,25 +53,50 @@ if (!platformPackage) {
     `@oneharness/sdk 0.3.23 has no packaged CLI for ${platformKey}; use a supported release target`,
   );
 }
-let upstream;
-try {
-  const sdkRequire = createRequire(
-    resolve(
-      realpathSync(resolve(root, "packages/oneharness-bridge/node_modules/@oneharness/sdk")),
-      "dist/index.js",
-    ),
-  );
-  const cliRequire = createRequire(sdkRequire.resolve("oneharness-cli/bin/oneharness.js"));
-  upstream = resolve(
-    dirname(cliRequire.resolve(`${platformPackage}/package.json`)),
-    "bin",
-    `oneharness${suffix}`,
-  );
-} catch (error) {
-  const detail = error instanceof Error ? error.message : String(error);
-  throw new Error(
-    `could not resolve @oneharness/sdk 0.3.23's packaged CLI: ${detail}; run bun install --frozen-lockfile with optional dependencies enabled, then rerun just bootstrap`,
-  );
+const sourceBuiltCli = resolve(root, "target/oneharness-ui-upstream/bin", `oneharness${suffix}`);
+let upstream = sourceBuiltCli;
+if (existsSync(sourceBuiltCli)) {
+  try {
+    accessSync(sourceBuiltCli, constants.R_OK | constants.X_OK);
+    if (!lstatSync(sourceBuiltCli).isFile()) throw new Error("not a file");
+  } catch {
+    throw new Error(
+      `source-built oneharness CLI is not an executable file at ${sourceBuiltCli}; clear target/oneharness-ui-upstream and rerun just bundle`,
+    );
+  }
+  const version = Bun.spawnSync([sourceBuiltCli, "--version"], { cwd: root });
+  if (version.exitCode !== 0 || version.stdout.toString().trim() !== "oneharness 0.3.23") {
+    const stdout = version.stdout.toString().trim().slice(0, 500);
+    const stderr = version.stderr.toString().trim().slice(0, 500);
+    const observed = [
+      `exit status ${version.exitCode}`,
+      stdout ? `stdout ${JSON.stringify(stdout)}` : "empty stdout",
+      stderr ? `stderr ${JSON.stringify(stderr)}` : "empty stderr",
+    ].join(", ");
+    throw new Error(
+      `source-built oneharness CLI at ${sourceBuiltCli} does not match version 0.3.23 (${observed}); clear target/oneharness-ui-upstream and rerun just bundle`,
+    );
+  }
+} else {
+  try {
+    const sdkRequire = createRequire(
+      resolve(
+        realpathSync(resolve(root, "packages/oneharness-bridge/node_modules/@oneharness/sdk")),
+        "dist/index.js",
+      ),
+    );
+    const cliRequire = createRequire(sdkRequire.resolve("oneharness-cli/bin/oneharness.js"));
+    upstream = resolve(
+      dirname(cliRequire.resolve(`${platformPackage}/package.json`)),
+      "bin",
+      `oneharness${suffix}`,
+    );
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `could not resolve @oneharness/sdk 0.3.23's packaged CLI: ${detail}; run bun install --frozen-lockfile with optional dependencies enabled, then rerun just bootstrap`,
+    );
+  }
 }
 if (!existsSync(upstream)) {
   throw new Error(

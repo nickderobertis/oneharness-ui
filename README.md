@@ -108,8 +108,10 @@ directory as the CLI. `ONEHARNESS_BIN` selects an explicit executable and
 the failing path and suggest the relevant setting.
 
 Linux `aarch64` Tauri and AppImage artifacts are built natively on Ubuntu 22.04
-so the desktop startup ABI remains compatible with glibc 2.35. Linux `x86_64`
-artifacts continue to build on Ubuntu 24.04.
+so the desktop startup ABI remains compatible with glibc 2.35. The bundle also
+builds the SDK-matched oneharness 0.3.23 CLI from its immutable upstream commit
+on that runner instead of copying its Ubuntu 24.04 prebuilt binary. Linux
+`x86_64` artifacts continue to build on Ubuntu 24.04.
 
 Selection is durable in `?session=<id>`. A conversation is continuable only
 when its latest SDK-validated record holds an eligible native `session_id`.

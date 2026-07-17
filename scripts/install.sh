@@ -154,7 +154,7 @@ install_linux() {
     || err "could not create the Linux payload directory: $payload_root; check directory permissions and retry"
 
   wrapper_source="${temporary}/${PROGRAM}-wrapper"
-  cat >"$wrapper_source" <<EOF
+  cat >"$wrapper_source" <<EOF || err "could not write the Linux launcher; check TMPDIR permissions and retry"
 #!/bin/sh
 set -eu
 
@@ -201,16 +201,19 @@ EOF
   destination="${install_dir}/${PROGRAM}"
   wrapper_candidate="$(mktemp "${install_dir}/.${PROGRAM}.XXXXXX" 2>/dev/null || true)"
   if [ -z "$wrapper_candidate" ] || ! cp "$wrapper_source" "$wrapper_candidate" || ! chmod 0755 "$wrapper_candidate"; then
-    rm -rf "$payload_directory"
+    rm -rf "$payload_directory" \
+      || err "could not roll back the staged Linux payload at $payload_directory; check directory permissions, remove it, and retry"
     if [ -n "$had_payload" ]; then
       mv "$payload_backup" "$payload_directory" >/dev/null 2>&1 || true
     fi
     err "could not prepare the launcher in $install_dir; check directory permissions and retry"
   fi
   if ! mv "$wrapper_candidate" "$destination"; then
-    rm -f "$wrapper_candidate"
+    rm -f "$wrapper_candidate" \
+      || err "could not remove the failed launcher candidate at $wrapper_candidate; check directory permissions, remove it, and retry"
     wrapper_candidate=""
-    rm -rf "$payload_directory"
+    rm -rf "$payload_directory" \
+      || err "could not roll back the staged Linux payload at $payload_directory; check directory permissions, remove it, and retry"
     if [ -n "$had_payload" ]; then
       mv "$payload_backup" "$payload_directory" >/dev/null 2>&1 || true
     fi
@@ -218,7 +221,8 @@ EOF
   fi
   wrapper_candidate=""
   if [ -n "$had_payload" ]; then
-    rm -rf "$payload_backup"
+    rm -rf "$payload_backup" \
+      || err "installed the new launcher but could not remove the previous payload at $payload_backup; remove that directory manually"
   fi
   case ":${PATH}:" in
     *":${install_dir}:"*) say "installed oneharness UI $version to $destination" ;;

@@ -46,17 +46,41 @@ function appBinary() {
 }
 
 function createStartupFixture() {
-  const fixtureRoot = mkdtempSync(resolve(tmpdir(), "oneharness-ui-desktop-startup-"));
-  const historyDirectory = resolve(fixtureRoot, "history");
-  mkdirSync(historyDirectory);
-  return {
-    cleanup: async () => rmSync(fixtureRoot, { force: true, recursive: true }),
-    environment: {
-      ONEHARNESS_NO_CONFIG: "1",
-      ONEHARNESS_UI_HISTORY_DIR: historyDirectory,
-      TAURI_WEBVIEW_AUTOMATION: "true",
-    },
-  };
+  let fixtureRoot;
+  try {
+    fixtureRoot = mkdtempSync(resolve(tmpdir(), "oneharness-ui-desktop-startup-"));
+    const historyDirectory = resolve(fixtureRoot, "history");
+    mkdirSync(historyDirectory);
+    return {
+      cleanup: async () => {
+        try {
+          rmSync(fixtureRoot, { force: true, recursive: true });
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error);
+          throw new Error(
+            `could not clean up the startup fixture at ${fixtureRoot}: ${detail}; remove it manually and rerun just test-desktop-e2e`,
+          );
+        }
+      },
+      environment: {
+        ONEHARNESS_NO_CONFIG: "1",
+        ONEHARNESS_UI_HISTORY_DIR: historyDirectory,
+        TAURI_WEBVIEW_AUTOMATION: "true",
+      },
+    };
+  } catch (error) {
+    if (fixtureRoot) {
+      try {
+        rmSync(fixtureRoot, { force: true, recursive: true });
+      } catch {
+        // The failure below reports the fixture path for manual cleanup.
+      }
+    }
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `could not create the startup fixture${fixtureRoot ? ` at ${fixtureRoot}` : ""}: ${detail}; make TMPDIR writable, remove any reported fixture, and rerun just test-desktop-e2e`,
+    );
+  }
 }
 
 async function main() {
