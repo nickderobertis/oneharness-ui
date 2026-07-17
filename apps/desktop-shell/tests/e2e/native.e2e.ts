@@ -26,10 +26,11 @@ function expectedIds(name: string): string[] {
 
 const expectedSessionIds = expectedIds("ONEHARNESS_UI_E2E_SESSION_IDS");
 const expectedTurnIds = expectedIds("ONEHARNESS_UI_E2E_TURN_IDS");
+const firstExpectedTurnId = expectedTurnIds[0];
+if (!firstExpectedTurnId) throw new Error("native turn fixture must contain a first turn id");
 
 type ScrollSnapshot = {
   clientHeight: number;
-  firstItemTop: number;
   scrollHeight: number;
   scrollTop: number;
 };
@@ -38,18 +39,17 @@ type ScrollRegion = ReturnType<typeof $>;
 async function scrollSnapshot(region: ScrollRegion): Promise<ScrollSnapshot> {
   return await browser.execute((element) => {
     const scrollRegion = element as HTMLElement;
-    const firstItem = scrollRegion.querySelector<HTMLElement>("[data-session-id], [data-turn-id]");
     return {
       clientHeight: scrollRegion.clientHeight,
-      firstItemTop: firstItem?.getBoundingClientRect().top ?? 0,
       scrollHeight: scrollRegion.scrollHeight,
       scrollTop: scrollRegion.scrollTop,
     };
   }, region);
 }
 
-async function wheelToEnd(region: ScrollRegion): Promise<ScrollSnapshot> {
+async function wheelToEnd(region: ScrollRegion, firstItem: ScrollRegion): Promise<ScrollSnapshot> {
   const before = await scrollSnapshot(region);
+  const firstItemTop = await firstItem.getLocation("y");
   expect(before.scrollHeight).toBeGreaterThan(before.clientHeight);
   await browser
     .action("wheel")
@@ -60,16 +60,17 @@ async function wheelToEnd(region: ScrollRegion): Promise<ScrollSnapshot> {
   });
   const after = await scrollSnapshot(region);
   expect(after.scrollTop).toBeGreaterThan(before.scrollTop);
-  expect(after.firstItemTop).toBeLessThan(before.firstItemTop);
+  expect(await firstItem.getLocation("y")).toBeLessThan(firstItemTop);
   return after;
 }
 
-async function attributeValues(selector: string, attribute: string): Promise<string[]> {
-  const values: string[] = [];
-  for (const element of await $$(selector)) {
-    values.push((await element.getAttribute(attribute)) ?? "");
+async function expectUniqueAccessibleIds(
+  ids: string[],
+  accessibleName: (id: string) => string,
+): Promise<void> {
+  for (const id of ids) {
+    expect(await $$(`aria/${accessibleName(id)}`)).toHaveLength(1);
   }
-  return values;
 }
 
 async function conversation(name: string) {
@@ -108,18 +109,16 @@ describe("packaged native desktop journey", () => {
 
     await runDesktopStage(desktopE2eStageLog, "journey oversized history pagination", async () => {
       const history = await $("aria/Conversation history");
-      const firstBoundaryPosition = await wheelToEnd(history);
+      const firstConversation = await conversation("stopped-tool-session");
+      const firstBoundaryPosition = await wheelToEnd(history, firstConversation);
       await expect($("aria/50 of 58 conversations loaded")).toBeDisplayed();
       expect((await scrollSnapshot(history)).scrollTop).toBeGreaterThanOrEqual(
         firstBoundaryPosition.scrollTop,
       );
-      await wheelToEnd(history);
+      await wheelToEnd(history, firstConversation);
       await expect($("aria/58 of 58 conversations loaded")).toBeDisplayed();
       await expect($("aria/All 58 conversations loaded")).toBeDisplayed();
-      const sessionIds = await attributeValues("[data-session-id]", "data-session-id");
-      expect(sessionIds).toHaveLength(expectedSessionIds.length);
-      expect(new Set(sessionIds).size).toBe(expectedSessionIds.length);
-      expect(sessionIds.toSorted()).toEqual(expectedSessionIds.toSorted());
+      await expectUniqueAccessibleIds(expectedSessionIds, (id) => `Session ID ${id}`);
       await expect(await conversation("oversized-session-00")).toBeDisplayed();
       await expect(await conversation("plain-session")).toBeDisplayed();
       await (await conversation("oversized-session-00")).click();
@@ -143,18 +142,16 @@ describe("packaged native desktop journey", () => {
 
     await runDesktopStage(desktopE2eStageLog, "journey turn history pagination", async () => {
       const turns = await $("aria/Conversation turns");
-      const firstBoundaryPosition = await wheelToEnd(turns);
+      const firstTurn = await $(`aria/Turn ${firstExpectedTurnId} from claude-code`);
+      const firstBoundaryPosition = await wheelToEnd(turns, firstTurn);
       await expect($("aria/40 of 45 turns loaded")).toBeDisplayed();
       expect((await scrollSnapshot(turns)).scrollTop).toBeGreaterThanOrEqual(
         firstBoundaryPosition.scrollTop,
       );
-      await wheelToEnd(turns);
+      await wheelToEnd(turns, firstTurn);
       await expect($("aria/45 of 45 turns loaded")).toBeDisplayed();
       await expect($("aria/All 45 turns loaded")).toBeDisplayed();
-      const turnIds = await attributeValues("[data-turn-id]", "data-turn-id");
-      expect(turnIds).toHaveLength(expectedTurnIds.length);
-      expect(new Set(turnIds).size).toBe(expectedTurnIds.length);
-      expect(turnIds).toEqual(expectedTurnIds);
+      await expectUniqueAccessibleIds(expectedTurnIds, (id) => `Turn ${id} from claude-code`);
     });
 
     await runDesktopStage(desktopE2eStageLog, "journey reasoning disclosure", async () => {

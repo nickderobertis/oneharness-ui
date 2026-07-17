@@ -269,12 +269,11 @@ describe("ConversationShell", () => {
 
     TestIntersectionObserver.intersect(history);
     expect(await screen.findByText("All 3 conversations loaded")).toBeTruthy();
-    const ids = Array.from(
-      document.querySelectorAll<HTMLElement>("[data-session-id]"),
-      (item) => item.dataset.sessionId,
-    );
-    expect(ids).toEqual(["session-1", "session-2", "session-3"]);
-    expect(new Set(ids).size).toBe(3);
+    expect(
+      screen
+        .getAllByRole("listitem", { name: /Session ID/ })
+        .map((item) => item.getAttribute("aria-label")),
+    ).toEqual(["Session ID session-1", "Session ID session-2", "Session ID session-3"]);
     expect(cursors).toHaveLength(3);
   });
 
@@ -380,12 +379,11 @@ describe("ConversationShell", () => {
     expect(await screen.findByText("Bounded answer 1")).toBeTruthy();
     TestIntersectionObserver.intersect(turnHistory);
     expect(await screen.findByText("All 3 turns loaded")).toBeTruthy();
-    const ids = Array.from(
-      document.querySelectorAll<HTMLElement>("[data-turn-id]"),
-      (item) => item.dataset.turnId,
-    );
-    expect(ids).toEqual(["session-1-0", "session-1-1", "session-1-2"]);
-    expect(new Set(ids).size).toBe(3);
+    expect(screen.getAllByRole("article").map((item) => item.getAttribute("aria-label"))).toEqual([
+      "Turn session-1-0 from claude-code",
+      "Turn session-1-1 from claude-code",
+      "Turn session-1-2 from claude-code",
+    ]);
     expect(offsets).toEqual([undefined, 1, 2]);
   });
 

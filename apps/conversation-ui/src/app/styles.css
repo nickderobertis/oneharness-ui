@@ -51,7 +51,6 @@ button:disabled {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
-
 .desktop-shell {
   display: grid;
   grid-template-columns: 330px minmax(0, 1fr);

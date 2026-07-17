@@ -78,12 +78,11 @@ export function ConversationList({
         ) : (
           <ul>
             {conversations.map((conversation) => (
-              <li key={conversation.id}>
+              <li aria-label={`Session ID ${conversation.id}`} key={conversation.id}>
                 <button
                   aria-label={`Open conversation ${conversation.name}`}
                   aria-current={selectedId === conversation.id ? "page" : undefined}
                   className="conversation-link"
-                  data-session-id={conversation.id}
                   onClick={() => onSelect(conversation.id)}
                   type="button"
                 >
