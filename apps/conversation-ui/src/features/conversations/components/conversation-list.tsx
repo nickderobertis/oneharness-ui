@@ -1,9 +1,11 @@
 import type { ConversationSummary } from "@oneharness-ui/ipc-contract";
 import { RefreshIcon, TerminalIcon } from "@/components/ui/icons";
+import { useInfiniteScroll } from "../hooks/use-infinite-scroll";
 
 export function ConversationList({
   conversations,
   hasMore,
+  loadMoreError,
   loadingMore,
   onLoadMore,
   onRefresh,
@@ -14,14 +16,22 @@ export function ConversationList({
 }: {
   conversations: ConversationSummary[];
   hasMore: boolean;
+  loadMoreError: Error | null;
   loadingMore: boolean;
-  onLoadMore: () => void;
+  onLoadMore: () => Promise<unknown>;
   onRefresh: () => void;
   onSelect: (id: string) => void;
   refreshing: boolean;
   selectedId: string | null;
   totalCount: number;
 }) {
+  const infiniteScroll = useInfiniteScroll({
+    automatic: loadMoreError === null,
+    hasMore,
+    loadedCount: conversations.length,
+    loading: loadingMore,
+    onLoadMore,
+  });
   return (
     <aside className="sidebar">
       <header className="sidebar__header">
@@ -44,7 +54,12 @@ export function ConversationList({
           <RefreshIcon className={refreshing ? "spin" : undefined} />
         </button>
       </header>
-      <nav aria-busy={loadingMore} aria-label="Conversation history" className="conversation-nav">
+      <nav
+        aria-busy={loadingMore}
+        aria-label="Conversation history"
+        className="conversation-nav"
+        ref={infiniteScroll.rootRef}
+      >
         <p className="conversation-nav__label">
           History
           <span
@@ -64,7 +79,7 @@ export function ConversationList({
         ) : (
           <ul>
             {conversations.map((conversation) => (
-              <li key={conversation.id}>
+              <li aria-label={`Session ID ${conversation.id}`} key={conversation.id}>
                 <button
                   aria-label={`Open conversation ${conversation.name}`}
                   aria-current={selectedId === conversation.id ? "page" : undefined}
@@ -87,11 +102,40 @@ export function ConversationList({
             ))}
           </ul>
         )}
-        {hasMore ? (
-          <button className="load-more" disabled={loadingMore} onClick={onLoadMore} type="button">
-            {loadingMore ? "Loading more conversations…" : "Load more conversations"}
-          </button>
-        ) : null}
+        <div className="pagination">
+          {hasMore ? (
+            <button
+              className="load-more"
+              disabled={loadingMore}
+              onClick={infiniteScroll.loadMore}
+              type="button"
+            >
+              {loadingMore
+                ? "Loading more conversations…"
+                : loadMoreError
+                  ? "Retry loading conversations"
+                  : "Load more conversations"}
+            </button>
+          ) : conversations.length > 0 ? (
+            <p
+              aria-label={`All ${totalCount} conversations loaded`}
+              className="pagination__status"
+              role="status"
+            >
+              All {totalCount} conversations loaded
+            </p>
+          ) : null}
+          {loadMoreError ? (
+            <p className="pagination__error" role="alert">
+              Couldn’t load more conversations. {loadMoreError.message}
+            </p>
+          ) : null}
+          <div
+            aria-hidden="true"
+            className="pagination__sentinel"
+            ref={infiniteScroll.sentinelRef}
+          />
+        </div>
       </nav>
       <footer className="sidebar__footer">Runs stay on this machine</footer>
     </aside>

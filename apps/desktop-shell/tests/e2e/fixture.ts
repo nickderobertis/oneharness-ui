@@ -53,7 +53,8 @@ type SeedOptions = {
   stdout: string;
 };
 
-const OVERSIZED_HISTORY_SESSION_COUNT = 30;
+const OVERSIZED_HISTORY_SESSION_COUNT = 55;
+const PAGINATED_TURN_COUNT = 45;
 const LEGACY_BRIDGE_RESPONSE_LIMIT_BYTES = 4 * 1024 * 1024;
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {
@@ -221,16 +222,25 @@ async function patchRecord(
   await writeFile(historyFile, `${JSON.stringify({ ...record, ...changes })}\n`);
 }
 
-async function seedOversizedHistory(historyFile: string): Promise<number> {
+async function readFirstHistoryRecord(historyFile: string) {
   const firstLine = (await readFile(historyFile, "utf8")).trim().split("\n")[0];
-  if (!firstLine) throw new Error("oversized fixture template history is empty");
-  const template = HistoryRecordSchema.parse(JSON.parse(firstLine));
-  const prompt = "Deterministic oversized native history prompt. ".repeat(3_800);
+  if (!firstLine) throw new Error(`fixture history is empty: ${historyFile}`);
+  return HistoryRecordSchema.parse(JSON.parse(firstLine));
+}
+
+async function seedOversizedHistory(
+  historyFile: string,
+): Promise<{ bytes: number; sessionIds: string[] }> {
+  const template = await readFirstHistoryRecord(historyFile);
+  const prompt = "Deterministic oversized native history prompt. ".repeat(2_100);
   const summaries: Array<Record<string, unknown>> = [];
+  const sessionIds = Array.from(
+    { length: OVERSIZED_HISTORY_SESSION_COUNT },
+    (_, index) => `oversized-session-${String(index).padStart(2, "0")}`,
+  );
   await Promise.all(
-    Array.from({ length: OVERSIZED_HISTORY_SESSION_COUNT }, async (_, index) => {
+    sessionIds.map(async (session, index) => {
       const suffix = String(index).padStart(2, "0");
-      const session = `oversized-session-${suffix}`;
       const record = HistoryRecordSchema.parse({
         ...template,
         name: session,
@@ -261,7 +271,23 @@ async function seedOversizedHistory(historyFile: string): Promise<number> {
   if (bytes <= LEGACY_BRIDGE_RESPONSE_LIMIT_BYTES) {
     throw new Error(`oversized fixture legacy response was only ${bytes} bytes`);
   }
-  return bytes;
+  return { bytes, sessionIds };
+}
+
+async function seedPaginatedTurns(historyFile: string): Promise<string[]> {
+  const template = await readFirstHistoryRecord(historyFile);
+  const records = Array.from({ length: PAGINATED_TURN_COUNT }, (_, index) =>
+    HistoryRecordSchema.parse({
+      ...template,
+      events: index === 0 ? template.events : [],
+      prompt: `Native paginated prompt ${String(index).padStart(2, "0")}`,
+      text:
+        index === 0 ? template.text : `Native paginated answer ${String(index).padStart(2, "0")}`,
+      thinking: index === 0 ? template.thinking : undefined,
+    }),
+  );
+  await writeFile(historyFile, `${records.map((record) => JSON.stringify(record)).join("\n")}\n`);
+  return records.map((record, index) => `${record.session}-${index}`);
 }
 
 export type DesktopFixture = {
@@ -274,6 +300,8 @@ export type DesktopFixture = {
     ONEHARNESS_NO_CONFIG: string;
     ONEHARNESS_UI_E2E_PROVIDER_ARGV: string;
     ONEHARNESS_UI_E2E_LEGACY_HISTORY_BYTES: string;
+    ONEHARNESS_UI_E2E_SESSION_IDS: string;
+    ONEHARNESS_UI_E2E_TURN_IDS: string;
     ONEHARNESS_UI_E2E_WEBVIEW2_USER_DATA_DIR: string;
     ONEHARNESS_UI_HISTORY_DIR: string;
     ONEHARNESS_UI_PROVIDER_BIN: string;
@@ -369,7 +397,7 @@ export async function createDesktopFixture(
       prompt: "Answer without optional thinking",
       stdout: '{"result":"A concise answer","session_id":"native-plain-session"}',
     });
-    const legacyHistoryBytes = await seedOversizedHistory(plainHistory);
+    const oversized = await seedOversizedHistory(plainHistory);
 
     const stopped = await seed(historyDir, providerPath, {
       name: "stopped-tool-session",
@@ -384,14 +412,26 @@ export async function createDesktopFixture(
       status: "timeout",
       thinking: "I checked the native command boundary before answering.",
     });
+    const turnIds = await seedPaginatedTurns(stopped);
 
-    await seed(historyDir, providerPath, {
+    const failed = await seed(historyDir, providerPath, {
       exit: 1,
       name: "recoverable-failure",
       prompt: "This provider attempt should fail",
       stderr: "rate limit exceeded",
       stdout: '{"result":"","session_id":"native-failed-session"}',
     });
+    const [plainRecord, stoppedRecord, failedRecord] = await Promise.all([
+      readFirstHistoryRecord(plainHistory),
+      readFirstHistoryRecord(stopped),
+      readFirstHistoryRecord(failed),
+    ]);
+    const sessionIds = [
+      plainRecord.session,
+      ...oversized.sessionIds,
+      stoppedRecord.session,
+      failedRecord.session,
+    ];
 
     return {
       cleanup,
@@ -403,7 +443,9 @@ export async function createDesktopFixture(
           '{"result":"Native continuation succeeded","session_id":"native-continued-session"}',
         ONEHARNESS_NO_CONFIG: "1",
         ONEHARNESS_UI_E2E_PROVIDER_ARGV: providerArgv,
-        ONEHARNESS_UI_E2E_LEGACY_HISTORY_BYTES: String(legacyHistoryBytes),
+        ONEHARNESS_UI_E2E_LEGACY_HISTORY_BYTES: String(oversized.bytes),
+        ONEHARNESS_UI_E2E_SESSION_IDS: JSON.stringify(sessionIds),
+        ONEHARNESS_UI_E2E_TURN_IDS: JSON.stringify(turnIds),
         ONEHARNESS_UI_E2E_WEBVIEW2_USER_DATA_DIR: webview2UserDataDir,
         ONEHARNESS_UI_HISTORY_DIR: historyDir,
         ONEHARNESS_UI_PROVIDER_BIN: providerPath,
