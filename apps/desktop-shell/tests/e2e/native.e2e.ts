@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { $, $$, browser, expect } from "@wdio/globals";
 import { validateProviderArgvPath } from "./capabilities.ts";
 import { desktopE2eStageLog, runDesktopStage } from "./stage-log.ts";
+import { type ScrollSnapshot, wheelUntilNextPage } from "./wheel-scroll.ts";
 
 const providerArgv = validateProviderArgvPath(process.env.ONEHARNESS_UI_E2E_PROVIDER_ARGV);
 const legacyHistoryBytes = Number(process.env.ONEHARNESS_UI_E2E_LEGACY_HISTORY_BYTES);
@@ -29,17 +30,13 @@ const expectedTurnIds = expectedIds("ONEHARNESS_UI_E2E_TURN_IDS");
 const firstExpectedTurnId = expectedTurnIds[0];
 if (!firstExpectedTurnId) throw new Error("native turn fixture must contain a first turn id");
 
-type ScrollSnapshot = {
-  clientHeight: number;
-  scrollHeight: number;
-  scrollTop: number;
-};
 type ScrollRegion = ReturnType<typeof $>;
 
 const maxWheelInputsPerPage = 20;
+const pageAppendTimeout = 20_000;
 const paginationPollInterval = 250;
 const requiredAutomaticPageBoundaries = 2;
-const scrollEndTolerance = 1;
+const wheelProgressTimeout = 750;
 
 async function scrollSnapshot(region: ScrollRegion): Promise<ScrollSnapshot> {
   return await browser.execute((element) => {
@@ -52,47 +49,28 @@ async function scrollSnapshot(region: ScrollRegion): Promise<ScrollSnapshot> {
   }, region);
 }
 
-function isAtScrollEnd(snapshot: ScrollSnapshot): boolean {
-  return snapshot.scrollTop >= snapshot.scrollHeight - snapshot.clientHeight - scrollEndTolerance;
-}
-
-async function wheelUntilNextPage(
+async function driveWheelUntilNextPage(
   region: ScrollRegion,
   pageStart: ScrollSnapshot,
 ): Promise<ScrollSnapshot> {
-  for (let wheelInputs = 0; wheelInputs < maxWheelInputsPerPage; wheelInputs += 1) {
-    const before = await scrollSnapshot(region);
-    await browser
-      .action("wheel")
-      .scroll({ deltaY: 100_000, duration: 250, origin: region, x: 0, y: 0 })
-      .perform();
-    await browser.waitUntil(
-      async () => {
-        const current = await scrollSnapshot(region);
-        return (
-          current.scrollHeight > pageStart.scrollHeight || current.scrollTop > before.scrollTop
-        );
-      },
-      { timeoutMsg: "wheel input neither moved the history region nor loaded its next page" },
-    );
-
-    const after = await scrollSnapshot(region);
-    if (after.scrollHeight > pageStart.scrollHeight) return after;
-    if (isAtScrollEnd(after)) {
-      await browser.waitUntil(
-        async () => (await scrollSnapshot(region)).scrollHeight > pageStart.scrollHeight,
-        {
-          interval: paginationPollInterval,
-          timeoutMsg: "automatic pagination did not append a page after wheel scrolling to the end",
-        },
-      );
-      return await scrollSnapshot(region);
-    }
-  }
-
-  throw new Error(
-    `wheel input did not reach the page boundary after ${maxWheelInputsPerPage} attempts`,
-  );
+  const result = await wheelUntilNextPage({
+    maxWheelInputs: maxWheelInputsPerPage,
+    pageAppendTimeout,
+    pageStart,
+    pause: async (milliseconds) => {
+      await browser.pause(milliseconds);
+    },
+    pollInterval: paginationPollInterval,
+    progressTimeout: wheelProgressTimeout,
+    readSnapshot: async () => await scrollSnapshot(region),
+    wheel: async () => {
+      await browser
+        .action("wheel")
+        .scroll({ deltaY: 100_000, duration: 250, origin: region, x: 0, y: 0 })
+        .perform();
+    },
+  });
+  return result.snapshot;
 }
 
 async function wheelThroughAutomaticPages(
@@ -110,7 +88,7 @@ async function wheelThroughAutomaticPages(
     automaticPages += 1
   ) {
     const pageStart = await scrollSnapshot(region);
-    const after = await wheelUntilNextPage(region, pageStart);
+    const after = await driveWheelUntilNextPage(region, pageStart);
     expect(after.scrollHeight).toBeGreaterThan(pageStart.scrollHeight);
     appendedPages += 1;
   }
