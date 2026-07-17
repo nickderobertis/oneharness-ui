@@ -5,6 +5,7 @@ import userEvent from "@testing-library/user-event";
 import { ConversationShell } from "../src/features/conversations/components/conversation-shell";
 
 class TestIntersectionObserver {
+  static intersectingRoots = new Set<Element>();
   static observers = new Set<TestIntersectionObserver>();
   readonly root: Document | Element | null;
   private readonly callback: IntersectionObserverCallback;
@@ -17,16 +18,14 @@ class TestIntersectionObserver {
   }
 
   static intersect(root: Element): void {
+    TestIntersectionObserver.intersectingRoots.add(root);
     for (const observer of TestIntersectionObserver.observers) {
-      if (observer.root !== root || !observer.target) continue;
-      observer.callback(
-        [{ isIntersecting: true, target: observer.target } as IntersectionObserverEntry],
-        observer as unknown as IntersectionObserver,
-      );
+      if (observer.root === root) observer.notifyIfIntersecting();
     }
   }
 
   static reset(): void {
+    TestIntersectionObserver.intersectingRoots.clear();
     TestIntersectionObserver.observers.clear();
   }
 
@@ -36,6 +35,7 @@ class TestIntersectionObserver {
 
   observe(target: Element): void {
     this.target = target;
+    this.notifyIfIntersecting();
   }
 
   takeRecords(): IntersectionObserverEntry[] {
@@ -44,6 +44,19 @@ class TestIntersectionObserver {
 
   unobserve(target: Element): void {
     if (target === this.target) this.target = null;
+  }
+
+  private notifyIfIntersecting(): void {
+    if (
+      !(this.root instanceof Element) ||
+      !TestIntersectionObserver.intersectingRoots.has(this.root) ||
+      !this.target
+    )
+      return;
+    this.callback(
+      [{ isIntersecting: true, target: this.target } as IntersectionObserverEntry],
+      this as unknown as IntersectionObserver,
+    );
   }
 }
 
@@ -230,7 +243,7 @@ describe("ConversationShell", () => {
     expect(firstPageCalls).toBe(2);
   });
 
-  test("automatically loads every conversation page near the scroll end without duplicates", async () => {
+  test("automatically loads three conversation pages while the sentinel stays near the scroll end", async () => {
     const second = { ...summary, id: "session-2", name: "middle-session" };
     const third = { ...summary, id: "session-3", name: "oldest-session" };
     let resolveSecondPage: (value: unknown) => void = () => {};
@@ -265,9 +278,6 @@ describe("ConversationShell", () => {
         totalCount: 3,
       }),
     );
-    expect(await screen.findByText("2 of 3")).toBeTruthy();
-
-    TestIntersectionObserver.intersect(history);
     expect(await screen.findByText("All 3 conversations loaded")).toBeTruthy();
     expect(
       screen
@@ -348,7 +358,7 @@ describe("ConversationShell", () => {
     expect(offsets).toEqual([undefined, 1]);
   });
 
-  test("automatically loads every turn page near the independent turn scroll end", async () => {
+  test("automatically loads three turn pages while its sentinel stays near the scroll end", async () => {
     const turns = Array.from({ length: 3 }, (_, index) => ({
       ...conversation.turns[0],
       assistant: `Bounded answer ${index}`,
@@ -375,8 +385,6 @@ describe("ConversationShell", () => {
       await screen.findByRole("button", { name: "Open conversation inspect-login" }),
     );
     const turnHistory = await screen.findByRole("region", { name: "Conversation turns" });
-    TestIntersectionObserver.intersect(turnHistory);
-    expect(await screen.findByText("Bounded answer 1")).toBeTruthy();
     TestIntersectionObserver.intersect(turnHistory);
     expect(await screen.findByText("All 3 turns loaded")).toBeTruthy();
     expect(screen.getAllByRole("article").map((item) => item.getAttribute("aria-label"))).toEqual([

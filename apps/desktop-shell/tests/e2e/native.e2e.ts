@@ -64,6 +64,26 @@ async function wheelToEnd(region: ScrollRegion, firstItem: ScrollRegion): Promis
   return after;
 }
 
+async function wheelThroughAutomaticPages(
+  region: ScrollRegion,
+  firstItem: ScrollRegion,
+  completedStatus: ScrollRegion,
+): Promise<void> {
+  for (let wheelInputs = 0; wheelInputs < 3; wheelInputs += 1) {
+    if (await completedStatus.isDisplayed()) return;
+    const after = await wheelToEnd(region, firstItem);
+    await browser.waitUntil(
+      async () => {
+        if (await completedStatus.isDisplayed()) return true;
+        const current = await scrollSnapshot(region);
+        const scrollEnd = current.scrollHeight - current.clientHeight;
+        return current.scrollHeight > after.scrollHeight && current.scrollTop < scrollEnd - 1;
+      },
+      { timeoutMsg: "automatic pagination neither completed nor exposed more history to scroll" },
+    );
+  }
+}
+
 async function expectUniqueAccessibleIds(
   ids: string[],
   accessibleName: (id: string) => string,
@@ -110,14 +130,10 @@ describe("packaged native desktop journey", () => {
     await runDesktopStage(desktopE2eStageLog, "journey oversized history pagination", async () => {
       const history = await $("aria/Conversation history");
       const firstConversation = await conversation("stopped-tool-session");
-      const firstBoundaryPosition = await wheelToEnd(history, firstConversation);
-      await expect($("aria/50 of 58 conversations loaded")).toBeDisplayed();
-      expect((await scrollSnapshot(history)).scrollTop).toBeGreaterThanOrEqual(
-        firstBoundaryPosition.scrollTop,
-      );
-      await wheelToEnd(history, firstConversation);
+      const allConversations = await $("aria/All 58 conversations loaded");
+      await wheelThroughAutomaticPages(history, firstConversation, allConversations);
       await expect($("aria/58 of 58 conversations loaded")).toBeDisplayed();
-      await expect($("aria/All 58 conversations loaded")).toBeDisplayed();
+      await expect(allConversations).toBeDisplayed();
       await expectUniqueAccessibleIds(expectedSessionIds, (id) => `Session ID ${id}`);
       await expect(await conversation("oversized-session-00")).toBeDisplayed();
       await expect(await conversation("plain-session")).toBeDisplayed();
@@ -143,14 +159,10 @@ describe("packaged native desktop journey", () => {
     await runDesktopStage(desktopE2eStageLog, "journey turn history pagination", async () => {
       const turns = await $("aria/Conversation turns");
       const firstTurn = await $(`aria/Turn ${firstExpectedTurnId} from claude-code`);
-      const firstBoundaryPosition = await wheelToEnd(turns, firstTurn);
-      await expect($("aria/40 of 45 turns loaded")).toBeDisplayed();
-      expect((await scrollSnapshot(turns)).scrollTop).toBeGreaterThanOrEqual(
-        firstBoundaryPosition.scrollTop,
-      );
-      await wheelToEnd(turns, firstTurn);
+      const allTurns = await $("aria/All 45 turns loaded");
+      await wheelThroughAutomaticPages(turns, firstTurn, allTurns);
       await expect($("aria/45 of 45 turns loaded")).toBeDisplayed();
-      await expect($("aria/All 45 turns loaded")).toBeDisplayed();
+      await expect(allTurns).toBeDisplayed();
       await expectUniqueAccessibleIds(expectedTurnIds, (id) => `Turn ${id} from claude-code`);
     });
 

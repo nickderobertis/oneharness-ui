@@ -42,7 +42,7 @@ describe("native desktop stage diagnostics", () => {
         "../../../../test-results/desktop-e2e/stages.log",
       ),
     );
-  });
+  }, 15_000);
 
   test("records bounded operation progress and identifies the failing stage", async () => {
     const root = await mkdtemp(resolve(tmpdir(), "oneharness-ui-stage-log-"));

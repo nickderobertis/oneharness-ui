@@ -28,6 +28,7 @@ export function ConversationList({
   const infiniteScroll = useInfiniteScroll({
     automatic: loadMoreError === null,
     hasMore,
+    loadedCount: conversations.length,
     loading: loadingMore,
     onLoadMore,
   });

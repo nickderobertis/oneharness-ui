@@ -42,6 +42,7 @@ export function ConversationView({
   const infiniteScroll = useInfiniteScroll({
     automatic: loadMoreTurnsError === null,
     hasMore: hasMoreTurns,
+    loadedCount: conversation.turns.length,
     loading: loadingMoreTurns,
     onLoadMore: onLoadMoreTurns,
   });
