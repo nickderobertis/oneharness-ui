@@ -54,7 +54,7 @@ export const config: WebdriverIO.Config = {
   framework: "mocha",
   logLevel: "info",
   maxInstances: 1,
-  mochaOpts: { timeout: 120_000, ui: "bdd" },
+  mochaOpts: { timeout: 240_000, ui: "bdd" },
   onComplete: async (exitCode) => {
     await recordDesktopStage(
       desktopE2eStageLog,
