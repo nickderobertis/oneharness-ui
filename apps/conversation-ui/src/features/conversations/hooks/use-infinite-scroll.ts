@@ -5,6 +5,7 @@ import { type RefObject, useCallback, useEffect, useRef } from "react";
 type InfiniteScrollOptions = {
   automatic: boolean;
   hasMore: boolean;
+  loadedCount: number;
   loading: boolean;
   onLoadMore: () => Promise<unknown>;
 };
@@ -18,14 +19,25 @@ type InfiniteScroll = {
 export function useInfiniteScroll({
   automatic,
   hasMore,
+  loadedCount,
   loading,
   onLoadMore,
 }: InfiniteScrollOptions): InfiniteScroll {
   const rootRef = useRef<HTMLElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const observerRef = useRef<IntersectionObserver>(null);
   const requestInFlight = useRef(false);
-  const latest = useRef({ hasMore, loading, onLoadMore });
-  latest.current = { hasMore, loading, onLoadMore };
+  const rearmedLoadedCount = useRef<number | null>(null);
+  const latest = useRef({ automatic, hasMore, loading, onLoadMore });
+  latest.current = { automatic, hasMore, loading, onLoadMore };
+
+  const rearmObserver = useCallback(() => {
+    const observer = observerRef.current;
+    const sentinel = sentinelRef.current;
+    if (!observer || !sentinel) return;
+    observer.unobserve(sentinel);
+    observer.observe(sentinel);
+  }, []);
 
   const loadMore = useCallback(() => {
     const state = latest.current;
@@ -37,19 +49,30 @@ export function useInfiniteScroll({
   }, []);
 
   useEffect(() => {
+    if (loading || rearmedLoadedCount.current === loadedCount) return;
+    rearmedLoadedCount.current = loadedCount;
+    requestInFlight.current = false;
+    rearmObserver();
+  }, [loadedCount, loading, rearmObserver]);
+
+  useEffect(() => {
     const root = rootRef.current;
     const sentinel = sentinelRef.current;
-    if (!automatic || !hasMore || loading || !root || !sentinel) return;
+    if (!automatic || !hasMore || !root || !sentinel) return;
 
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry?.isIntersecting) loadMore();
+        if (entry?.isIntersecting && latest.current.automatic) loadMore();
       },
       { root, rootMargin: "0px 0px 180px" },
     );
+    observerRef.current = observer;
     observer.observe(sentinel);
-    return () => observer.disconnect();
-  }, [automatic, hasMore, loadMore, loading]);
+    return () => {
+      observer.disconnect();
+      if (observerRef.current === observer) observerRef.current = null;
+    };
+  }, [automatic, hasMore, loadMore]);
 
   return { loadMore, rootRef, sentinelRef };
 }

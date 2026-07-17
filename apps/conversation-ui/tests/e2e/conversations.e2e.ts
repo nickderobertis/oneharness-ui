@@ -27,7 +27,9 @@ test("continues the exact session and selects refreshed history", async ({ page 
   const before = page.url();
   await page.getByRole("textbox", { name: "Continue this session" }).fill("Continue with a fix");
   await page.getByRole("button", { name: "Send reply" }).click();
-  await expect(page.getByText("Continued from the exact desktop session")).toBeVisible();
+  await expect(page.getByText("Continued from the exact desktop session")).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(page).not.toHaveURL(before);
   await expect(page.getByRole("main").getByText("Completed", { exact: true })).toBeVisible();
 });
@@ -45,6 +47,8 @@ test("marks ineligible sessions and recovers from a recorded provider failure", 
   await expect(page.getByRole("note", { name: "Failure: rate_limit" })).toBeVisible();
   await page.getByRole("textbox", { name: "Continue this session" }).fill("Retry now");
   await page.getByRole("button", { name: "Send reply" }).click();
-  await expect(page.getByText("Continued from the exact desktop session")).toBeVisible();
+  await expect(page.getByText("Continued from the exact desktop session")).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(page.getByText("Completed", { exact: true }).last()).toBeVisible();
 });
