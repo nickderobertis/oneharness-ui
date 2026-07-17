@@ -99,7 +99,7 @@ impl ValidatedAutomationDataDirectory {
                     name.starts_with(FIXTURE_ROOT_PREFIX) && name.len() > FIXTURE_ROOT_PREFIX.len()
                 }) =>
             {
-                name
+                name.to_owned()
             }
             _ => {
                 return Err(std::io::Error::other(
