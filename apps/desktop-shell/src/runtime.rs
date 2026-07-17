@@ -488,7 +488,10 @@ mod tests {
             Some(local_app_data.path().as_os_str()),
         )?
         .expect("valid automation profile was ignored");
-        assert_eq!(directory.absolute, user_data_directory);
+        assert_eq!(
+            directory.absolute,
+            std::fs::canonicalize(&user_data_directory)?
+        );
         assert_eq!(
             directory.relative,
             PathBuf::from(fixture_name).join("webview2-user-data"),
