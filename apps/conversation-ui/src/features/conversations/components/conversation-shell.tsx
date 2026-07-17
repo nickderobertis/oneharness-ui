@@ -40,16 +40,20 @@ function Workspace() {
         <ErrorState error={list.error} onRetry={() => void list.refetch()} />
       </div>
     );
-  const conversations = list.data ?? [];
+  const conversations = list.data?.conversations ?? [];
 
   return (
     <div className="desktop-shell">
       <ConversationList
         conversations={conversations}
-        onRefresh={() => void list.refetch()}
+        hasMore={list.hasNextPage}
+        loadingMore={list.isFetchingNextPage}
+        onLoadMore={() => void list.fetchNextPage()}
+        onRefresh={() => void list.refresh()}
         onSelect={select}
         refreshing={list.isFetching}
         selectedId={selectedId}
+        totalCount={list.data?.totalCount ?? 0}
       />
       {!selectedId ? (
         <main className="welcome">
@@ -75,9 +79,12 @@ function Workspace() {
         <ConversationView
           conversation={selected.data}
           continueError={continuation.error}
+          hasMoreTurns={selected.hasNextPage}
+          loadingMoreTurns={selected.isFetchingNextPage}
           onContinue={async (message) => {
             await continuation.mutateAsync({ message, sessionId: selected.data.id });
           }}
+          onLoadMoreTurns={() => void selected.fetchNextPage()}
           pending={continuation.isPending}
         />
       ) : null}

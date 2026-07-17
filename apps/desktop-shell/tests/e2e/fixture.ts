@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { HistoryRecordSchema } from "@oneharness/sdk";
 
 const repository = resolve(import.meta.dir, "../../../..");
 const executableSuffix = process.platform === "win32" ? ".exe" : "";
@@ -51,6 +52,9 @@ type SeedOptions = {
   stderr?: string;
   stdout: string;
 };
+
+const OVERSIZED_HISTORY_SESSION_COUNT = 30;
+const LEGACY_BRIDGE_RESPONSE_LIMIT_BYTES = 4 * 1024 * 1024;
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -217,6 +221,49 @@ async function patchRecord(
   await writeFile(historyFile, `${JSON.stringify({ ...record, ...changes })}\n`);
 }
 
+async function seedOversizedHistory(historyFile: string): Promise<number> {
+  const firstLine = (await readFile(historyFile, "utf8")).trim().split("\n")[0];
+  if (!firstLine) throw new Error("oversized fixture template history is empty");
+  const template = HistoryRecordSchema.parse(JSON.parse(firstLine));
+  const prompt = "Deterministic oversized native history prompt. ".repeat(3_800);
+  const summaries: Array<Record<string, unknown>> = [];
+  await Promise.all(
+    Array.from({ length: OVERSIZED_HISTORY_SESSION_COUNT }, async (_, index) => {
+      const suffix = String(index).padStart(2, "0");
+      const session = `oversized-session-${suffix}`;
+      const record = HistoryRecordSchema.parse({
+        ...template,
+        name: session,
+        prompt,
+        session,
+        session_id: `native-oversized-${suffix}`,
+      });
+      summaries.push({
+        canContinue: true,
+        harnesses: [record.harness],
+        id: session,
+        name: session,
+        preview: record.prompt,
+        project: record.project,
+        startedAt: record.timestamp,
+        state: "completed",
+        turnCount: 1,
+      });
+      await writeFile(
+        resolve(dirname(historyFile), `${session}.jsonl`),
+        `${JSON.stringify(record)}\n`,
+      );
+    }),
+  );
+  const bytes = Buffer.byteLength(
+    JSON.stringify({ data: { conversations: summaries, kind: "list" }, ok: true }),
+  );
+  if (bytes <= LEGACY_BRIDGE_RESPONSE_LIMIT_BYTES) {
+    throw new Error(`oversized fixture legacy response was only ${bytes} bytes`);
+  }
+  return bytes;
+}
+
 export type DesktopFixture = {
   cleanup: () => Promise<void>;
   environment: {
@@ -226,6 +273,7 @@ export type DesktopFixture = {
     MOCK_STDOUT: string;
     ONEHARNESS_NO_CONFIG: string;
     ONEHARNESS_UI_E2E_PROVIDER_ARGV: string;
+    ONEHARNESS_UI_E2E_LEGACY_HISTORY_BYTES: string;
     ONEHARNESS_UI_E2E_WEBVIEW2_USER_DATA_DIR: string;
     ONEHARNESS_UI_HISTORY_DIR: string;
     ONEHARNESS_UI_PROVIDER_BIN: string;
@@ -316,11 +364,12 @@ export async function createDesktopFixture(
       mkdir(webview2UserDataDir, { recursive: true }),
       writeFile(providerArgv, ""),
     ]);
-    await seed(historyDir, providerPath, {
+    const plainHistory = await seed(historyDir, providerPath, {
       name: "plain-session",
       prompt: "Answer without optional thinking",
       stdout: '{"result":"A concise answer","session_id":"native-plain-session"}',
     });
+    const legacyHistoryBytes = await seedOversizedHistory(plainHistory);
 
     const stopped = await seed(historyDir, providerPath, {
       name: "stopped-tool-session",
@@ -354,6 +403,7 @@ export async function createDesktopFixture(
           '{"result":"Native continuation succeeded","session_id":"native-continued-session"}',
         ONEHARNESS_NO_CONFIG: "1",
         ONEHARNESS_UI_E2E_PROVIDER_ARGV: providerArgv,
+        ONEHARNESS_UI_E2E_LEGACY_HISTORY_BYTES: String(legacyHistoryBytes),
         ONEHARNESS_UI_E2E_WEBVIEW2_USER_DATA_DIR: webview2UserDataDir,
         ONEHARNESS_UI_HISTORY_DIR: historyDir,
         ONEHARNESS_UI_PROVIDER_BIN: providerPath,

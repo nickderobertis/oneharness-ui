@@ -13,6 +13,15 @@ describe("IPC validation", () => {
     expect(() =>
       bridgeRequestSchema.parse({ kind: "continue", sessionId: "valid", message: "  " }),
     ).toThrow();
+    expect(() =>
+      bridgeRequestSchema.parse({
+        cursor: { sessionId: "../secret", startedAt: "2026-07-15T00:00:00Z" },
+        kind: "list",
+      }),
+    ).toThrow();
+    expect(() =>
+      bridgeRequestSchema.parse({ kind: "get", sessionId: "valid", turnOffset: -1 }),
+    ).toThrow();
   });
 
   test("keeps unknown upstream structured values as data", () => {
@@ -28,6 +37,7 @@ describe("IPC validation", () => {
           state: "future-state",
           canContinue: false,
           harnesses: ["future-harness"],
+          nextTurnOffset: null,
           turns: [
             {
               id: "session-1-0",
@@ -44,6 +54,7 @@ describe("IPC validation", () => {
               unknown: { future: { nested: true } },
             },
           ],
+          totalTurnCount: 1,
         },
       },
     });

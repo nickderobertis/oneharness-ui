@@ -83,11 +83,14 @@ describe("native desktop fixture", () => {
         "--history-dir",
         historyDir,
       ]);
-      expect(listed.map((record) => requiredString(record, "name")).sort()).toEqual([
-        "plain-session",
-        "recoverable-failure",
-        "stopped-tool-session",
-      ]);
+      const names = listed.map((record) => requiredString(record, "name"));
+      expect(names).toContain("plain-session");
+      expect(names).toContain("recoverable-failure");
+      expect(names).toContain("stopped-tool-session");
+      expect(names.filter((name) => name.startsWith("oversized-session-"))).toHaveLength(30);
+      expect(Number(fixture.environment.ONEHARNESS_UI_E2E_LEGACY_HISTORY_BYTES)).toBeGreaterThan(
+        4 * 1024 * 1024,
+      );
 
       const stoppedSummary = listed.find(
         (record) => requiredString(record, "name") === "stopped-tool-session",

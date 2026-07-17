@@ -35,11 +35,14 @@ describe("validated bridge client", () => {
     globalThis.fetch = (async (input, init) => {
       requests.push({ init, url: String(input) });
       if (String(input).endsWith("/session")) return new Response(null, { status: 204 });
-      return Response.json({ data: { conversations: [], kind: "list" }, ok: true });
+      return Response.json({
+        data: { conversations: [], kind: "list", nextCursor: null, totalCount: 0 },
+        ok: true,
+      });
     }) as typeof fetch;
 
     await expect(invokeBridge({ kind: "list" })).resolves.toEqual({
-      data: { conversations: [], kind: "list" },
+      data: { conversations: [], kind: "list", nextCursor: null, totalCount: 0 },
       ok: true,
     });
     expect(requests.map(({ url }) => url)).toEqual([
@@ -57,12 +60,18 @@ describe("validated bridge client", () => {
       invoke: async (command: string, args: unknown) => {
         invocations.push({ args, command });
         if (failure) throw failure;
-        return { data: { conversations: [], kind: "list" }, ok: true };
+        return {
+          data: { conversations: [], kind: "list", nextCursor: null, totalCount: 0 },
+          ok: true,
+        };
       },
     }));
     window.__TAURI_INTERNALS__ = {};
     const response = await invokeBridge({ kind: "list" });
-    expect(response).toEqual({ data: { conversations: [], kind: "list" }, ok: true });
+    expect(response).toEqual({
+      data: { conversations: [], kind: "list", nextCursor: null, totalCount: 0 },
+      ok: true,
+    });
     expect(invocations).toEqual([
       { args: { request: { kind: "list" } }, command: "invoke_bridge" },
     ]);
