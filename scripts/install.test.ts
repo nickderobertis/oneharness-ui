@@ -127,8 +127,34 @@ describe("release platform selection", () => {
   });
 });
 
-function writeReleaseFixture(directory: string, asset: string, validChecksum = true) {
-  const contents = "#!/bin/sh\nprintf 'oneharness UI fixture\\n'\n";
+function writeReleaseFixture(
+  directory: string,
+  asset: string,
+  validChecksum = true,
+  validExtraction = true,
+) {
+  const extraction = validExtraction
+    ? `mkdir -p squashfs-root
+cat > squashfs-root/AppRun <<'APP_RUN'
+#!/bin/sh
+printf 'oneharness UI extracted fixture'
+for argument in "$@"; do
+  printf ' <%s>' "$argument"
+done
+printf '\\n'
+APP_RUN
+chmod 0755 squashfs-root/AppRun
+`
+    : `printf 'fixture extraction failed\\n' >&2
+exit 17
+`;
+  const contents = `#!/bin/sh
+if [ "\${1:-}" = "--appimage-extract" ]; then
+  printf 'extract\\n' >> "$TEST_EXTRACTION_LOG"
+  ${extraction}  exit 0
+fi
+printf 'oneharness UI AppImage fixture\\n'
+`;
   const assetPath = join(directory, asset);
   writeFileSync(assetPath, contents);
   const digest = validChecksum
@@ -166,12 +192,14 @@ esac
 }
 
 describe.skipIf(process.platform === "win32")("offline installation journey", () => {
-  test("resolves latest, verifies the checksum, and installs the ARM64 AppImage", () => {
+  test("installs a checksum-verified ARM64 command that reuses its no-FUSE extraction", () => {
     const fixture = temporaryDirectory("oneharness-ui-release-fixture-");
     const asset = "oneharness-ui-v1.2.3-linux-aarch64.AppImage";
-    const contents = writeReleaseFixture(fixture, asset);
+    writeReleaseFixture(fixture, asset);
+    const extractionLog = join(fixture, "extractions.log");
     const environment = installerEnvironment("Linux", "aarch64", {
       ONEHARNESS_UI_RELEASE_BASE_URL: `file://${fixture}`,
+      TEST_EXTRACTION_LOG: extractionLog,
     });
     addOfflineCurl(environment, fixture);
     const installDirectory = temporaryDirectory("oneharness-ui-install-destination-");
@@ -180,10 +208,58 @@ describe.skipIf(process.platform === "win32")("offline installation journey", ()
 
     expect(result.exitCode).toBe(0);
     const installed = join(installDirectory, "oneharness-ui");
-    expect(readFileSync(installed, "utf8")).toBe(contents);
     expect(statSync(installed).mode & 0o111).not.toBe(0);
+    expect(
+      statSync(join(installDirectory, ".oneharness-ui", asset, "squashfs-root", "AppRun")).mode &
+        0o111,
+    ).not.toBe(0);
+
+    for (const expectedArgument of ["first launch", "second launch"]) {
+      const launched = Bun.spawnSync([installed, expectedArgument], {
+        env: { ...environment, APPIMAGE_EXTRACT_AND_RUN: "1" },
+      });
+      expect(launched.exitCode).toBe(0);
+      expect(launched.stdout.toString()).toBe(
+        `oneharness UI extracted fixture <${expectedArgument}>\n`,
+      );
+      expect(launched.stderr.toString()).toBe("");
+    }
+    expect(readFileSync(extractionLog, "utf8")).toBe("extract\n");
     expect(result.stderr.toString()).toContain(`installed oneharness UI v1.2.3 to ${installed}`);
     expect(result.stderr.toString().trim().split("\n")).toHaveLength(1);
+  });
+
+  test("keeps the working no-FUSE command when replacement extraction fails", () => {
+    const fixture = temporaryDirectory("oneharness-ui-release-fixture-");
+    const asset = "oneharness-ui-v1.2.3-linux-aarch64.AppImage";
+    const extractionLog = join(fixture, "extractions.log");
+    writeReleaseFixture(fixture, asset);
+    const environment = installerEnvironment("Linux", "aarch64", {
+      ONEHARNESS_UI_RELEASE_BASE_URL: `file://${fixture}`,
+      TEST_EXTRACTION_LOG: extractionLog,
+    });
+    addOfflineCurl(environment, fixture);
+    const installDirectory = temporaryDirectory("oneharness-ui-install-destination-");
+    const installed = join(installDirectory, "oneharness-ui");
+    expect(
+      runInstaller(["--version", "v1.2.3", "--to", installDirectory], environment).exitCode,
+    ).toBe(0);
+
+    writeReleaseFixture(fixture, asset, true, false);
+    const replacement = runInstaller(
+      ["--version", "v1.2.3", "--to", installDirectory],
+      environment,
+    );
+
+    expect(replacement.exitCode).toBe(1);
+    expect(replacement.stderr.toString()).toContain("could not extract the AppImage");
+    const recovered = Bun.spawnSync([installed, "after failed update"], {
+      env: { ...environment, APPIMAGE_EXTRACT_AND_RUN: "1" },
+    });
+    expect(recovered.exitCode).toBe(0);
+    expect(recovered.stdout.toString()).toBe(
+      "oneharness UI extracted fixture <after failed update>\n",
+    );
   });
 
   test("refuses a corrupted release without replacing the destination", () => {

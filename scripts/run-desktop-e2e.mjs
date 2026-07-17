@@ -1,5 +1,6 @@
 #!/usr/bin/env bun
-import { existsSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import {
   createDesktopFixture,
@@ -14,6 +15,13 @@ import {
 const root = resolve(import.meta.dir, "..");
 const artifacts = resolve(root, "test-results/desktop-e2e");
 const driverVersion = "tauri-driver v2.0.6:";
+
+function enabledFlag(name) {
+  const value = process.env[name];
+  if (value === undefined || value === "0") return false;
+  if (value === "1") return true;
+  throw new Error(`${name} must be 0 or 1; correct the native journey environment and retry`);
+}
 
 function run(command, environment, label, remedy) {
   const result = Bun.spawnSync(command, {
@@ -37,7 +45,24 @@ function appBinary() {
   return path;
 }
 
+function createStartupFixture() {
+  const fixtureRoot = mkdtempSync(resolve(tmpdir(), "oneharness-ui-desktop-startup-"));
+  const historyDirectory = resolve(fixtureRoot, "history");
+  mkdirSync(historyDirectory);
+  return {
+    cleanup: async () => rmSync(fixtureRoot, { force: true, recursive: true }),
+    environment: {
+      ONEHARNESS_NO_CONFIG: "1",
+      ONEHARNESS_UI_HISTORY_DIR: historyDirectory,
+      TAURI_WEBVIEW_AUTOMATION: "true",
+    },
+  };
+}
+
 async function main() {
+  const extractAndRun = enabledFlag("APPIMAGE_EXTRACT_AND_RUN");
+  const prebuiltApplication = enabledFlag("ONEHARNESS_UI_E2E_PREBUILT");
+  const startupOnly = enabledFlag("ONEHARNESS_UI_E2E_STARTUP_ONLY");
   rmSync(artifacts, { force: true, recursive: true });
   await recordDesktopStage(desktopE2eStageLog, "artifact initialization", "pass");
 
@@ -87,18 +112,26 @@ async function main() {
     }
   });
 
-  const format = process.platform === "win32" ? "msi" : "deb";
-  await runDesktopStage(desktopE2eStageLog, `native ${format} package build`, () =>
-    run(
-      ["just", "bundle"],
-      deterministicDesktopEnvironment({ BUNDLE_FORMATS: format }),
-      `native ${format} package build`,
-      "install the reported Tauri prerequisite and rerun just test-desktop-e2e",
-    ),
-  );
+  if (prebuiltApplication) {
+    await runDesktopStage(desktopE2eStageLog, "prebuilt native application verification", () => {
+      appBinary();
+    });
+  } else {
+    const format = process.platform === "win32" ? "msi" : "deb";
+    await runDesktopStage(desktopE2eStageLog, `native ${format} package build`, () =>
+      run(
+        ["just", "bundle"],
+        deterministicDesktopEnvironment({ BUNDLE_FORMATS: format }),
+        `native ${format} package build`,
+        "install the reported Tauri prerequisite and rerun just test-desktop-e2e",
+      ),
+    );
+  }
 
-  const fixture = await runDesktopStage(desktopE2eStageLog, "desktop fixture creation", async () =>
-    createDesktopFixture(),
+  const fixture = await runDesktopStage(
+    desktopE2eStageLog,
+    startupOnly ? "startup fixture creation" : "desktop fixture creation",
+    async () => (startupOnly ? createStartupFixture() : createDesktopFixture()),
   );
   try {
     await runDesktopStage(desktopE2eStageLog, "webdriver native journey", () =>
@@ -106,7 +139,9 @@ async function main() {
         ["bun", "run", "--cwd", "apps/desktop-shell", "test:e2e"],
         deterministicDesktopEnvironment({
           ...fixture.environment,
+          APPIMAGE_EXTRACT_AND_RUN: extractAndRun ? "1" : undefined,
           ONEHARNESS_UI_E2E_APP_BINARY: appBinary(),
+          ONEHARNESS_UI_E2E_STARTUP_ONLY: startupOnly ? "1" : undefined,
           // Node 26 must provide the fetch primitives as one compatible set. The
           // mixed global/bundled Undici path fails before reaching tauri-driver.
           WDIO_USE_NATIVE_FETCH: "1",
@@ -116,15 +151,17 @@ async function main() {
       ),
     );
   } catch (error) {
-    try {
-      await runDesktopStage(desktopE2eStageLog, "webdriver profile diagnostics", () =>
-        fixture.recordWebView2Diagnostics(resolve(artifacts, "webview2-profile.log")),
-      );
-    } catch (diagnosticError) {
-      const detail = diagnosticError instanceof Error ? diagnosticError.message : "unknown error";
-      console.error(
-        `native desktop E2E profile diagnostics failed: ${detail}; inspect test-results/desktop-e2e and rerun just test-desktop-e2e`,
-      );
+    if (!startupOnly) {
+      try {
+        await runDesktopStage(desktopE2eStageLog, "webdriver profile diagnostics", () =>
+          fixture.recordWebView2Diagnostics(resolve(artifacts, "webview2-profile.log")),
+        );
+      } catch (diagnosticError) {
+        const detail = diagnosticError instanceof Error ? diagnosticError.message : "unknown error";
+        console.error(
+          `native desktop E2E profile diagnostics failed: ${detail}; inspect test-results/desktop-e2e and rerun just test-desktop-e2e`,
+        );
+      }
     }
     throw error;
   } finally {

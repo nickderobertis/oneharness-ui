@@ -131,14 +131,94 @@ install_linux() {
   [ -n "$install_dir" ] || err "HOME is unset; pass --to with an install directory"
   mkdir -p "$install_dir" \
     || err "could not create install directory: $install_dir; pass --to with a writable directory"
-  destination="${install_dir}/${PROGRAM}"
+
+  staged_payload="${temporary}/linux-payload"
+  mkdir -p "$staged_payload" \
+    || err "could not stage the Linux payload; check TMPDIR permissions and retry"
+  staged_appimage="${staged_payload}/${asset}"
   if have install; then
-    install -m 0755 "$archive_path" "$destination" \
-      || err "could not install the AppImage to $destination; check directory permissions and retry"
-  else
-    if ! cp "$archive_path" "$destination" || ! chmod 0755 "$destination"; then
-      err "could not install the AppImage to $destination; check directory permissions and retry"
+    install -m 0755 "$archive_path" "$staged_appimage" \
+      || err "could not stage the AppImage; check TMPDIR permissions and retry"
+  elif ! cp "$archive_path" "$staged_appimage" || ! chmod 0755 "$staged_appimage"; then
+    err "could not stage the AppImage; check TMPDIR permissions and retry"
+  fi
+  if ! (cd "$staged_payload" && "./${asset}" --appimage-extract >/dev/null); then
+    err "could not extract the AppImage for FUSE-free launch; report the malformed release asset"
+  fi
+  [ -x "${staged_payload}/squashfs-root/AppRun" ] \
+    || err "the AppImage extraction has no executable AppRun; report the malformed release asset"
+
+  payload_root="${install_dir}/.${PROGRAM}"
+  payload_directory="${payload_root}/${asset}"
+  mkdir -p "$payload_root" \
+    || err "could not create the Linux payload directory: $payload_root; check directory permissions and retry"
+
+  wrapper_source="${temporary}/${PROGRAM}-wrapper"
+  cat >"$wrapper_source" <<EOF
+#!/bin/sh
+set -eu
+
+install_root="\$(CDPATH= cd -- "\$(dirname -- "\$0")" && pwd)" || {
+  printf 'oneharness UI launcher: could not resolve the install directory; reinstall oneharness UI\\n' >&2
+  exit 1
+}
+payload_directory="\${install_root}/.${PROGRAM}/${asset}"
+appimage="\${payload_directory}/${asset}"
+extracted_app="\${payload_directory}/squashfs-root/AppRun"
+
+if [ ! -x "\$appimage" ] || [ ! -x "\$extracted_app" ]; then
+  printf 'oneharness UI launcher: installed payload is incomplete; rerun the oneharness UI installer\\n' >&2
+  exit 1
+fi
+
+if [ "\${APPIMAGE_EXTRACT_AND_RUN:-}" = "1" ]; then
+  exec "\$extracted_app" "\$@"
+fi
+if [ -c /dev/fuse ] && [ -r /dev/fuse ] && [ -w /dev/fuse ]; then
+  exec "\$appimage" "\$@"
+fi
+exec "\$extracted_app" "\$@"
+EOF
+  chmod 0755 "$wrapper_source" \
+    || err "could not prepare the Linux launcher; check TMPDIR permissions and retry"
+
+  payload_backup="${payload_directory}.previous.$$"
+  had_payload=""
+  if [ -e "$payload_directory" ] || [ -L "$payload_directory" ]; then
+    [ ! -e "$payload_backup" ] && [ ! -L "$payload_backup" ] \
+      || err "could not replace the existing Linux payload safely; remove $payload_backup and retry"
+    mv "$payload_directory" "$payload_backup" \
+      || err "could not preserve the existing Linux payload; check directory permissions and retry"
+    had_payload="1"
+  fi
+  if ! mv "$staged_payload" "$payload_directory"; then
+    if [ -n "$had_payload" ]; then
+      mv "$payload_backup" "$payload_directory" >/dev/null 2>&1 || true
     fi
+    err "could not install the Linux payload to $payload_directory; check directory permissions and retry"
+  fi
+
+  destination="${install_dir}/${PROGRAM}"
+  wrapper_candidate="$(mktemp "${install_dir}/.${PROGRAM}.XXXXXX" 2>/dev/null || true)"
+  if [ -z "$wrapper_candidate" ] || ! cp "$wrapper_source" "$wrapper_candidate" || ! chmod 0755 "$wrapper_candidate"; then
+    rm -rf "$payload_directory"
+    if [ -n "$had_payload" ]; then
+      mv "$payload_backup" "$payload_directory" >/dev/null 2>&1 || true
+    fi
+    err "could not prepare the launcher in $install_dir; check directory permissions and retry"
+  fi
+  if ! mv "$wrapper_candidate" "$destination"; then
+    rm -f "$wrapper_candidate"
+    wrapper_candidate=""
+    rm -rf "$payload_directory"
+    if [ -n "$had_payload" ]; then
+      mv "$payload_backup" "$payload_directory" >/dev/null 2>&1 || true
+    fi
+    err "could not install the launcher to $destination; check directory permissions and retry"
+  fi
+  wrapper_candidate=""
+  if [ -n "$had_payload" ]; then
+    rm -rf "$payload_backup"
   fi
   case ":${PATH}:" in
     *":${install_dir}:"*) say "installed oneharness UI $version to $destination" ;;
@@ -186,6 +266,9 @@ install_windows() {
 cleanup() {
   if [ -n "${mounted:-}" ] && [ -n "${mount_path:-}" ]; then
     hdiutil detach "$mount_path" >/dev/null 2>&1 || true
+  fi
+  if [ -n "${wrapper_candidate:-}" ]; then
+    rm -f "$wrapper_candidate"
   fi
   if [ -n "${temporary:-}" ]; then
     rm -rf "$temporary"

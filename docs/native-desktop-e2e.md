@@ -27,6 +27,13 @@ Failure screenshots, driver logs, and an ordered `stages.log` stay under
 accepted the profile and whether WebView2 created `DevToolsActivePort`.
 Successful runs remove the diagnostics.
 
+The ARM64 release-like lane uses the same driver against the public-installer
+layout on a native Ubuntu 22.04 ARM runner. It sets
+`APPIMAGE_EXTRACT_AND_RUN=1`, launches the installer's cached `AppRun` without
+FUSE, and asserts that the real window, local sidecar, empty SDK history, and
+refreshable conversation UI reach the native startup boundary. Release builds
+repeat that journey before uploading the ARM64 assets.
+
 The fixture replaces only paid model execution with oneharness's own
 deterministic provider binary. History creation, the packaged UI, Tauri command,
 bundled sidecar, pinned SDK, bundled CLI, filesystem, and refresh remain real.
