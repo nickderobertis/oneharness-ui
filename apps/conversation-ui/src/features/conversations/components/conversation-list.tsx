@@ -47,7 +47,10 @@ export function ConversationList({
       <nav aria-busy={loadingMore} aria-label="Conversation history" className="conversation-nav">
         <p className="conversation-nav__label">
           History
-          <span>
+          <span
+            aria-label={`${conversations.length} of ${totalCount} conversations loaded`}
+            role="status"
+          >
             {conversations.length < totalCount
               ? `${conversations.length} of ${totalCount}`
               : conversations.length}

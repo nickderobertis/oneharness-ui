@@ -34,7 +34,7 @@ describe("packaged native desktop journey", () => {
       await expect(browser).toHaveTitle("oneharness");
       const history = await $("aria/Conversation history");
       await expect(history).toBeDisplayed();
-      expect(await history.getText()).toMatch(/25 of 33/i);
+      await expect($("aria/25 of 33 conversations loaded")).toBeDisplayed();
       await expect(await conversation("stopped-tool-session")).toBeDisplayed();
       await expect(await conversation("recoverable-failure")).toBeDisplayed();
       await expect($("aria/Load more conversations")).toBeDisplayed();
@@ -47,7 +47,7 @@ describe("packaged native desktop journey", () => {
       await loadMore.click();
       await expect(await conversation("oversized-session-00")).toBeDisplayed();
       await expect(await conversation("plain-session")).toBeDisplayed();
-      expect(await $("aria/Conversation history").getText()).toContain("33");
+      await expect($("aria/33 of 33 conversations loaded")).toBeDisplayed();
       await (await conversation("oversized-session-00")).click();
       await expect($("aria/oversized-session-00")).toBeDisplayed();
       await expect($("aria/A concise answer")).toBeDisplayed();

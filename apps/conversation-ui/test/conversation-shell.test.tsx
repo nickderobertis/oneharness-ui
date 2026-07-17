@@ -165,6 +165,7 @@ describe("ConversationShell", () => {
     render(<ConversationShell />);
 
     expect(await screen.findByText("1 of 2")).toBeTruthy();
+    expect(screen.getByRole("status", { name: "1 of 2 conversations loaded" })).toBeTruthy();
     const loadMore = screen.getByRole("button", { name: "Load more conversations" });
     loadMore.focus();
     await user.keyboard("{Enter}");
@@ -172,6 +173,7 @@ describe("ConversationShell", () => {
       await screen.findByRole("button", { name: "Open conversation older-session" }),
     ).toBeTruthy();
     expect(screen.getByText("2", { exact: true })).toBeTruthy();
+    expect(screen.getByRole("status", { name: "2 of 2 conversations loaded" })).toBeTruthy();
 
     await user.click(screen.getByRole("button", { name: "Refresh conversations" }));
     expect(
