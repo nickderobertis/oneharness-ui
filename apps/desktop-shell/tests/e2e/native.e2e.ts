@@ -34,7 +34,7 @@ describe("packaged native desktop journey", () => {
       await expect(browser).toHaveTitle("oneharness");
       const history = await $("aria/Conversation history");
       await expect(history).toBeDisplayed();
-      expect(await history.getText()).toContain("25 of 33");
+      expect(await history.getText()).toMatch(/25 of 33/i);
       await expect(await conversation("stopped-tool-session")).toBeDisplayed();
       await expect(await conversation("recoverable-failure")).toBeDisplayed();
       await expect($("aria/Load more conversations")).toBeDisplayed();
