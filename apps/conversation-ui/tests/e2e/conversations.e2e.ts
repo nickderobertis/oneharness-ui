@@ -42,7 +42,7 @@ test("marks ineligible sessions and recovers from a recorded provider failure", 
 
   await page.getByRole("button", { name: /failed-session/i }).click();
   await expect(page.getByText("Failed", { exact: true }).last()).toBeVisible();
-  await expect(page.getByText("Failure: rate_limit")).toBeVisible();
+  await expect(page.getByRole("note", { name: "Failure: rate_limit" })).toBeVisible();
   await page.getByRole("textbox", { name: "Continue this session" }).fill("Retry now");
   await page.getByRole("button", { name: "Send reply" }).click();
   await expect(page.getByText("Continued from the exact desktop session")).toBeVisible();

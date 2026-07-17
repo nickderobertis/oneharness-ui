@@ -12,16 +12,52 @@
     "bundle": {
       "command": "bunx tauri build --config apps/desktop-shell/tauri.conf.json"
     },
+    "desktop-e2e": {
+      "command": "bun scripts/run-desktop-e2e.mjs"
+    },
     "test": {
-      "command": "bash scripts/test-rust.sh"
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "bash scripts/test-rust.sh",
+          "bun test apps/desktop-shell/tests/e2e/fixture.integration.test.ts apps/desktop-shell/tests/e2e/capabilities.test.ts apps/desktop-shell/tests/e2e/stage-log.test.ts apps/desktop-shell/tests/e2e/tauri-launcher-service.test.ts"
+        ],
+        "parallel": false
+      }
     },
     "lint": {
-      "command": "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings"
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "cargo clippy --locked --workspace --all-targets --all-features -- -D warnings",
+          "bunx biome check --error-on-warnings apps/desktop-shell"
+        ],
+        "parallel": false
+      }
     },
-    "format": { "command": "cargo fmt --all" },
+    "format": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": ["cargo fmt --all", "bunx biome format --write apps/desktop-shell"],
+        "parallel": false
+      }
+    },
     "typecheck": {
-      "command": "cargo check --locked --workspace --all-targets --all-features"
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "cargo check --locked --workspace --all-targets --all-features",
+          "bunx tsc -p apps/desktop-shell/tsconfig.json --noEmit"
+        ],
+        "parallel": false
+      }
     },
-    "format-check": { "command": "cargo fmt --all -- --check" }
+    "format-check": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": ["cargo fmt --all -- --check", "bunx biome format apps/desktop-shell"],
+        "parallel": false
+      }
+    }
   }
 }

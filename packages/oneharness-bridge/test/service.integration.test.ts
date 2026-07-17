@@ -2,38 +2,36 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { isAbsolute, resolve } from "node:path";
-import { OneHarness, type RunReport } from "@oneharness/sdk";
+import { basename, isAbsolute, resolve } from "node:path";
+import { HistoryRecordSchema, OneHarness, RunOptionsSchema, type RunReport } from "@oneharness/sdk";
 import { BridgeService } from "../src/service.ts";
+import { readFixtureHistoryRecord } from "./history-fixture.ts";
 
 const repository = resolve(import.meta.dir, "../../..");
+const cliOverride = process.env.ONEHARNESS_UI_TEST_CLI_BIN;
 const providerOverride = process.env.ONEHARNESS_UI_TEST_PROVIDER_BIN;
-if (
-  providerOverride !== undefined &&
-  (providerOverride.length === 0 ||
-    providerOverride.length > 4096 ||
-    !isAbsolute(providerOverride) ||
-    !existsSync(providerOverride))
-) {
-  throw new Error(
-    "ONEHARNESS_UI_TEST_PROVIDER_BIN must be an existing absolute path to the deterministic provider",
-  );
+for (const [name, value] of [
+  ["ONEHARNESS_UI_TEST_CLI_BIN", cliOverride],
+  ["ONEHARNESS_UI_TEST_PROVIDER_BIN", providerOverride],
+] as const) {
+  if (
+    value !== undefined &&
+    (value.length === 0 || value.length > 4096 || !isAbsolute(value) || !existsSync(value))
+  ) {
+    throw new Error(`${name} must be an existing absolute executable path`);
+  }
 }
 const provider =
   providerOverride ??
   resolve(
     repository,
-    `.cache/upstream-target/debug/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
+    `target/oneharness-ui-test/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
   );
-const executable = resolve(
-  repository,
-  `.cache/upstream-target/debug/oneharness${process.platform === "win32" ? ".exe" : ""}`,
-);
 const TEST_AUTHORIZATION = "oneharness-ui-integration-authorization";
 
 let historyDir = "";
 const originalMockEnvironment = new Map<string, string | undefined>();
-const mockKeys = ["MOCK_EXIT", "MOCK_STDERR", "MOCK_STDOUT"];
+const mockKeys = ["MOCK_EXIT", "MOCK_STDERR", "MOCK_STDOUT", "ONEHARNESS_NO_CONFIG"];
 
 beforeEach(async () => {
   historyDir = await mkdtemp(resolve(tmpdir(), "oneharness-ui-bridge-"));
@@ -54,7 +52,7 @@ async function seed(
   stdout: string,
   options: { exit?: number; prompt?: string; stderr?: string } = {},
 ): Promise<RunReport> {
-  return await new OneHarness({ executable }).run({
+  const report = await new OneHarness(cliOverride ? { executable: cliOverride } : {}).run({
     bins: { "claude-code": provider },
     env: {
       MOCK_EXIT: String(options.exit ?? 0),
@@ -69,12 +67,14 @@ async function seed(
     mode: "bypass",
     prompt: options.prompt ?? "Inspect the repository",
   });
+  expect(report.oneharness_version).toBe("0.3.23");
+  return report;
 }
 
 function service(): BridgeService {
   return new BridgeService(
     {
-      executable,
+      ...(cliOverride ? { executable: cliOverride } : {}),
       historyDir,
       providerBin: provider,
       providerHarness: "claude-code",
@@ -84,6 +84,51 @@ function service(): BridgeService {
 }
 
 describe("BridgeService across SDK, CLI, provider, and history boundaries", () => {
+  test("uses the exact public SDK and its generated input/response schemas", async () => {
+    const manifest = JSON.parse(
+      await readFile(
+        resolve(import.meta.dir, "../node_modules/@oneharness/sdk/package.json"),
+        "utf8",
+      ),
+    ) as { dependencies?: Record<string, string>; version?: string };
+    expect(manifest).toMatchObject({
+      dependencies: { "oneharness-cli": "0.3.23" },
+      version: "0.3.23",
+    });
+    expect(
+      RunOptionsSchema.safeParse({ prompt: "Valid prompt", repositoryOwnedOption: true }).success,
+    ).toBe(false);
+
+    const report = await seed("schema-boundary", '{"result":"Validated","session_id":"sdk-1"}');
+    const { record } = await readFixtureHistoryRecord(historyDir, report);
+    expect(HistoryRecordSchema.safeParse({ ...record, status: "future-status" }).success).toBe(
+      false,
+    );
+    const forwardCompatible = HistoryRecordSchema.parse({
+      ...record,
+      future_payload: { preserved: true },
+    });
+    expect(forwardCompatible.future_payload).toEqual({ preserved: true });
+
+    await expect(
+      readFixtureHistoryRecord(historyDir, { ...report, history_file: null }),
+    ).rejects.toThrow("did not write history");
+    const outside = resolve(historyDir, "..", `${basename(historyDir)}-outside.jsonl`);
+    const multiple = resolve(historyDir, "multiple.jsonl");
+    try {
+      await writeFile(outside, `${JSON.stringify(record)}\n`);
+      await expect(
+        readFixtureHistoryRecord(historyDir, { ...report, history_file: outside }),
+      ).rejects.toThrow("outside the isolated fixture directory");
+      await writeFile(multiple, `${JSON.stringify(record)}\n${JSON.stringify(record)}\n`);
+      await expect(
+        readFixtureHistoryRecord(historyDir, { ...report, history_file: multiple }),
+      ).rejects.toThrow("must contain one record");
+    } finally {
+      await rm(outside, { force: true });
+    }
+  });
+
   test("rejects callers without the local authorization capability", async () => {
     const result = await service().handle({ kind: "list" }, "incorrect-authorization-value-0000");
     expect(result).toEqual({
@@ -100,6 +145,12 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     });
   });
 
+  test("rejects oversized ambient discovery configuration", async () => {
+    process.env.ONEHARNESS_NO_CONFIG = "x".repeat(32_769);
+    const result = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
+    expect(result).toMatchObject({ ok: false, error: { code: "ONEHARNESS_ERROR" } });
+  });
+
   test("discovers, selects, and safely preserves optional detail", async () => {
     const report = await seed(
       "tool-session",
@@ -108,9 +159,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
         '{"type":"result","result":"Repository inspected","session_id":"native-1","usage":{"input_tokens":0,"output_tokens":4}}',
       ].join("\n"),
     );
-    const historyFile = report.history_file;
-    if (!historyFile) throw new Error("seed run did not write history");
-    const record = JSON.parse(await readFile(historyFile, "utf8")) as Record<string, unknown>;
+    const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
     record.thinking = "Checked the project shape before answering.";
     record.future_payload = { preserved: true };
     await writeFile(historyFile, `${JSON.stringify(record)}\n`);
@@ -136,13 +185,25 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     ).toBe("Bash");
   });
 
-  test("continues the exact native session and returns the new history selection", async () => {
-    await seed("continue-me", '{"result":"First answer","session_id":"native-continue-1"}');
+  test("continues a stopped session and returns the new history selection", async () => {
+    const report = await seed(
+      "continue-me",
+      '{"result":"First answer","session_id":"native-continue-1"}',
+    );
+    const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
+    await writeFile(
+      historyFile,
+      `${JSON.stringify({ ...record, exit_code: null, status: "timeout" })}\n`,
+    );
     process.env.MOCK_STDOUT = '{"result":"Continued answer","session_id":"native-continue-1"}';
     process.env.MOCK_EXIT = "0";
     const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
     const firstId =
       listed.ok && listed.data.kind === "list" ? listed.data.conversations[0]?.id : "";
+    expect(listed.ok && listed.data.kind === "list" && listed.data.conversations[0]).toMatchObject({
+      canContinue: true,
+      state: "stopped",
+    });
     const continued = await service().handle(
       {
         kind: "continue",
@@ -262,7 +323,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     await writeFile(fileInsteadOfDirectory, "not a history directory");
     const storage = await new BridgeService(
       {
-        executable,
+        ...(cliOverride ? { executable: cliOverride } : {}),
         historyDir: fileInsteadOfDirectory,
       },
       TEST_AUTHORIZATION,

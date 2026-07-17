@@ -59,12 +59,16 @@ test:
 test-e2e:
     @./scripts/run-quiet.sh "browser journeys" "Inspect the Playwright artifact, fix the user journey, and rerun 'just test-e2e'." -- bunx nx run conversation-ui:e2e --outputStyle=static
 
+# Packages and drives the real desktop binary with official tauri-driver. Upstream supports Linux and Windows only.
+test-desktop-e2e:
+    @./scripts/run-quiet.sh "native desktop journey" "Install the documented WebDriver prerequisite, inspect test-results/desktop-e2e, and rerun 'just test-desktop-e2e'." -- env RUSTFLAGS="-D warnings" bunx nx run desktop-shell:desktop-e2e --outputStyle=static
+
 build:
     @./scripts/run-quiet.sh "build" "Fix the reported static-export or native build error, then rerun 'just build'." -- env RUSTFLAGS="-D warnings" bunx nx run-many -t build --all --outputStyle=static
 
 bundle:
     @[[ "${BUNDLE_FORMATS:-}" =~ ^(deb|appimage|app|dmg|msi|nsis)(,(deb|appimage|app|dmg|msi|nsis))*$ ]] || { echo "native bundle: set BUNDLE_FORMATS to a comma-separated platform bundle list" >&2; exit 2; }
-    @./scripts/run-quiet.sh "native bundle" "Install the platform's Tauri prerequisites, fix the reported packaging error, and rerun 'just bundle'." -- bun scripts/build-native.mjs "$BUNDLE_FORMATS"
+    @./scripts/run-quiet.sh "native bundle" "Install the platform's Tauri prerequisites, fix the reported packaging error, and rerun 'just bundle'." -- env RUSTFLAGS="-D warnings" bun scripts/build-native.mjs "$BUNDLE_FORMATS"
 
 checksums:
     @./scripts/run-quiet.sh "release checksums" "Set BUNDLE_DIRECTORY and CHECKSUM_OUTPUT after building the platform bundles, then rerun 'just checksums'." -- bun scripts/checksums.mjs "${BUNDLE_DIRECTORY:-}" "${CHECKSUM_OUTPUT:-}"
@@ -91,7 +95,6 @@ supply-chain:
     @if [ "${ONEHARNESS_QUIET:-}" != "1" ]; then echo "supply-chain: ok"; fi
 
 upgrade:
-    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "pinned SDK refresh" "Verify network access and the immutable SDK pin, then rerun 'just upgrade'." -- ./scripts/fetch-sdk.sh
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "JavaScript dependency upgrade" "Resolve the package conflict, then rerun 'just upgrade'." -- bun update
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Rust dependency upgrade" "Resolve the Cargo dependency conflict, then rerun 'just upgrade'." -- cargo update
     @ONEHARNESS_QUIET=1 just gate
@@ -107,9 +110,10 @@ lint-llm:
     @command -v llmlint >/dev/null 2>&1 || { echo "llmlint missing; run just setup-llmlint" >&2; exit 1; }
     @./scripts/run-quiet.sh "semantic lint" "Inspect 'llmlint history latest', fix every finding, then rerun 'just lint-llm'." -- llmlint
 
-lint-llm-diff:
+lint-llm-diff base="origin/main":
     @command -v llmlint >/dev/null 2>&1 || { echo "llmlint missing; run just setup-llmlint" >&2; exit 1; }
-    @./scripts/run-quiet.sh "semantic diff lint" "Inspect 'llmlint history latest', fix every finding, then rerun 'just lint-llm-diff'." -- llmlint --diff --diff-base "origin/main"
+    @base={{quote(base)}}; [[ "$base" =~ ^[A-Za-z0-9][A-Za-z0-9._/-]{0,239}$ ]] || { echo "semantic diff lint: base must be a branch, tag, or commit without shell metacharacters" >&2; exit 2; }
+    @./scripts/run-quiet.sh "semantic diff lint" "Inspect 'llmlint history latest', fix every finding, then rerun 'just lint-llm-diff'." -- llmlint --diff --diff-base {{quote(base)}}
 
 lint-llm-copilot:
     @./scripts/run-llmlint-copilot.sh

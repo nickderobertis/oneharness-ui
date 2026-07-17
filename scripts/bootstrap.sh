@@ -16,8 +16,6 @@ for tool in bun cargo node rustup curl uv; do
   }
 done
 
-"$ROOT/scripts/fetch-sdk.sh" \
-  || fail "SDK materialization failed; follow the fetch-sdk remedy above, then rerun just bootstrap"
 cd "$ROOT"
 if [ -f bun.lock ]; then
   bun install --frozen-lockfile >/dev/null \
@@ -26,6 +24,8 @@ else
   bun install >/dev/null \
     || fail "workspace install failed; restore bun.lock or resolve the Bun diagnostic, then rerun just bootstrap"
 fi
+bun "$ROOT/scripts/build-test-provider.mjs" \
+  || fail "deterministic provider build failed; follow the build-test-provider remedy above, then rerun just bootstrap"
 bun "$ROOT/scripts/build-sidecar.mjs" \
   || fail "sidecar assembly failed; follow the build-sidecar remedy above, then rerun just bootstrap"
 bunx playwright install chromium >/dev/null \
@@ -50,6 +50,15 @@ install_cargo_tool() {
 install_cargo_tool deny cargo-deny 0.20.2
 install_cargo_tool machete cargo-machete 0.9.2
 install_cargo_tool llvm-cov cargo-llvm-cov 0.8.7
+
+case "$(uname -s)" in
+  Linux | MINGW* | MSYS* | CYGWIN*)
+    if ! cargo install --list | grep -Fxq "tauri-driver v2.0.6:"; then
+      cargo install --locked --quiet tauri-driver --version 2.0.6 \
+        || fail "could not install tauri-driver 2.0.6; verify crates.io access, then rerun just bootstrap"
+    fi
+    ;;
+esac
 
 if [ "${CI:-}" != "true" ]; then
   "$ROOT/scripts/setup-llmlint.sh" >/dev/null 2>&1 || true

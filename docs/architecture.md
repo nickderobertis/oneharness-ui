@@ -32,9 +32,9 @@ at the service layer, and bounds the bytes read from the request stream. No
 bridge secret is present in browser JavaScript. Release builds do not configure
 this adapter.
 
-The bridge first uses an explicit `ONEHARNESS_BIN`, then a compatible CLI
-bundled beside it, then the SDK's packaged CLI. Config/history resolution is
-otherwise delegated to oneharness. Continuation forces parallel run mode
+The bridge first uses an explicit `ONEHARNESS_BIN`, then the SDK's packaged CLI
+binary bundled beside it, then the SDK's package-resolved CLI. Config/history
+resolution is otherwise delegated to oneharness. Continuation forces parallel run mode
 because a native resume ID belongs to one harness and cannot use a fallback
 selection; every other discovered setting remains available.
 

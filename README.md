@@ -16,7 +16,7 @@ Next.js webview
       └─ fixed Tauri command (no webview shell permission)
           └─ oneharness-ui bridge (bundled Bun executable)
               └─ @oneharness/sdk (types + runtime contract validation)
-                  └─ pinned oneharness CLI
+                  └─ packaged oneharness CLI
                       └─ local config, history, and harness process
 ```
 
@@ -33,6 +33,7 @@ smaller application view model validated on both sides of IPC. See
 - `curl` and the native [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/)
 - On Linux: WebKitGTK 4.1, GTK 3, appindicator, librsvg, `pkg-config`, and
   `patchelf`
+- For native desktop E2E on Linux: `webkit2gtk-driver` and a display (or `xvfb`)
 
 From a clean clone:
 
@@ -92,31 +93,34 @@ Start the desktop app during development:
 just dev
 ```
 
+Run the focused browser journey with `just test-e2e`. On Linux or Windows, run
+the additional packaged Tauri journey with `just test-desktop-e2e`; it builds
+the platform installer and drives that release application through
+WebdriverIO and the pinned official `tauri-driver`. See
+[native desktop E2E](docs/native-desktop-e2e.md) for platform prerequisites and
+the precise macOS limitation.
+
 The app discovers the same layered oneharness config and platform history
 directory as the CLI. `ONEHARNESS_BIN` selects an explicit executable and
 `ONEHARNESS_UI_HISTORY_DIR` selects an explicit history directory. Errors name
 the failing path and suggest the relevant setting.
+
+Linux builds target Ubuntu 24.04 or another distribution with glibc 2.39 or
+newer, matching the published oneharness 0.3.23 CLI binaries.
 
 Selection is durable in `?session=<id>`. A conversation is continuable only
 when its latest SDK-validated record holds an eligible native `session_id`.
 Submitting a reply calls SDK `run({ resume, prompt })`, records a new history
 session, refreshes the list, and selects that result.
 
-## SDK source pin
+## SDK package pin
 
-`@oneharness/sdk` is not yet published to npm. `scripts/fetch-sdk.sh` consumes
-oneharness commit `964a5e030b2e0caa4cd0827ac871a0f94ca1d8a5`, verifies source archive
-SHA-256 `beb8b4fe66d56dc212ab1105efa15c8d2e0479b070b3e470d1f68a6fe5138224`,
-and builds the upstream package in that immutable source tree without copying
-its contracts here. The workspace uses the assembled package directory rather
-than a repacked tarball, avoiding platform-dependent archive metadata. The same
-commit supplies the compatible CLI and deterministic provider fixture used by
-boundary/e2e tests.
-
-When a registry release is available, replace the bridge dependency with the
-exact compatible `@oneharness/sdk` version, delete the SDK pack step, refresh
-`bun.lock`, and keep all imports unchanged. The SDK remains the contract owner
-in both layouts.
+The bridge reproducibly pins the public `@oneharness/sdk` package to `0.3.23`.
+That package owns the generated TypeScript contracts and Zod schemas and brings
+the matching packaged `oneharness-cli` binary for each supported platform. The
+repository keeps only its UI-specific IPC/view-model schemas. Tests compile a
+credential-free deterministic provider fixture and pass it through the real
+SDK → packaged CLI → provider process seam.
 
 ## Quality and release
 
@@ -126,6 +130,10 @@ static export, Rust checks, dependency policy, and audits. Tests replace only
 paid model execution with oneharness's own deterministic provider fixture; the
 SDK, CLI, filesystem history, subprocess, bridge, HTTP/Tauri transport, and UI
 remain real.
+
+The separately required native desktop CI gate runs the packaged WebDriverIO
+journey on Linux and Windows. macOS keeps a native DMG build/install smoke
+because upstream official `tauri-driver` has no WKWebView driver.
 
 Rust coverage excludes only `src/main.rs`, the two-line native GUI event-loop
 entrypoint that cannot return under a headless coverage runner; its runtime

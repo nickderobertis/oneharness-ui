@@ -1,23 +1,32 @@
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { mkdir, rm, writeFile } from "node:fs/promises";
+import { isAbsolute, resolve } from "node:path";
 import { OneHarness } from "@oneharness/sdk";
 import { startServer } from "../src/server.ts";
+import { readFixtureHistoryRecord } from "./history-fixture.ts";
 
 const repository = resolve(import.meta.dir, "../../..");
+const cliOverride = process.env.ONEHARNESS_UI_TEST_CLI_BIN;
+if (
+  cliOverride !== undefined &&
+  (cliOverride.length === 0 ||
+    cliOverride.length > 4096 ||
+    !isAbsolute(cliOverride) ||
+    !existsSync(cliOverride))
+) {
+  throw new Error("ONEHARNESS_UI_TEST_CLI_BIN must be an existing absolute executable path");
+}
 const historyDir = resolve(repository, ".cache/e2e-history");
 const provider = resolve(
   repository,
-  `.cache/upstream-target/debug/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
-);
-const executable = resolve(
-  repository,
-  `.cache/upstream-target/debug/oneharness${process.platform === "win32" ? ".exe" : ""}`,
+  `target/oneharness-ui-test/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
 );
 const authorization = "oneharness-ui-e2e-authorization-token";
 
+if (cliOverride) process.env.ONEHARNESS_BIN = cliOverride;
 await rm(historyDir, { force: true, recursive: true });
 await mkdir(historyDir, { recursive: true });
-const sdk = new OneHarness({ executable });
+const sdk = new OneHarness();
 
 async function seed({
   exit = 0,
@@ -53,13 +62,12 @@ const tools = await seed({
     '{"type":"result","result":"Tool inspection complete","session_id":"e2e-native-tool","usage":{"input_tokens":0,"output_tokens":5}}',
   ].join("\n"),
 });
-if (!tools.history_file) throw new Error("tool fixture did not write history");
-const toolRecord = JSON.parse(await readFile(tools.history_file, "utf8")) as Record<
-  string,
-  unknown
->;
+const { historyFile: toolsHistoryFile, record: toolRecord } = await readFixtureHistoryRecord(
+  historyDir,
+  tools,
+);
 toolRecord.reasoning = "I checked the command boundary first.";
-await writeFile(tools.history_file, `${JSON.stringify(toolRecord)}\n`);
+await writeFile(toolsHistoryFile, `${JSON.stringify(toolRecord)}\n`);
 
 await seed({
   name: "plain-session",
@@ -80,7 +88,6 @@ await seed({
 });
 
 process.env.ONEHARNESS_UI_HISTORY_DIR = historyDir;
-process.env.ONEHARNESS_BIN = executable;
 process.env.ONEHARNESS_UI_PROVIDER_BIN = provider;
 process.env.ONEHARNESS_UI_PROVIDER_HARNESS = "claude-code";
 process.env.MOCK_EXIT = "0";

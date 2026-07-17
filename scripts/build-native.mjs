@@ -26,11 +26,13 @@ class CommandFailure extends Error {
 function run(command) {
   const result = Bun.spawnSync(command, {
     cwd: root,
-    stderr: "inherit",
+    stderr: "pipe",
     stdin: "inherit",
-    stdout: "inherit",
+    stdout: "pipe",
   });
   if (result.exitCode !== 0) {
+    process.stderr.write(result.stdout);
+    process.stderr.write(result.stderr);
     throw new CommandFailure(result.exitCode);
   }
 }
@@ -124,6 +126,9 @@ if (import.meta.main) {
     main();
   } catch (error) {
     if (error instanceof CommandFailure) {
+      console.error(
+        `native bundle orchestration: child command exited with status ${error.exitCode}; inspect the diagnostic above and rerun just bundle`,
+      );
       process.exit(error.exitCode);
     }
     const detail = error instanceof Error ? error.message : String(error);
