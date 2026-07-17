@@ -34,8 +34,10 @@ EOF
 }
 
 detect_platform() {
-  os="$(uname -s)" || err "could not detect the operating system with uname"
-  arch="$(uname -m)" || err "could not detect the architecture with uname"
+  os="$(uname -s)" \
+    || err "could not detect the operating system; install uname (usually coreutils) and retry"
+  arch="$(uname -m)" \
+    || err "could not detect the architecture; install uname (usually coreutils) and retry"
 
   case "$os" in
     Linux) platform_os="linux" ;;
@@ -102,7 +104,7 @@ latest_tag() {
     | sed -nE 's/.*"tag_name":[[:space:]]*"([^"]+)".*/\1/p' \
     | head -n 1)"
   [ -n "$release_tag" ] \
-    || err "could not parse the latest release tag from the GitHub API response"
+    || err "could not parse the latest release tag; retry or pass --version with a published tag"
   printf '%s\n' "$release_tag"
 }
 
@@ -127,20 +129,20 @@ sha256_of() {
 install_linux() {
   [ -n "$install_dir" ] || install_dir="${HOME:-}/.local/bin"
   [ -n "$install_dir" ] || err "HOME is unset; pass --to with an install directory"
-  mkdir -p "$install_dir" || err "could not create install directory: $install_dir"
+  mkdir -p "$install_dir" \
+    || err "could not create install directory: $install_dir; pass --to with a writable directory"
   destination="${install_dir}/${PROGRAM}"
   if have install; then
     install -m 0755 "$archive_path" "$destination" \
-      || err "could not install the AppImage to $destination"
+      || err "could not install the AppImage to $destination; check directory permissions and retry"
   else
     if ! cp "$archive_path" "$destination" || ! chmod 0755 "$destination"; then
-      err "could not install the AppImage to $destination"
+      err "could not install the AppImage to $destination; check directory permissions and retry"
     fi
   fi
-  say "installed oneharness UI $version to $destination"
   case ":${PATH}:" in
-    *":${install_dir}:"*) ;;
-    *) say "NOTE: add ${install_dir} to PATH to launch with '${PROGRAM}'." ;;
+    *":${install_dir}:"*) say "installed oneharness UI $version to $destination" ;;
+    *) say "installed oneharness UI $version to $destination; add ${install_dir} to PATH to launch with '${PROGRAM}'" ;;
   esac
 }
 
@@ -148,16 +150,21 @@ install_macos() {
   [ -n "$install_dir" ] || install_dir="${HOME:-}/Applications"
   [ -n "$install_dir" ] || err "HOME is unset; pass --to with an application directory"
   mount_path="${temporary}/mount"
-  mkdir -p "$mount_path" || err "could not prepare the temporary DMG mount"
+  mkdir -p "$mount_path" \
+    || err "could not prepare the temporary DMG mount; check TMPDIR permissions and retry"
   hdiutil attach "$archive_path" -nobrowse -readonly -mountpoint "$mount_path" >/dev/null \
-    || err "could not mount $asset"
+    || err "could not mount $asset; verify hdiutil is available and retry the download"
   mounted="1"
   source_app="${mount_path}/oneharness.app"
-  [ -d "$source_app" ] || err "oneharness.app was not present in $asset"
-  mkdir -p "$install_dir" || err "could not create application directory: $install_dir"
+  [ -d "$source_app" ] \
+    || err "oneharness.app was not present in $asset; report the malformed release asset"
+  mkdir -p "$install_dir" \
+    || err "could not create application directory: $install_dir; pass --to with a writable directory"
   destination="${install_dir}/oneharness.app"
-  ditto "$source_app" "$destination" || err "could not install oneharness.app to $install_dir"
-  hdiutil detach "$mount_path" >/dev/null || err "could not detach the temporary DMG mount"
+  ditto "$source_app" "$destination" \
+    || err "could not install oneharness.app to $install_dir; check directory permissions and retry"
+  hdiutil detach "$mount_path" >/dev/null \
+    || err "could not detach the temporary DMG mount; run hdiutil detach '$mount_path' and retry"
   mounted=""
   say "installed oneharness UI $version to $destination"
 }
@@ -169,7 +176,7 @@ install_windows() {
   windows_archive="$archive_path"
   if have cygpath; then
     windows_archive="$(cygpath -w "$archive_path")" \
-      || err "could not translate the MSI path for Windows"
+      || err "could not translate the MSI path; reinstall Git Bash with cygpath and retry"
   fi
   MSYS2_ARG_CONV_EXCL='*' msiexec.exe /i "$windows_archive" /qn /norestart \
     || err "Windows Installer failed for $asset; rerun from an elevated Git Bash or install the MSI manually"
@@ -183,6 +190,34 @@ cleanup() {
   if [ -n "${temporary:-}" ]; then
     rm -rf "$temporary"
   fi
+}
+
+validate_release_base_url() {
+  trusted_url="https://github.com/$REPO/releases/download/${version}"
+  if [ -z "$RELEASE_BASE_URL" ]; then
+    RELEASE_BASE_URL="$trusted_url"
+    return
+  fi
+  if [ "$RELEASE_BASE_URL" = "$trusted_url" ]; then
+    return
+  fi
+  case "$RELEASE_BASE_URL" in
+    file:///*)
+      local_release_directory="${RELEASE_BASE_URL#file://}"
+      case "$local_release_directory" in
+        *'/../'* | *'/..') err "local release directory must be normalized without parent traversal; use an absolute normalized path" ;;
+      esac
+      printf '%s\n' "$local_release_directory" | grep -Eq '^/[A-Za-z0-9_./ -]+$' \
+        || err "local release directory contains unsafe characters; use an absolute normalized path"
+      [ "${#local_release_directory}" -le 4096 ] \
+        || err "local release directory is too long; use a shorter absolute path"
+      [ -d "$local_release_directory" ] \
+        || err "local release directory does not exist: $local_release_directory; build release-like assets and retry"
+      ;;
+    *)
+      err "release base URL must be $trusted_url or a local file:// directory; correct ONEHARNESS_UI_RELEASE_BASE_URL and retry"
+      ;;
+  esac
 }
 
 main() {
@@ -223,7 +258,6 @@ main() {
     else
       err "curl or wget is required to resolve the latest release"
     fi
-    say "resolving the latest oneharness UI release..."
     version="$(latest_tag)"
   fi
   validate_version
@@ -242,10 +276,9 @@ main() {
     err "curl or wget is required to download the release"
   fi
 
-  [ -n "$RELEASE_BASE_URL" ] \
-    || RELEASE_BASE_URL="https://github.com/$REPO/releases/download/${version}"
+  validate_release_base_url
   temporary="$(mktemp -d 2>/dev/null || mktemp -d -t oneharness-ui)" \
-    || err "could not create a temporary directory"
+    || err "could not create a temporary directory; set TMPDIR to a writable location and retry"
   mounted=""
   trap cleanup EXIT
   trap 'exit 129' HUP
@@ -254,21 +287,20 @@ main() {
 
   archive_path="${temporary}/${asset}"
   checksum_path="${archive_path}.sha256"
-  say "downloading $asset ($version)..."
   download "${RELEASE_BASE_URL}/${asset}" "$archive_path" \
-    || err "download failed: ${RELEASE_BASE_URL}/${asset}"
+    || err "download failed: ${RELEASE_BASE_URL}/${asset}; confirm the release and platform asset exist, then retry"
   download "${RELEASE_BASE_URL}/${asset}.sha256" "$checksum_path" \
-    || err "checksum download failed: ${RELEASE_BASE_URL}/${asset}.sha256"
+    || err "checksum download failed: ${RELEASE_BASE_URL}/${asset}.sha256; confirm the companion checksum exists, then retry"
 
-  say "verifying the SHA-256 checksum..."
   expected="$(awk -v name="$asset" '$2 == name { print $1; exit }' "$checksum_path")"
   case "$expected" in
-    '' | *[!0-9A-Fa-f]*) err "invalid checksum file for $asset" ;;
+    '' | *[!0-9A-Fa-f]*) err "invalid checksum file for $asset; report the malformed release asset" ;;
   esac
-  [ "${#expected}" -eq 64 ] || err "invalid checksum file for $asset"
+  [ "${#expected}" -eq 64 ] \
+    || err "invalid checksum file for $asset; report the malformed release asset"
   actual="$(sha256_of "$archive_path")"
   [ "$expected" = "$actual" ] \
-    || err "checksum mismatch for $asset (expected $expected, got $actual); refusing to install"
+    || err "checksum mismatch for $asset (expected $expected, got $actual); refusing to install, retry and report the release if it repeats"
 
   case "$platform_os" in
     linux) install_linux ;;

@@ -111,6 +111,20 @@ describe("release platform selection", () => {
     expect(result.exitCode).toBe(1);
     expect(result.stderr.toString()).toContain("invalid release version");
   });
+
+  test("rejects an untrusted release origin before downloading", () => {
+    const result = runInstaller(
+      ["--version", "v1.2.3"],
+      installerEnvironment("Linux", "aarch64", {
+        ONEHARNESS_UI_RELEASE_BASE_URL: "https://release.invalid/v1.2.3",
+      }),
+    );
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr.toString()).toContain(
+      "release base URL must be https://github.com/nickderobertis/oneharness-ui/releases/download/v1.2.3",
+    );
+    expect(result.stderr.toString()).toContain("correct ONEHARNESS_UI_RELEASE_BASE_URL and retry");
+  });
 });
 
 function writeReleaseFixture(directory: string, asset: string, validChecksum = true) {
@@ -157,7 +171,7 @@ describe.skipIf(process.platform === "win32")("offline installation journey", ()
     const asset = "oneharness-ui-v1.2.3-linux-aarch64.AppImage";
     const contents = writeReleaseFixture(fixture, asset);
     const environment = installerEnvironment("Linux", "aarch64", {
-      ONEHARNESS_UI_RELEASE_BASE_URL: "https://release.invalid/v1.2.3",
+      ONEHARNESS_UI_RELEASE_BASE_URL: `file://${fixture}`,
     });
     addOfflineCurl(environment, fixture);
     const installDirectory = temporaryDirectory("oneharness-ui-install-destination-");
@@ -168,9 +182,8 @@ describe.skipIf(process.platform === "win32")("offline installation journey", ()
     const installed = join(installDirectory, "oneharness-ui");
     expect(readFileSync(installed, "utf8")).toBe(contents);
     expect(statSync(installed).mode & 0o111).not.toBe(0);
-    expect(result.stderr.toString()).toContain("resolving the latest oneharness UI release");
-    expect(result.stderr.toString()).toContain("verifying the SHA-256 checksum");
     expect(result.stderr.toString()).toContain(`installed oneharness UI v1.2.3 to ${installed}`);
+    expect(result.stderr.toString().trim().split("\n")).toHaveLength(1);
   });
 
   test("refuses a corrupted release without replacing the destination", () => {
@@ -178,7 +191,7 @@ describe.skipIf(process.platform === "win32")("offline installation journey", ()
     const asset = "oneharness-ui-v1.2.3-linux-aarch64.AppImage";
     writeReleaseFixture(fixture, asset, false);
     const environment = installerEnvironment("Linux", "aarch64", {
-      ONEHARNESS_UI_RELEASE_BASE_URL: "https://release.invalid/v1.2.3",
+      ONEHARNESS_UI_RELEASE_BASE_URL: `file://${fixture}`,
     });
     addOfflineCurl(environment, fixture);
     const installDirectory = temporaryDirectory("oneharness-ui-install-destination-");
