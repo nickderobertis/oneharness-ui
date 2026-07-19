@@ -78,7 +78,7 @@ export function ConversationList({
     onLoadMore,
   });
   return (
-    <aside className="flex min-h-0 min-w-0 flex-col border-r bg-[#151713] max-[680px]:max-h-[42vh] max-[680px]:border-r-0 max-[680px]:border-b">
+    <aside className="flex min-h-0 min-w-0 flex-col border-r bg-[#151713] max-[680px]:h-[100dvh] max-[680px]:border-r-0">
       <header className="flex min-h-[86px] items-center justify-between border-b px-4.5 py-4">
         <div className="flex items-center gap-3">
           <span className="flex size-9 items-center justify-center rounded-[9px] bg-primary text-primary-foreground">

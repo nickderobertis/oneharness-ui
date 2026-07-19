@@ -24,10 +24,16 @@ if (
   throw new Error("ONEHARNESS_UI_TEST_CLI_BIN must be an existing absolute executable path");
 }
 const historyDir = resolve(repository, ".cache/e2e-history");
-const provider = resolve(
-  repository,
-  `target/oneharness-ui-test/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
-);
+const visualProject = "/tmp/oneharness-ui-visual-project";
+if (process.env.ONEHARNESS_UI_TEST_VISUAL === "true")
+  await mkdir(visualProject, { recursive: true });
+const provider =
+  process.env.ONEHARNESS_UI_TEST_VISUAL === "true"
+    ? resolve(repository, "packages/oneharness-bridge/test/fixtures/visual-provider.sh")
+    : resolve(
+        repository,
+        `target/oneharness-ui-test/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
+      );
 
 if (cliOverride) process.env.ONEHARNESS_BIN = cliOverride;
 await rm(historyDir, { force: true, recursive: true });
@@ -47,7 +53,7 @@ async function seed({
   stderr?: string;
   stdout: string;
 }) {
-  return await sdk.run({
+  const result = await sdk.run({
     bins: { "claude-code": provider },
     env: { MOCK_EXIT: String(exit), MOCK_STDERR: stderr, MOCK_STDOUT: stdout },
     events: true,
@@ -57,7 +63,12 @@ async function seed({
     historyName: name,
     mode: "bypass",
     prompt,
+    ...(process.env.ONEHARNESS_UI_TEST_VISUAL === "true" ? { cwd: visualProject } : {}),
   });
+  if (process.env.ONEHARNESS_UI_TEST_VISUAL === "true") {
+    await Bun.sleep(1_100);
+  }
+  return result;
 }
 
 const tools = await seed({

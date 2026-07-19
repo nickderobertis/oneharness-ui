@@ -60,6 +60,20 @@ test("continues the exact session and selects refreshed history", async ({ page 
   await expect(page.getByRole("main").getByText("Completed", { exact: true })).toBeVisible();
 });
 
+test("keeps conversation navigation usable in a phone-sized viewport", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 800 });
+  await page.goto("/");
+  const history = page.getByRole("navigation", { name: "Conversation history" });
+  await expect(history).toBeVisible();
+  await page.getByRole("button", { name: /markdown-session/i }).click();
+  await expect(history).toBeHidden();
+  await expect(page.getByRole("heading", { name: "markdown-session" })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Continue this session" })).toBeVisible();
+  await page.getByRole("button", { name: "Back to conversations" }).click();
+  await expect(history).toBeVisible();
+  await expect(page).toHaveURL(/\/$/);
+});
+
 test("organizes sessions by project and round-trips local labels", async ({ page }) => {
   await page.goto("/");
   const organize = page.getByRole("combobox", { name: "Organize by" });

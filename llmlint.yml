@@ -26,6 +26,23 @@ agents:
   default:
     batch_size: 4
 rules:
+  - name: changed_behavior_has_e2e
+    override: true
+    description: Realistic end-to-end coverage exists.
+    relevance: the target adds core user-facing behavior
+  - name: least_privilege_grants
+    override: true
+    description: Permissions are limited to runtime needs.
+    files:
+      include:
+        - ".github/workflows/**/*.yml"
+    require_line_attribution: true
+    relevance: permissions exceed audited reusable-workflow requirements
+  - name: work_goes_through_command_surface
+    override: true
+    description: Automation uses the command surface required by its execution environment.
+    require_line_attribution: true
+    relevance: automation bypasses the required command surface
   - name: live_tier_compiles_and_requires_credential
     override: true
     relevance: the target files define a test tier that connects to a credentialed external service

@@ -1,0 +1,22 @@
+[capture]
+arches = ["x86_64"]
+
+[comment]
+title = "Conversation UI visual changes"
+marker = "oneharness-ui-visual-docs"
+embed_limit = 10
+
+[[toggle]]
+key = "viewport"
+label = "Viewport"
+values = ["desktop", "mobile"]
+
+[guard]
+paths = [
+  "apps/conversation-ui/src/**",
+  "apps/conversation-ui/tests/visual/**",
+  "apps/conversation-ui/visual.playwright.config.ts",
+  "packages/oneharness-bridge/test/e2e-server.ts",
+  "capture.sh",
+]
+gallery = "shots/review"

@@ -11,7 +11,7 @@
       "outputs": ["{projectRoot}/out"]
     },
     "test": {
-      "command": "bun test --preload ./apps/conversation-ui/test/setup.ts apps/conversation-ui/src apps/conversation-ui/test --coverage --coverage-dir coverage/conversation-ui",
+      "command": "bun test --preload ./apps/conversation-ui/test/setup.ts --coverage --coverage-dir coverage/conversation-ui apps/conversation-ui/src apps/conversation-ui/test",
       "outputs": ["{workspaceRoot}/coverage/conversation-ui"]
     },
     "e2e": {

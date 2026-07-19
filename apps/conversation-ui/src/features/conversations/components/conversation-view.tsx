@@ -1,6 +1,7 @@
 "use client";
 
 import type { Conversation } from "@oneharness-ui/ipc-contract";
+import { ArrowLeft } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ export function ConversationView({
   loadMoreTurnsError,
   loadingMoreTurns,
   onContinue,
+  onBack,
   onLoadMoreTurns,
   pending,
   totalTurnCount,
@@ -40,6 +42,7 @@ export function ConversationView({
   loadMoreTurnsError: Error | null;
   loadingMoreTurns: boolean;
   onContinue: (message: string) => Promise<void>;
+  onBack: () => void;
   onLoadMoreTurns: () => Promise<unknown>;
   pending: boolean;
   totalTurnCount: number;
@@ -53,15 +56,25 @@ export function ConversationView({
     onLoadMore: onLoadMoreTurns,
   });
   return (
-    <main className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden max-[680px]:min-h-screen">
-      <header className="relative z-2 flex min-h-[86px] items-center justify-between border-b bg-background/90 px-[clamp(24px,5vw,70px)] py-3.5 backdrop-blur max-[680px]:sticky max-[680px]:top-0">
-        <div>
+    <main className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden max-[680px]:h-[100dvh]">
+      <header className="relative z-2 flex min-h-[86px] items-center justify-between gap-3 border-b bg-background/90 px-[clamp(16px,5vw,70px)] py-3.5 backdrop-blur max-[680px]:sticky max-[680px]:top-0">
+        <Button
+          aria-label="Back to conversations"
+          className="hidden shrink-0 max-[680px]:inline-flex"
+          onClick={onBack}
+          size="icon"
+          type="button"
+          variant="ghost"
+        >
+          <ArrowLeft />
+        </Button>
+        <div className="min-w-0 flex-1">
           <p className="m-0 text-[10px] font-bold uppercase tracking-[.13em] text-primary">
             {conversation.harnesses.join(" · ")}
           </p>
           <ConversationTitle key={conversation.id} name={conversation.name} />
           <p
-            className="m-0 max-w-[50vw] truncate font-mono text-[10px] text-subtle"
+            className="m-0 max-w-[50vw] truncate font-mono text-[10px] text-subtle max-[680px]:max-w-full"
             title={conversation.project}
           >
             {conversation.project}
@@ -72,7 +85,7 @@ export function ConversationView({
       <section
         aria-busy={loadingMoreTurns}
         aria-label="Conversation turns"
-        className="min-h-0 overflow-y-auto px-[clamp(24px,7vw,94px)] pb-14 pt-9 max-[680px]:overflow-visible"
+        className="min-h-0 overflow-y-auto px-[clamp(16px,7vw,94px)] pb-14 pt-9"
         ref={infiniteScroll.rootRef}
       >
         <p
@@ -126,7 +139,7 @@ export function ConversationView({
           />
         </div>
       </section>
-      <footer className="bg-gradient-to-b from-transparent via-background to-background px-[clamp(24px,7vw,94px)] pb-6 pt-6 max-[680px]:sticky max-[680px]:bottom-0">
+      <footer className="bg-gradient-to-b from-transparent via-background to-background px-[clamp(16px,7vw,94px)] pb-[max(1rem,env(safe-area-inset-bottom))] pt-6">
         {conversation.canContinue ? (
           <ReplyForm error={continueError} onSubmit={onContinue} pending={pending} />
         ) : (

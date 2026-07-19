@@ -1,5 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "@fontsource-variable/inter";
+@import "@fontsource-variable/jetbrains-mono";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -30,6 +32,8 @@
 }
 
 @theme inline {
+  --font-mono: "JetBrains Mono Variable", monospace;
+  --font-sans: "Inter Variable", sans-serif;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -67,7 +71,7 @@
   }
   body {
     @apply overflow-hidden bg-background text-foreground;
-    font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-family: "Inter Variable", sans-serif;
   }
   button {
     @apply cursor-pointer;
@@ -95,7 +99,7 @@
   }
   .message-markdown code,
   .message-json code {
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: "JetBrains Mono Variable", monospace;
   }
   .message-markdown :not(pre) > code {
     @apply rounded-sm bg-muted px-1.5 py-0.5 text-[#e5f5b7];
@@ -136,11 +140,11 @@
 @media (max-width: 680px) {
   html,
   body {
-    height: auto;
+    height: 100%;
     min-height: 100%;
   }
   body {
-    overflow: visible;
+    overflow: hidden;
   }
 }
 
