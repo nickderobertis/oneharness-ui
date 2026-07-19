@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { labelStoreSchema, labelsFor, setLabels } from "../src/label-store.ts";
 import { readEnvironment } from "../src/environment.ts";
+import { labelStoreSchema, labelsFor, setLabels } from "../src/label-store.ts";
 
 describe("conversation label storage", () => {
   test("uses only validated fallback state directories", async () => {
@@ -15,6 +15,20 @@ describe("conversation label storage", () => {
       expect(() => readEnvironment({ XDG_STATE_HOME: "relative/state" })).toThrow(
         "must be an absolute path",
       );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  test("recovers after the storage target stops being a directory", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "oneharness-label-recovery-"));
+    const path = resolve(root, ".oneharness-ui-labels.json");
+    try {
+      await mkdir(path);
+      await expect(setLabels({ historyDir: root }, "session-1", ["urgent"])).rejects.toThrow();
+      await rm(path, { recursive: true });
+      await setLabels({ historyDir: root }, "session-1", ["urgent"]);
+      expect(await labelsFor({ historyDir: root })).toEqual({ "session-1": ["urgent"] });
     } finally {
       await rm(root, { force: true, recursive: true });
     }

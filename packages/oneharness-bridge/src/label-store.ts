@@ -1,13 +1,17 @@
 import { randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { conversationLabelSchema, sessionIdSchema } from "@oneharness-ui/ipc-contract";
+import {
+  conversationLabelSchema,
+  conversationLabelsSchema,
+  sessionIdSchema,
+} from "@oneharness-ui/ipc-contract";
 import { z } from "zod";
 import type { BridgeEnvironment } from "./environment.ts";
 
 const MAX_STORE_BYTES = 256 * 1024;
 export const labelStoreSchema = z.object({
-  labels: z.record(sessionIdSchema, z.array(conversationLabelSchema).max(20)),
+  labels: z.record(sessionIdSchema, conversationLabelsSchema),
   schemaVersion: z.literal(1),
 });
 type LabelStore = z.infer<typeof labelStoreSchema>;
@@ -23,8 +27,8 @@ async function readStore(path: string): Promise<LabelStore> {
     const stat = await lstat(path);
     if (!stat.isFile() || stat.isSymbolicLink())
       throw new Error("label storage is not a regular file");
+    if (stat.size > MAX_STORE_BYTES) throw new Error("label storage is too large");
     const value = await readFile(path, "utf8");
-    if (Buffer.byteLength(value) > MAX_STORE_BYTES) throw new Error("label storage is too large");
     return labelStoreSchema.parse(JSON.parse(value));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return { labels: {}, schemaVersion: 1 };

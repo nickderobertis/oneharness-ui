@@ -10,6 +10,7 @@ export const sessionIdSchema = z
 const harnessId = z.string().min(1).max(100);
 const startedAt = z.string().max(128);
 export const conversationLabelSchema = z.string().trim().min(1).max(64);
+export const conversationLabelsSchema = z.array(conversationLabelSchema).max(20);
 
 export const conversationCursorSchema = z.object({
   sessionId: sessionIdSchema,
@@ -67,7 +68,7 @@ export const conversationPageSchema = conversationSchema.extend({
 export const conversationSummarySchema = conversationSchema
   .pick({ harnesses: true, id: true, name: true, project: true, startedAt: true })
   .extend({
-    labels: z.array(conversationLabelSchema).max(20),
+    labels: conversationLabelsSchema,
     turnCount: z.number().int().nonnegative(),
   });
 
@@ -85,7 +86,7 @@ export const bridgeRequestSchema = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("set-labels"),
-    labels: z.array(conversationLabelSchema).max(20),
+    labels: conversationLabelsSchema,
     sessionId: sessionIdSchema,
   }),
 ]);
@@ -111,7 +112,7 @@ const successResponseSchema = z.discriminatedUnion("kind", [
   }),
   z.object({
     kind: z.literal("set-labels"),
-    labels: z.array(conversationLabelSchema).max(20),
+    labels: conversationLabelsSchema,
     sessionId: sessionIdSchema,
   }),
 ]);
