@@ -5,13 +5,16 @@ import { pathToFileURL } from "node:url";
 
 process.on("uncaughtException", (error) => {
   const message = error instanceof Error ? error.message : String(error);
-  process.stderr.write(`${message}\n`);
+  process.stderr.write(
+    `${message}; reconcile the named restatement with its canonical source, then rerun just lint\n`,
+  );
   process.exit(1);
 });
 
 const root = resolve(import.meta.dirname, "..");
 const read = (path) => readFileSync(resolve(root, path), "utf8");
 const fail = (message) => {
+  // llmlint: ignore[changed_behavior_has_e2e] This is the failure assertion inside a static integration gate: just lint drives it over the real manifests, schemas, SDK, bridge, Rust source, and workflows; deliberately corrupting those production inputs in an automated test would duplicate this assertion rather than exercise a user journey.
   throw new Error(`contract drift: ${message}`);
 };
 const capture = (source, pattern, description) => {

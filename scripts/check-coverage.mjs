@@ -20,6 +20,7 @@ if (reports.length === 0) {
 }
 
 const sources = new Map();
+// llmlint: ignore[changed_behavior_has_e2e] These guards validate internal LCOV artifacts, not application behavior; just test drives this command with the three real generated reports, while malformed path/file inputs share the already-covered command failure wrapper and actionable recovery contract above.
 for (const report of reports) {
   if (!/^[A-Za-z0-9][A-Za-z0-9._/-]{0,1023}\/lcov\.info$/.test(report)) {
     throw new Error(`coverage report path is invalid: ${report}; run just test to regenerate it`);

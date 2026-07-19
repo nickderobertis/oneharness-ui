@@ -47,7 +47,7 @@ async function seed({
   stderr?: string;
   stdout: string;
 }) {
-  return await sdk.run({
+  const report = await sdk.run({
     bins: { "claude-code": provider },
     env: { MOCK_EXIT: String(exit), MOCK_STDERR: stderr, MOCK_STDOUT: stdout },
     events: true,
@@ -58,6 +58,10 @@ async function seed({
     mode: "bypass",
     prompt,
   });
+  const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
+  record.project = ".";
+  await writeFile(historyFile, `${JSON.stringify(record)}\n`);
+  return report;
 }
 
 const tools = await seed({
