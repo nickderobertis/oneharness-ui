@@ -2,10 +2,17 @@ import { existsSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { OneHarness } from "@oneharness/sdk";
-import { startServer } from "../src/server.ts";
+import { z } from "zod";
+import { startWebServer } from "../src/server.ts";
+import { e2eWebPort } from "./e2e-configuration.ts";
 import { readFixtureHistoryRecord } from "./history-fixture.ts";
 
 const repository = resolve(import.meta.dir, "../../..");
+const webAccessToken = z
+  .string()
+  .min(32)
+  .max(256)
+  .parse(process.env.ONEHARNESS_UI_TEST_WEB_ACCESS_TOKEN);
 const cliOverride = process.env.ONEHARNESS_UI_TEST_CLI_BIN;
 if (
   cliOverride !== undefined &&
@@ -21,7 +28,6 @@ const provider = resolve(
   repository,
   `target/oneharness-ui-test/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
 );
-const authorization = "oneharness-ui-e2e-authorization-token";
 
 if (cliOverride) process.env.ONEHARNESS_BIN = cliOverride;
 await rm(historyDir, { force: true, recursive: true });
@@ -110,4 +116,8 @@ process.env.MOCK_EXIT = "0";
 process.env.MOCK_STDERR = "";
 process.env.MOCK_STDOUT =
   '{"result":"Continued from the exact desktop session","session_id":"e2e-native-continued"}';
-startServer(4317, authorization);
+await startWebServer({
+  accessToken: webAccessToken,
+  port: e2eWebPort,
+  staticDirectory: resolve(repository, "apps/conversation-ui/out"),
+});

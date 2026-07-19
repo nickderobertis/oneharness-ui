@@ -24,13 +24,17 @@ one newline-delimited request, then invokes processes with argv arrays and
 `shell: false`. It returns normalized, sanitized errors and does not log
 prompts, answers, reasoning, or environment values.
 
-Production uses that process-local, scoped sidecar transport. The loopback HTTP
-adapter exists only for browser development and end-to-end testing: it accepts
-only an explicit loopback UI origin, establishes its server-held capability in
-a short-lived `HttpOnly`/`SameSite=Strict` cookie, checks that capability again
-at the service layer, and bounds the bytes read from the request stream. No
-bridge secret is present in browser JavaScript. Release builds do not configure
-this adapter.
+Desktop production uses that process-local, scoped sidecar transport. Browser
+development and web mode use HTTP adapters backed by the same `BridgeService`.
+Web mode serves the static export and bridge routes from one origin, binds only
+to loopback unless the operator explicitly selects a private LAN address, and
+rejects missing, non-private, or cross-origin browser mutation requests. Its
+ephemeral HTTP access token gates both UI and bridge routes, while its separate
+bridge capability remains only in server memory. The development
+adapter establishes its capability in a short-lived
+`HttpOnly`/`SameSite=Strict` cookie and checks it again at the service layer.
+Both adapters bound the bytes read from the request stream; no bridge secret is
+present in browser JavaScript.
 
 The bridge first uses an explicit `ONEHARNESS_BIN`, then the SDK's packaged CLI
 binary bundled beside it, then the SDK's package-resolved CLI. Config/history

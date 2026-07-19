@@ -1,4 +1,14 @@
+import { randomBytes } from "node:crypto";
 import { defineConfig, devices } from "@playwright/test";
+import { z } from "zod";
+import { e2eWebOrigin } from "../../packages/oneharness-bridge/test/e2e-configuration";
+
+const webAccessToken = z
+  .string()
+  .min(32)
+  .max(256)
+  .parse(process.env.ONEHARNESS_UI_TEST_WEB_ACCESS_TOKEN ?? randomBytes(24).toString("base64url"));
+process.env.ONEHARNESS_UI_TEST_WEB_ACCESS_TOKEN = webAccessToken;
 
 export default defineConfig({
   expect: { timeout: 5_000 },
@@ -10,7 +20,10 @@ export default defineConfig({
   testMatch: "**/*.e2e.ts",
   timeout: 30_000,
   use: {
-    baseURL: "http://127.0.0.1:3000",
+    baseURL: e2eWebOrigin,
+    extraHTTPHeaders: {
+      Authorization: `Basic ${Buffer.from(`oneharness:${webAccessToken}`).toString("base64")}`,
+    },
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
@@ -18,18 +31,10 @@ export default defineConfig({
     {
       command: "bun packages/oneharness-bridge/test/e2e-server.ts",
       cwd: "../..",
-      url: "http://127.0.0.1:4317/health",
+      env: { ONEHARNESS_UI_TEST_WEB_ACCESS_TOKEN: webAccessToken },
+      url: `${e2eWebOrigin}/health`,
       reuseExistingServer: false,
       timeout: 120_000,
-    },
-    {
-      command:
-        "bun run --cwd apps/conversation-ui build && bun apps/conversation-ui/tests/e2e/static-server.ts",
-      cwd: "../..",
-      env: { NEXT_PUBLIC_ONEHARNESS_BRIDGE_URL: "http://127.0.0.1:4317" },
-      port: 3000,
-      reuseExistingServer: false,
-      timeout: 180_000,
     },
   ],
   workers: 1,
