@@ -51,21 +51,21 @@ function Workspace() {
     <div className="grid h-full min-h-0 grid-cols-[330px_minmax(0,1fr)] overflow-hidden max-[820px]:grid-cols-[260px_minmax(0,1fr)] max-[680px]:min-h-[100dvh] max-[680px]:grid-cols-1">
       <div className={selectedId ? "contents max-[680px]:hidden" : "contents"}>
         <ConversationList
-        conversations={conversations}
-        hasMore={list.hasNextPage}
-        loadMoreError={list.isFetchNextPageError ? list.error : null}
-        loadingMore={list.isFetchingNextPage}
-        onLoadMore={list.fetchNextPage}
-        onRefresh={() => void list.refresh()}
-        onSetLabels={async (sessionId, nextLabels) => {
-          await labels.mutateAsync({ labels: nextLabels, sessionId });
-        }}
-        onSelect={select}
-        refreshing={list.isFetching}
-        selectedId={selectedId}
-        totalCount={list.data?.totalCount ?? 0}
-        labelError={labels.error}
-        labeling={labels.isPending}
+          conversations={conversations}
+          hasMore={list.hasNextPage}
+          loadMoreError={list.isFetchNextPageError ? list.error : null}
+          loadingMore={list.isFetchingNextPage}
+          onLoadMore={list.fetchNextPage}
+          onRefresh={() => void list.refresh()}
+          onSetLabels={async (sessionId, nextLabels) => {
+            await labels.mutateAsync({ labels: nextLabels, sessionId });
+          }}
+          onSelect={select}
+          refreshing={list.isFetching}
+          selectedId={selectedId}
+          totalCount={list.data?.totalCount ?? 0}
+          labelError={labels.error}
+          labeling={labels.isPending}
         />
       </div>
       {!selectedId ? (
