@@ -172,6 +172,12 @@ describe("ConversationShell", () => {
     render(<ConversationShell />);
 
     const organize = await screen.findByRole("combobox", { name: "Organize by" });
+    await user.selectOptions(organize, "label");
+    expect(screen.getByRole("heading", { name: "Unlabeled" })).toBeTruthy();
+    await user.selectOptions(screen.getByRole("combobox", { name: "Filter label" }), "Unlabeled");
+    expect(screen.getByRole("button", { name: "Open conversation inspect-login" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Open conversation ship-api" })).toBeNull();
+
     await user.selectOptions(organize, "project");
     expect(screen.getByRole("heading", { name: "/workspace/product" })).toBeTruthy();
     await user.selectOptions(

@@ -1,13 +1,13 @@
 import { randomUUID } from "node:crypto";
 import { lstat, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
+import { conversationLabelSchema, sessionIdSchema } from "@oneharness-ui/ipc-contract";
 import { z } from "zod";
 import type { BridgeEnvironment } from "./environment.ts";
 
 const MAX_STORE_BYTES = 256 * 1024;
-const labelSchema = z.string().trim().min(1).max(64);
 export const labelStoreSchema = z.object({
-  labels: z.record(z.string().min(1).max(240), z.array(labelSchema).max(20)),
+  labels: z.record(sessionIdSchema, z.array(conversationLabelSchema).max(20)),
   schemaVersion: z.literal(1),
 });
 type LabelStore = z.infer<typeof labelStoreSchema>;
@@ -46,8 +46,8 @@ export async function setLabels(
   sessionId: string,
   input: string[],
 ): Promise<string[]> {
-  const labels = [...new Set(input.map((label) => labelSchema.parse(label)))].sort((a, b) =>
-    a.localeCompare(b),
+  const labels = [...new Set(input.map((label) => conversationLabelSchema.parse(label)))].sort(
+    (a, b) => a.localeCompare(b),
   );
   const path = storePath(environment);
   const store = await readStore(path);

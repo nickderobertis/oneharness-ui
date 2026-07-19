@@ -135,6 +135,11 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       error: { code: "UNAUTHORIZED", message: "Local bridge authorization failed." },
       ok: false,
     });
+    const labelResult = await service().handle(
+      { kind: "set-labels", labels: ["private"], sessionId: "session-1" },
+      "incorrect-authorization-value-0000",
+    );
+    expect(labelResult).toEqual(result);
   });
 
   test("rejects invalid bridge input before touching history", async () => {

@@ -1,9 +1,10 @@
 import type { ConversationSummary } from "@oneharness-ui/ipc-contract";
-import { useMemo, useState } from "react";
 import { RefreshIcon, TerminalIcon } from "@/components/ui/icons";
+import {
+  type ConversationGrouping,
+  useConversationOrganization,
+} from "../hooks/use-conversation-organization";
 import { useInfiniteScroll } from "../hooks/use-infinite-scroll";
-
-type Grouping = "none" | "label" | "project";
 
 export function ConversationList({
   conversations,
@@ -34,39 +35,18 @@ export function ConversationList({
   selectedId: string | null;
   totalCount: number;
 }) {
-  const [grouping, setGrouping] = useState<Grouping>("none");
-  const [filter, setFilter] = useState("all");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [labelInput, setLabelInput] = useState("");
-  const choices = useMemo(() => {
-    const values = new Set<string>();
-    for (const conversation of conversations) {
-      if (grouping === "project") values.add(conversation.project || "Project not recorded");
-      if (grouping === "label") {
-        for (const label of conversation.labels) values.add(label);
-        if (conversation.labels.length === 0) values.add("Unlabeled");
-      }
-    }
-    return [...values].sort((a, b) => a.localeCompare(b));
-  }, [conversations, grouping]);
-  const grouped = useMemo(() => {
-    const result = new Map<string, ConversationSummary[]>();
-    for (const conversation of conversations) {
-      const groups =
-        grouping === "project"
-          ? [conversation.project || "Project not recorded"]
-          : grouping === "label"
-            ? conversation.labels.length > 0
-              ? conversation.labels
-              : ["Unlabeled"]
-            : ["History"];
-      for (const group of groups) {
-        if (filter !== "all" && group !== filter) continue;
-        result.set(group, [...(result.get(group) ?? []), conversation]);
-      }
-    }
-    return result;
-  }, [conversations, filter, grouping]);
+  const {
+    choices,
+    editingId,
+    filter,
+    grouped,
+    grouping,
+    labelInput,
+    setEditingId,
+    setFilter,
+    setGrouping,
+    setLabelInput,
+  } = useConversationOrganization(conversations);
   const infiniteScroll = useInfiniteScroll({
     automatic: loadMoreError === null,
     hasMore,
@@ -107,7 +87,7 @@ export function ConversationList({
           <select
             id="group-conversations"
             onChange={(event) => {
-              setGrouping(event.target.value as Grouping);
+              setGrouping(event.target.value as ConversationGrouping);
               setFilter("all");
             }}
             value={grouping}
