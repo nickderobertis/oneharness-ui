@@ -1,11 +1,50 @@
-import { bridgeResponseSchema } from "@oneharness-ui/ipc-contract";
+import { randomBytes, timingSafeEqual } from "node:crypto";
+import { realpath, stat } from "node:fs/promises";
+import { extname, isAbsolute, relative, resolve, sep } from "node:path";
+import { bridgeResponseSchema, bridgeRoutes } from "@oneharness-ui/ipc-contract";
+import { z } from "zod";
 import { readEnvironment } from "./environment.ts";
 import { authorizationSchema, BridgeService } from "./service.ts";
 
 const MAX_REQUEST_BYTES = 64 * 1024;
 const MAX_COOKIE_BYTES = 4096;
+const MAX_AUTHORIZATION_HEADER_BYTES = 1024;
 const SESSION_COOKIE = "oneharness_ui_capability";
 const DEFAULT_UI_ORIGIN = "http://127.0.0.1:3000";
+export const WEB_DEFAULT_PORT = 4173;
+export const webHostnameSchema = z.union([
+  z.literal("127.0.0.1"),
+  z
+    .ipv4()
+    .refine(
+      (value) =>
+        value.startsWith("10.") ||
+        value.startsWith("192.168.") ||
+        /^172\.(1[6-9]|2\d|3[01])\./.test(value),
+      "host must be loopback or a private LAN IPv4 address",
+    ),
+]);
+const SECURITY_HEADERS = {
+  "Content-Security-Policy":
+    "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
+  "Cross-Origin-Opener-Policy": "same-origin",
+  "Referrer-Policy": "no-referrer",
+  "X-Content-Type-Options": "nosniff",
+  "X-Frame-Options": "DENY",
+} as const;
+
+const CONTENT_TYPES: Readonly<Record<string, string>> = {
+  ".css": "text/css; charset=utf-8",
+  ".html": "text/html; charset=utf-8",
+  ".ico": "image/x-icon",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".txt": "text/plain; charset=utf-8",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+};
 
 class RequestTooLargeError extends Error {}
 
@@ -132,6 +171,144 @@ export function startServer(
         await service.handle(input, presentedAuthorization),
       );
       return Response.json(response, { headers });
+    },
+  });
+}
+
+function isPermittedWebOrigin(request: Request): boolean {
+  const origin = request.headers.get("origin");
+  if (origin === null) return false;
+  try {
+    const requestUrl = new URL(request.url);
+    const originUrl = new URL(origin);
+    return (
+      originUrl.protocol === "http:" &&
+      webHostnameSchema.safeParse(originUrl.hostname).success &&
+      originUrl.origin === requestUrl.origin
+    );
+  } catch {
+    return false;
+  }
+}
+
+function hasWebAccess(request: Request, expectedToken: string): boolean {
+  const header = request.headers.get("authorization");
+  if (!header || Buffer.byteLength(header) > MAX_AUTHORIZATION_HEADER_BYTES) return false;
+  const prefix = "Basic ";
+  if (!header.startsWith(prefix)) return false;
+  try {
+    const decoded = Buffer.from(header.slice(prefix.length), "base64").toString("utf8");
+    const separator = decoded.indexOf(":");
+    if (separator < 0 || decoded.slice(0, separator) !== "oneharness") return false;
+    const presented = Buffer.from(decoded.slice(separator + 1));
+    const expected = Buffer.from(expectedToken);
+    return presented.length === expected.length && timingSafeEqual(presented, expected);
+  } catch {
+    return false;
+  }
+}
+
+async function staticResponse(root: string, pathname: string): Promise<Response> {
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return new Response("Bad request", { status: 400 });
+  }
+  if (decoded.includes("\0") || decoded.includes("\\")) {
+    return new Response("Bad request", { status: 400 });
+  }
+  const requested = decoded.endsWith("/") ? `${decoded}index.html` : decoded;
+  const candidate = resolve(root, `.${requested}`);
+  const local = relative(root, candidate);
+  if (local === ".." || local.startsWith(`..${sep}`) || isAbsolute(local)) {
+    return new Response("Not found", { status: 404 });
+  }
+  try {
+    const [canonical, metadata] = await Promise.all([realpath(candidate), stat(candidate)]);
+    const canonicalLocal = relative(root, canonical);
+    if (
+      !metadata.isFile() ||
+      canonicalLocal === ".." ||
+      canonicalLocal.startsWith(`..${sep}`) ||
+      isAbsolute(canonicalLocal)
+    ) {
+      return new Response("Not found", { status: 404 });
+    }
+    return new Response(Bun.file(canonical), {
+      headers: {
+        ...SECURITY_HEADERS,
+        "Content-Type":
+          CONTENT_TYPES[extname(canonical).toLowerCase()] ?? "application/octet-stream",
+      },
+    });
+  } catch {
+    return new Response("Not found", { status: 404 });
+  }
+}
+
+export async function startWebServer({
+  accessToken,
+  hostname = "127.0.0.1",
+  port,
+  staticDirectory,
+}: {
+  accessToken: string;
+  hostname?: string;
+  port: number;
+  staticDirectory: string;
+}): Promise<ReturnType<typeof Bun.serve>> {
+  const authorization = authorizationSchema.parse(randomBytes(32).toString("base64url"));
+  const expectedAccessToken = authorizationSchema.parse(accessToken);
+  const root = await realpath(staticDirectory);
+  if (!(await stat(root)).isDirectory()) throw new Error("web UI path must be a directory");
+  const service = new BridgeService(readEnvironment(), authorization);
+  return Bun.serve({
+    hostname,
+    port,
+    async fetch(request) {
+      const url = new URL(request.url);
+      const jsonHeaders = { ...SECURITY_HEADERS, "Content-Type": "application/json" };
+      if (request.method === "GET" && url.pathname === bridgeRoutes.health) {
+        return Response.json({ status: "ok" }, { headers: jsonHeaders });
+      }
+      if (!hasWebAccess(request, expectedAccessToken)) {
+        return new Response("Authentication required", {
+          headers: { ...SECURITY_HEADERS, "WWW-Authenticate": 'Basic realm="oneharness UI"' },
+          status: 401,
+        });
+      }
+      if (url.pathname === bridgeRoutes.invoke) {
+        if (request.method !== "POST") {
+          return Response.json(
+            { error: "Method not allowed" },
+            { headers: jsonHeaders, status: 405 },
+          );
+        }
+        if (!isPermittedWebOrigin(request)) {
+          return Response.json(
+            { error: "Forbidden origin" },
+            { headers: jsonHeaders, status: 403 },
+          );
+        }
+        let input: unknown;
+        try {
+          input = await readBoundedJson(request);
+        } catch (error) {
+          const status = error instanceof RequestTooLargeError ? 413 : 400;
+          const message = status === 413 ? "Request too large" : "Malformed JSON";
+          return Response.json({ error: message }, { headers: jsonHeaders, status });
+        }
+        const response = bridgeResponseSchema.parse(await service.handle(input, authorization));
+        return Response.json(response, { headers: jsonHeaders });
+      }
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        return new Response("Method not allowed", { headers: SECURITY_HEADERS, status: 405 });
+      }
+      const response = await staticResponse(root, url.pathname);
+      return request.method === "HEAD"
+        ? new Response(null, { headers: response.headers, status: response.status })
+        : response;
     },
   });
 }

@@ -5,8 +5,9 @@ history. Browse recorded sessions, inspect normalized tool activity and optional
 reasoning, distinguish run outcomes and unreported usage, and continue an
 eligible conversation through its exact native harness session.
 
-The app never sends history to a service and never renders session content as
-HTML. The Next.js interface is statically exported into a Tauri v2 webview.
+The app never sends history to a remote service and never renders session
+content as HTML. The Next.js interface is statically exported into a Tauri v2
+webview or served by an operator-run local HTTP server.
 
 ## Architecture
 
@@ -94,6 +95,34 @@ Start the desktop app during development:
 ```console
 just dev
 ```
+
+To use the same UI in a browser on this computer, start the web version. It
+binds only to loopback by default:
+
+```console
+just serve
+```
+
+Then open `http://127.0.0.1:4173`. To opt in to LAN exposure, bind the
+computer's private IPv4 address, for example:
+
+```console
+ONEHARNESS_UI_HOST=192.168.1.20 just serve
+```
+
+Find the computer's private LAN address and open `http://<private-ip>:4173` on
+the phone or tablet. `ONEHARNESS_UI_PORT` selects another unprivileged port.
+LAN binding exposes conversation history and continuation to devices that can
+reach that address and port, so use it only on a trusted local network, keep the
+host firewall enabled, and stop the process when finished. Do not port-forward
+or otherwise publish it to the internet. History remains on the operator's
+computer; the browser reaches oneharness only through the same size-limited,
+schema-validated bridge service used by the desktop IPC path.
+
+The server prints a fresh `oneharness` browser login each time it starts. Enter
+that username and token in the browser's authentication prompt. Anyone who can
+reach the address and obtain that token can use the UI for the lifetime of the
+server; the separate bridge authorization remains only in server memory.
 
 Run the focused browser journey with `just test-e2e`. On Linux or Windows, run
 the additional packaged Tauri journey with `just test-desktop-e2e`; it builds

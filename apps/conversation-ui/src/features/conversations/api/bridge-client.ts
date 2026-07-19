@@ -3,6 +3,7 @@ import {
   type BridgeResponse,
   bridgeRequestSchema,
   bridgeResponseSchema,
+  bridgeRoutes,
 } from "@oneharness-ui/ipc-contract";
 import { z } from "zod";
 
@@ -15,8 +16,13 @@ declare global {
 const httpConfigurationSchema = z.object({
   url: z
     .string()
-    .url()
+    .optional()
     .transform((value, context) => {
+      if (value === undefined || value === "") return "";
+      if (!URL.canParse(value)) {
+        context.addIssue({ code: "custom", message: "Bridge URL must be a URL" });
+        return z.NEVER;
+      }
       const url = new URL(value);
       if (
         url.protocol !== "http:" ||
@@ -47,11 +53,13 @@ async function invokeTauri(request: BridgeRequest): Promise<unknown> {
 
 async function invokeHttp(request: BridgeRequest): Promise<unknown> {
   const configuration = httpConfiguration();
-  const session = await fetch(`${configuration.url}/session`, {
-    credentials: "include",
-  });
-  if (!session.ok) throw new Error(`Local bridge session returned HTTP ${session.status}`);
-  const response = await fetch(`${configuration.url}/invoke`, {
+  if (configuration.url !== "") {
+    const session = await fetch(`${configuration.url}${bridgeRoutes.session}`, {
+      credentials: "include",
+    });
+    if (!session.ok) throw new Error(`Local bridge session returned HTTP ${session.status}`);
+  }
+  const response = await fetch(`${configuration.url}${bridgeRoutes.invoke}`, {
     body: JSON.stringify(request),
     credentials: "include",
     headers: {

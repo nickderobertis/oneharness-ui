@@ -1,8 +1,9 @@
 #!/usr/bin/env bun
-import { randomUUID } from "node:crypto";
+import { randomBytes, randomUUID } from "node:crypto";
+import { resolve } from "node:path";
 import { bridgeResponseSchema } from "@oneharness-ui/ipc-contract";
 import { readEnvironment } from "./environment.ts";
-import { startServer } from "./server.ts";
+import { startServer, startWebServer, WEB_DEFAULT_PORT, webHostnameSchema } from "./server.ts";
 import { BridgeService } from "./service.ts";
 
 const MAX_REQUEST_BYTES = 64 * 1024;
@@ -29,6 +30,23 @@ async function readRequestLine(): Promise<string> {
 }
 
 async function main(): Promise<void> {
+  if (process.argv[2] === "web") {
+    const accessToken = randomBytes(24).toString("base64url");
+    const port = Number(process.env.ONEHARNESS_UI_PORT ?? String(WEB_DEFAULT_PORT));
+    if (!Number.isSafeInteger(port) || port < 1024 || port > 65_535) {
+      throw new Error("ONEHARNESS_UI_PORT must be an unprivileged TCP port");
+    }
+    const hostname = webHostnameSchema.parse(process.env.ONEHARNESS_UI_HOST ?? "127.0.0.1");
+    await startWebServer({
+      accessToken,
+      hostname,
+      port,
+      staticDirectory: resolve(process.cwd(), "apps/conversation-ui/out"),
+    });
+    process.stdout.write(`oneharness UI listening on http://${hostname}:${port}\n`);
+    process.stdout.write(`browser login: oneharness / ${accessToken}\n`);
+    return;
+  }
   if (process.argv[2] === "serve") {
     const environment = readEnvironment();
     const port = Number(process.env.ONEHARNESS_UI_BRIDGE_PORT ?? "4317");
