@@ -14,7 +14,7 @@ dev:
 # Loopback is the safe default. Set ONEHARNESS_UI_HOST explicitly to expose the server on a private LAN.
 serve:
     @./scripts/run-quiet.sh "web UI build" "Fix the reported static export error, then rerun 'just serve'." -- bun run --cwd apps/conversation-ui build
-    @bun packages/oneharness-bridge/src/cli.ts web || { status=$?; echo "web server: failed. Choose an available port and a loopback or private LAN IPv4 bind address, then rerun 'just serve'." >&2; exit "$status"; }
+    @bun packages/oneharness-bridge/src/cli.ts web || { status=$?; echo "web server: the exact startup error is printed above. Choose an available port and a loopback or private LAN IPv4 bind address, then rerun 'just serve'." >&2; exit "$status"; }
 
 check:
     @ONEHARNESS_QUIET=1 just format-check

@@ -26,7 +26,6 @@ const provider =
     repository,
     `target/oneharness-ui-test/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
   );
-const authorization = "oneharness-ui-web-integration-authorization";
 let fixtureRoot = "";
 let server: ReturnType<typeof Bun.serve> | undefined;
 const originalHistoryDir = process.env.ONEHARNESS_UI_HISTORY_DIR;
@@ -56,12 +55,6 @@ function endpoint(): string {
   return `http://127.0.0.1:${server.port}`;
 }
 
-async function cookie(): Promise<string> {
-  const response = await fetch(`${endpoint()}/session`);
-  expect(response.status).toBe(204);
-  return response.headers.get("set-cookie")?.split(";", 1)[0] ?? "";
-}
-
 describe("web UI over the real HTTP, SDK, CLI, provider, and history boundary", () => {
   test("serves the UI and lists SDK-validated history over the same origin", async () => {
     const historyDir = resolve(fixtureRoot, "history");
@@ -83,7 +76,6 @@ describe("web UI over the real HTTP, SDK, CLI, provider, and history boundary", 
     process.env.ONEHARNESS_UI_HISTORY_DIR = historyDir;
     if (cliOverride) process.env.ONEHARNESS_BIN = cliOverride;
     server = await startWebServer({
-      authorization,
       port: 0,
       staticDirectory: resolve(fixtureRoot, "ui"),
     });
@@ -94,7 +86,7 @@ describe("web UI over the real HTTP, SDK, CLI, provider, and history boundary", 
     expect(page.headers.get("content-security-policy")).toContain("connect-src 'self'");
     const response = await fetch(`${endpoint()}/invoke`, {
       body: JSON.stringify({ kind: "list" }),
-      headers: { "Content-Type": "application/json", Cookie: await cookie() },
+      headers: { "Content-Type": "application/json", Origin: endpoint() },
       method: "POST",
     });
     expect(response.status).toBe(200);
@@ -106,33 +98,26 @@ describe("web UI over the real HTTP, SDK, CLI, provider, and history boundary", 
 
   test("rejects cross-origin and invalid contract input", async () => {
     server = await startWebServer({
-      authorization,
       port: 0,
       staticDirectory: resolve(fixtureRoot, "ui"),
     });
     const health = await fetch(`${endpoint()}/health`);
     expect(await health.json()).toEqual({ status: "ok" });
-    const unauthorized = await fetch(`${endpoint()}/invoke`, {
+    const missingOrigin = await fetch(`${endpoint()}/invoke`, {
       body: JSON.stringify({ kind: "list" }),
       method: "POST",
     });
-    expect(unauthorized.status).toBe(401);
-    const sessionCookie = await cookie();
+    expect(missingOrigin.status).toBe(403);
     const crossOrigin = await fetch(`${endpoint()}/invoke`, {
       body: JSON.stringify({ kind: "list" }),
-      headers: { Cookie: sessionCookie, Origin: "https://attacker.example" },
+      headers: { Origin: "https://attacker.example" },
       method: "POST",
     });
     expect(crossOrigin.status).toBe(403);
-    const crossSiteSession = await fetch(`${endpoint()}/session`, {
-      headers: { "Sec-Fetch-Site": "cross-site" },
-    });
-    expect(crossSiteSession.status).toBe(403);
-    expect(crossSiteSession.headers.get("set-cookie")).toBeNull();
 
     const invalid = await fetch(`${endpoint()}/invoke`, {
       body: JSON.stringify({ kind: "continue", message: "", sessionId: "session" }),
-      headers: { "Content-Type": "application/json", Cookie: sessionCookie },
+      headers: { "Content-Type": "application/json", Origin: endpoint() },
       method: "POST",
     });
     expect(invalid.status).toBe(200);
@@ -144,13 +129,13 @@ describe("web UI over the real HTTP, SDK, CLI, provider, and history boundary", 
     expect(wrongMethod.status).toBe(405);
     const malformed = await fetch(`${endpoint()}/invoke`, {
       body: "{",
-      headers: { Cookie: sessionCookie },
+      headers: { Origin: endpoint() },
       method: "POST",
     });
     expect(malformed.status).toBe(400);
     const oversized = await fetch(`${endpoint()}/invoke`, {
       body: JSON.stringify({ message: "x".repeat(70_000) }),
-      headers: { Cookie: sessionCookie },
+      headers: { Origin: endpoint() },
       method: "POST",
     });
     expect(oversized.status).toBe(413);
@@ -159,5 +144,9 @@ describe("web UI over the real HTTP, SDK, CLI, provider, and history boundary", 
     expect(await head.text()).toBe("");
     const staticPost = await fetch(`${endpoint()}/`, { method: "POST" });
     expect(staticPost.status).toBe(405);
+    expect((await fetch(`${endpoint()}/missing`)).status).toBe(404);
+    expect((await fetch(`${endpoint()}/%ZZ`)).status).toBe(400);
+    expect((await fetch(`${endpoint()}/%5Csecret`)).status).toBe(400);
+    expect((await fetch(`${endpoint()}/%2e%2e%2fsecret`)).status).toBe(404);
   });
 });

@@ -58,7 +58,6 @@ describe("validated bridge client", () => {
     const requests: string[] = [];
     globalThis.fetch = (async (input) => {
       requests.push(String(input));
-      if (String(input) === "/session") return new Response(null, { status: 204 });
       return Response.json({
         data: { conversations: [], kind: "list", nextCursor: null, totalCount: 0 },
         ok: true,
@@ -66,7 +65,7 @@ describe("validated bridge client", () => {
     }) as typeof fetch;
 
     await invokeBridge({ kind: "list" });
-    expect(requests).toEqual(["/session", "/invoke"]);
+    expect(requests).toEqual(["/invoke"]);
   });
 
   test("uses only the fixed Tauri bridge command", async () => {

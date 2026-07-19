@@ -18,18 +18,9 @@ export default defineConfig({
     {
       command: "bun packages/oneharness-bridge/test/e2e-server.ts",
       cwd: "../..",
-      url: "http://127.0.0.1:4317/health",
+      url: "http://127.0.0.1:3000/health",
       reuseExistingServer: false,
       timeout: 120_000,
-    },
-    {
-      command:
-        "bun run --cwd apps/conversation-ui build && bun apps/conversation-ui/tests/e2e/static-server.ts",
-      cwd: "../..",
-      env: { NEXT_PUBLIC_ONEHARNESS_BRIDGE_URL: "http://127.0.0.1:4317" },
-      port: 3000,
-      reuseExistingServer: false,
-      timeout: 180_000,
     },
   ],
   workers: 1,

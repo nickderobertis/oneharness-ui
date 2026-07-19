@@ -1,3 +1,4 @@
+import { randomBytes } from "node:crypto";
 import { realpath, stat } from "node:fs/promises";
 import { extname, isAbsolute, relative, resolve, sep } from "node:path";
 import { bridgeResponseSchema, bridgeRoutes } from "@oneharness-ui/ipc-contract";
@@ -160,9 +161,9 @@ export function startServer(
   });
 }
 
-function sameOrigin(request: Request): boolean {
+function isPermittedWebOrigin(request: Request): boolean {
   const origin = request.headers.get("origin");
-  if (origin === null) return request.headers.get("sec-fetch-site") !== "cross-site";
+  if (origin === null) return false;
   try {
     const requestUrl = new URL(request.url);
     const originUrl = new URL(origin);
@@ -220,17 +221,15 @@ async function staticResponse(root: string, pathname: string): Promise<Response>
 }
 
 export async function startWebServer({
-  authorization: expectedAuthorization,
   hostname = "127.0.0.1",
   port,
   staticDirectory,
 }: {
-  authorization: string;
   hostname?: string;
   port: number;
   staticDirectory: string;
 }): Promise<ReturnType<typeof Bun.serve>> {
-  const authorization = authorizationSchema.parse(expectedAuthorization);
+  const authorization = authorizationSchema.parse(randomBytes(32).toString("base64url"));
   const root = await realpath(staticDirectory);
   if (!(await stat(root)).isDirectory()) throw new Error("web UI path must be a directory");
   const service = new BridgeService(readEnvironment(), authorization);
@@ -243,21 +242,6 @@ export async function startWebServer({
       if (request.method === "GET" && url.pathname === bridgeRoutes.health) {
         return Response.json({ status: "ok" }, { headers: jsonHeaders });
       }
-      if (request.method === "GET" && url.pathname === bridgeRoutes.session) {
-        if (!sameOrigin(request)) {
-          return Response.json(
-            { error: "Forbidden origin" },
-            { headers: jsonHeaders, status: 403 },
-          );
-        }
-        return new Response(null, {
-          headers: {
-            ...SECURITY_HEADERS,
-            "Set-Cookie": `${SESSION_COOKIE}=${encodeURIComponent(authorization)}; HttpOnly; SameSite=Strict; Path=/; Max-Age=300`,
-          },
-          status: 204,
-        });
-      }
       if (url.pathname === bridgeRoutes.invoke) {
         if (request.method !== "POST") {
           return Response.json(
@@ -265,15 +249,11 @@ export async function startWebServer({
             { headers: jsonHeaders, status: 405 },
           );
         }
-        if (!sameOrigin(request)) {
+        if (!isPermittedWebOrigin(request)) {
           return Response.json(
             { error: "Forbidden origin" },
             { headers: jsonHeaders, status: 403 },
           );
-        }
-        const presentedAuthorization = cookieAuthorization(request);
-        if (!service.isAuthorized(presentedAuthorization)) {
-          return Response.json({ error: "Unauthorized" }, { headers: jsonHeaders, status: 401 });
         }
         let input: unknown;
         try {
@@ -283,9 +263,7 @@ export async function startWebServer({
           const message = status === 413 ? "Request too large" : "Malformed JSON";
           return Response.json({ error: message }, { headers: jsonHeaders, status });
         }
-        const response = bridgeResponseSchema.parse(
-          await service.handle(input, presentedAuthorization),
-        );
+        const response = bridgeResponseSchema.parse(await service.handle(input, authorization));
         return Response.json(response, { headers: jsonHeaders });
       }
       if (request.method !== "GET" && request.method !== "HEAD") {

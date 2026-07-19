@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { randomBytes, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { bridgeResponseSchema } from "@oneharness-ui/ipc-contract";
 import { z } from "zod";
@@ -51,7 +51,6 @@ async function main(): Promise<void> {
       ])
       .parse(process.env.ONEHARNESS_UI_HOST ?? "127.0.0.1");
     await startWebServer({
-      authorization: randomBytes(32).toString("base64url"),
       hostname,
       port,
       staticDirectory: resolve(process.cwd(), "apps/conversation-ui/out"),
