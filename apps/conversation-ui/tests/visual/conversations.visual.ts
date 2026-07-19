@@ -3,7 +3,17 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 
-const shotsOut = process.env.SHOTS_OUT ?? "shots/current/x86_64";
+const shotsOut = (() => {
+  const candidate = process.env.SHOTS_OUT;
+  if (
+    !candidate ||
+    !path.isAbsolute(candidate) ||
+    (!candidate.endsWith("/shots/current/x86_64") && !candidate.endsWith("/shots/verify/x86_64"))
+  ) {
+    throw new Error("SHOTS_OUT must be an absolute screencomp x86_64 capture directory");
+  }
+  return candidate;
+})();
 const viewports = [
   { height: 800, name: "desktop", width: 1280 },
   { height: 800, name: "mobile", width: 390 },

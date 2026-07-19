@@ -1,7 +1,12 @@
 import { defineConfig } from "@playwright/test";
+import { z } from "zod";
 import { e2eWebOrigin } from "../../packages/oneharness-bridge/test/e2e-configuration";
 
-const webAccessToken = "screencomp-visual-docs-access-token";
+const webAccessToken = z
+  .string()
+  .min(32)
+  .max(256)
+  .parse(process.env.ONEHARNESS_UI_TEST_WEB_ACCESS_TOKEN);
 
 export default defineConfig({
   fullyParallel: false,

@@ -25,14 +25,8 @@ if (
 }
 const historyDir = resolve(repository, ".cache/e2e-history");
 const visualProject = "/tmp/oneharness-ui-visual-project";
-const visualTimestamps: Readonly<Record<string, string>> = {
-  "failed-session": "2025-01-01T00:00:00Z",
-  "ineligible-session": "2025-01-01T00:01:00Z",
-  "json-session": "2025-01-01T00:02:00Z",
-  "markdown-session": "2025-01-01T00:03:00Z",
-  "plain-session": "2025-01-01T00:04:00Z",
-  "tool-session": "2025-01-01T00:05:00Z",
-};
+if (process.env.ONEHARNESS_UI_TEST_VISUAL === "true")
+  await mkdir(visualProject, { recursive: true });
 const provider = resolve(
   repository,
   `target/oneharness-ui-test/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
@@ -66,13 +60,10 @@ async function seed({
     historyName: name,
     mode: "bypass",
     prompt,
+    ...(process.env.ONEHARNESS_UI_TEST_VISUAL === "true" ? { cwd: visualProject } : {}),
   });
   if (process.env.ONEHARNESS_UI_TEST_VISUAL === "true") {
-    const { historyFile, record } = await readFixtureHistoryRecord(historyDir, result);
-    record.project = visualProject;
-    record.timestamp = visualTimestamps[name] ?? "2025-01-01T00:06:00Z";
-    await mkdir(visualProject, { recursive: true });
-    await writeFile(historyFile, `${JSON.stringify(record)}\n`);
+    await Bun.sleep(1_100);
   }
   return result;
 }
