@@ -8,6 +8,8 @@ readonly ROOT
 source "$ROOT/scripts/visual-docs-versions.sh"
 [[ "$SCREENCOMP_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] \
   || { echo "screencomp setup: invalid pinned version; correct scripts/visual-docs-versions.sh" >&2; exit 2; }
+[[ -n "${HOME:-}" && "$HOME" = /* && "${#HOME}" -le 4096 ]] \
+  || { echo "screencomp setup: HOME must be an absolute path of reasonable length" >&2; exit 2; }
 readonly INSTALL_DIR="$HOME/.local/bin"
 readonly INSTALLER_SHA256="dd4e02daf93c3f056b84b0555c03c60b8e8bfb29ecb462e7dfa4b84fd84202b4"
 installer="$(mktemp "${TMPDIR:-/tmp}/screencomp-install.XXXXXX")"

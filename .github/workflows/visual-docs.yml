@@ -7,6 +7,8 @@ on:
     branches: [main]
 
 permissions:
+  # The reusable workflow isolates PR capture in a contents:read container job;
+  # these writes are available only to its host-side gallery/comment report job.
   contents: write
   pull-requests: write
 
@@ -18,5 +20,3 @@ jobs:
       container: mcr.microsoft.com/playwright:v1.61.1-noble
       fail-on-drift: true
       screencomp-version: v0.4.2
-    secrets:
-      push-token: ${{ secrets.VISUAL_DOCS_PUSH_TOKEN }}

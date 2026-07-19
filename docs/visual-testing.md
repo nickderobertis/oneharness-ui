@@ -24,9 +24,9 @@ Commit only that JSON digest manifest, never baseline PNG files.
 The `Visual docs` workflow is a strict drift gate and also publishes the review
 gallery. A maintainer must enable GitHub Pages with **Deploy from a branch** and
 select the `gh-pages` branch. Make the Pages site public if inline images should
-appear in pull-request comments. Add a `VISUAL_DOCS_PUSH_TOKEN` Actions secret
-containing a fine-grained PAT or GitHub App token with repository Contents and
-Pull requests write access when branch protection requires token-triggered
-workflow runs. The built-in token still runs the reproducibility and drift gate;
-the extra secret is for reliable publishing and comments under protected-branch
-rules.
+appear in pull-request comments. This strict gate does not push manifests and
+uses the scoped built-in token for publishing and comments, so it does not expose
+a long-lived `VISUAL_DOCS_PUSH_TOKEN` to pull-request capture code. If the project
+later opts into screencomp's manifest auto-push mode, a maintainer must supply a
+GitHub App or fine-grained token through a separately actor-gated publishing job;
+never pass that credential to the untrusted capture job.

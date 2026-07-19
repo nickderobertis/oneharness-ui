@@ -61,4 +61,63 @@ describe("visual docs command contracts", () => {
     expect(result.exitCode).toBe(1);
     expect(result.stderr.toString()).toContain("installer checksum mismatch");
   });
+
+  test("runs every capture stage and identifies each failed operation", () => {
+    const directory = mkdtempSync(join(tmpdir(), "visual-capture-test-"));
+    const bin = join(directory, "bin");
+    mkdirSync(bin);
+    const log = join(directory, "commands.log");
+    for (const command of ["npm", "bun"]) {
+      const executable = join(bin, command);
+      writeFileSync(
+        executable,
+        `#!/bin/sh\nprintf '%s %s\\n' '${command}' "$*" >> "$TEST_COMMAND_LOG"\nactual='${command} '"$*"\n[ "$TEST_FAIL_COMMAND" != "$actual" ]\n`,
+      );
+      chmodSync(executable, 0o755);
+    }
+    const node = join(bin, "node");
+    writeFileSync(node, "#!/bin/sh\nprintf '%064d' 0\n");
+    chmodSync(node, 0o755);
+    const baseEnvironment = {
+      ...process.env,
+      PATH: `${bin}${delimiter}${process.env.PATH}`,
+      SHOTS_OUT: resolve(root, "shots/current/x86_64"),
+      TEST_COMMAND_LOG: log,
+      TEST_FAIL_COMMAND: "",
+    };
+    const success = Bun.spawnSync(["bash", "capture.sh"], { cwd: root, env: baseEnvironment });
+    expect(success.exitCode).toBe(0);
+    expect(readFileSync(log, "utf8")).toContain("playwright test");
+
+    const failure = Bun.spawnSync(["bash", "capture.sh"], {
+      cwd: root,
+      env: { ...baseEnvironment, TEST_FAIL_COMMAND: "bun install --frozen-lockfile" },
+    });
+    expect(failure.exitCode).toBe(1);
+    expect(failure.stderr.toString()).toContain("workspace install failed");
+  });
+
+  test("reports verification failures from the screencomp boundary", () => {
+    const directory = mkdtempSync(join(tmpdir(), "visual-verify-test-"));
+    const bin = join(directory, "bin");
+    mkdirSync(bin);
+    for (const command of ["test-docker", "test-screencomp"]) {
+      const executable = join(bin, command);
+      writeFileSync(executable, `#!/bin/sh\n[ "$TEST_FAIL_SUBCOMMAND" != "$1" ]\n`);
+      chmodSync(executable, 0o755);
+    }
+    const environment = {
+      ...process.env,
+      ONEHARNESS_VISUAL_DOCKER_COMMAND: "test-docker",
+      ONEHARNESS_VISUAL_SCREENCOMP_COMMAND: "test-screencomp",
+      PATH: `${bin}${delimiter}${process.env.PATH}`,
+      TEST_FAIL_SUBCOMMAND: "verify",
+    };
+    const result = Bun.spawnSync(["bash", "scripts/verify-visual.sh"], {
+      cwd: root,
+      env: environment,
+    });
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr.toString()).toContain("captures are not reproducible");
+  });
 });
