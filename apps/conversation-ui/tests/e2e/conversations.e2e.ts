@@ -1,3 +1,7 @@
+import {
+  conversationLabelMaxLength,
+  conversationLabelsMaxCount,
+} from "@oneharness-ui/ipc-contract";
 import { expect, test } from "@playwright/test";
 
 test("lists, selects, restores a deep link, and expands optional details", async ({ page }) => {
@@ -76,10 +80,16 @@ test("organizes sessions by project and round-trips local labels", async ({ page
   await page.getByRole("button", { name: "Edit labels" }).first().click();
   await page
     .getByRole("textbox", { name: /Labels for/ })
-    .fill(Array.from({ length: 21 }, (_, index) => `label-${index}`).join(","));
+    .fill(
+      Array.from({ length: conversationLabelsMaxCount + 1 }, (_, index) => `label-${index}`).join(
+        ",",
+      ),
+    );
   await page.getByRole("button", { name: "Save labels" }).click();
   await expect(page.getByRole("alert")).toContainText("no more than 20 labels");
-  await page.getByRole("textbox", { name: /Labels for/ }).fill("x".repeat(65));
+  await page
+    .getByRole("textbox", { name: /Labels for/ })
+    .fill("x".repeat(conversationLabelMaxLength + 1));
   await page.getByRole("button", { name: "Save labels" }).click();
   await expect(page.getByRole("alert")).toContainText("at most 64 characters");
   await page.getByRole("textbox", { name: /Labels for/ }).fill("review, urgent");

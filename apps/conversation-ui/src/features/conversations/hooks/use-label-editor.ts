@@ -1,4 +1,9 @@
-import { type ConversationSummary, conversationLabelsSchema } from "@oneharness-ui/ipc-contract";
+import {
+  type ConversationSummary,
+  conversationLabelMaxLength,
+  conversationLabelsMaxCount,
+  conversationLabelsSchema,
+} from "@oneharness-ui/ipc-contract";
 import { useState } from "react";
 
 export function useLabelEditor(onSetLabels: (id: string, labels: string[]) => Promise<unknown>) {
@@ -24,7 +29,9 @@ export function useLabelEditor(onSetLabels: (id: string, labels: string[]) => Pr
         .filter(Boolean),
     );
     if (!result.success) {
-      setValidationError("Use no more than 20 labels, with at most 64 characters each.");
+      setValidationError(
+        `Use no more than ${conversationLabelsMaxCount} labels, with at most ${conversationLabelMaxLength} characters each.`,
+      );
       return;
     }
     setValidationError(null);
