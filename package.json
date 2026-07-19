@@ -26,7 +26,7 @@
     "lefthook": "^2.1.10",
     "nx": "^23.1.0",
     "semantic-release": "^25.0.7",
-    "typescript": "5.9.3",
+    "typescript": "7.0.2",
     "zod": "^4.4.3"
   }
 }
