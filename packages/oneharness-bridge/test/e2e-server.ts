@@ -81,6 +81,22 @@ await seed({
   stdout: '{"result":"A concise answer","session_id":"e2e-native-plain"}',
 });
 await seed({
+  name: "markdown-session",
+  prompt: "Render **safely** <img src=x onerror=alert('unsafe')>",
+  stdout: JSON.stringify({
+    result: "**Highlighted code**\n\n```ts\nconst answer = 42;\n```",
+    session_id: "e2e-native-markdown",
+  }),
+});
+await seed({
+  name: "json-session",
+  prompt: "Return structured data",
+  stdout: JSON.stringify({
+    result: '{"status":"ready","items":[1,2]}',
+    session_id: "e2e-native-json",
+  }),
+});
+await seed({
   name: "ineligible-session",
   prompt: "This provider omitted its session handle",
   stdout: '{"result":"No continuation handle"}',
