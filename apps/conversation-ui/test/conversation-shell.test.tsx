@@ -66,6 +66,7 @@ globalThis.IntersectionObserver =
 const summary: ConversationSummary = {
   harnesses: ["claude-code"],
   id: "session-1",
+  labels: [],
   name: "inspect-login",
   project: "/workspace/product",
   startedAt: "2026-07-15T10:00:00Z",
@@ -145,6 +146,53 @@ afterEach(() => {
 });
 
 describe("ConversationShell", () => {
+  test("groups and filters by project and persists accessible labels with failure recovery", async () => {
+    const second = {
+      ...summary,
+      id: "session-2",
+      labels: ["backend"],
+      name: "ship-api",
+      project: "/workspace/api",
+    };
+    let failSave = true;
+    let savedLabels: string[] = [];
+    installBridge((request) => {
+      if (request.kind === "set-labels") {
+        if (failSave) {
+          failSave = false;
+          return { error: { code: "IO_ERROR", message: "Label storage is busy" }, ok: false };
+        }
+        savedLabels = request.labels as string[];
+        return success({ kind: "set-labels", labels: savedLabels, sessionId: summary.id });
+      }
+      if (request.kind !== "list") throw new Error("unexpected detail request");
+      return listPage([{ ...summary, labels: savedLabels }, second]);
+    });
+    const user = userEvent.setup();
+    render(<ConversationShell />);
+
+    const organize = await screen.findByRole("combobox", { name: "Organize by" });
+    await user.selectOptions(organize, "project");
+    expect(screen.getByRole("heading", { name: "/workspace/product" })).toBeTruthy();
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Filter project" }),
+      "/workspace/api",
+    );
+    expect(screen.getByRole("button", { name: "Open conversation ship-api" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Open conversation inspect-login" })).toBeNull();
+
+    await user.selectOptions(organize, "label");
+    await user.click(screen.getAllByRole("button", { name: "Edit labels" })[0] as HTMLElement);
+    await user.type(
+      screen.getByRole("textbox", { name: "Labels for inspect-login" }),
+      "urgent, frontend",
+    );
+    await user.click(screen.getByRole("button", { name: "Save labels" }));
+    expect((await screen.findByRole("alert")).textContent).toContain("Label storage is busy");
+    await user.click(screen.getByRole("button", { name: "Save labels" }));
+    expect(await screen.findByRole("heading", { name: "frontend" })).toBeTruthy();
+    expect(savedLabels).toEqual(["urgent", "frontend"]);
+  });
   test("renders loading and empty states and refreshes discovery", async () => {
     let finishFirstList: (value: unknown) => void = () => {};
     const firstList = new Promise<unknown>((resolve) => {

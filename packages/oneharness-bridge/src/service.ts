@@ -23,6 +23,7 @@ import {
 } from "@oneharness-ui/ipc-contract";
 import { z } from "zod";
 import type { BridgeEnvironment } from "./environment.ts";
+import { labelsFor, setLabels } from "./label-store.ts";
 
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 const CONVERSATION_LIST_PAGE_SIZE = 25;
@@ -243,10 +244,11 @@ function toConversationPage(records: HistoryRecord[], requestedOffset = 0): Conv
   return conversation;
 }
 
-function toSummary(summary: HistorySessionSummary): ConversationSummary {
+function toSummary(summary: HistorySessionSummary, labels: string[]): ConversationSummary {
   return {
     harnesses: summary.harnesses,
     id: summary.id,
+    labels,
     name: summary.name,
     project: summary.project,
     startedAt: summary.started,
@@ -351,14 +353,17 @@ export class BridgeService {
     nextCursor: ConversationCursor | null;
     totalCount: number;
   }> {
-    const discovered = (await invokeDiscovery(this.environment)).sort(summaryOrder);
+    const [discovered, storedLabels] = await Promise.all([
+      invokeDiscovery(this.environment).then((summaries) => summaries.sort(summaryOrder)),
+      labelsFor(this.environment),
+    ]);
     const remaining = cursor
       ? discovered.filter((summary) => followsCursor(summary, cursor))
       : discovered;
     const page = remaining.slice(0, CONVERSATION_LIST_PAGE_SIZE);
     const last = page.at(-1);
     return {
-      conversations: page.map(toSummary),
+      conversations: page.map((summary) => toSummary(summary, storedLabels[summary.id] ?? [])),
       nextCursor:
         remaining.length > page.length && last
           ? { sessionId: last.id, startedAt: last.started }
@@ -432,6 +437,17 @@ export class BridgeService {
                 request.turnOffset,
               ),
               kind: "get",
+            },
+            ok: true,
+          };
+        }
+        if (request.kind === "set-labels") {
+          await this.#history(request.sessionId);
+          return {
+            data: {
+              kind: "set-labels",
+              labels: await setLabels(this.environment, request.sessionId, request.labels),
+              sessionId: request.sessionId,
             },
             ok: true,
           };

@@ -9,6 +9,7 @@ const sessionId = z
 
 const harnessId = z.string().min(1).max(100);
 const startedAt = z.string().max(128);
+const conversationLabel = z.string().trim().min(1).max(64);
 
 export const conversationCursorSchema = z.object({
   sessionId,
@@ -66,6 +67,7 @@ export const conversationPageSchema = conversationSchema.extend({
 export const conversationSummarySchema = conversationSchema
   .pick({ harnesses: true, id: true, name: true, project: true, startedAt: true })
   .extend({
+    labels: z.array(conversationLabel).max(20),
     turnCount: z.number().int().nonnegative(),
   });
 
@@ -79,6 +81,11 @@ export const bridgeRequestSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("continue"),
     message: z.string().trim().min(1, "Write a message first").max(32_000),
+    sessionId,
+  }),
+  z.object({
+    kind: z.literal("set-labels"),
+    labels: z.array(conversationLabel).max(20),
     sessionId,
   }),
 ]);
@@ -101,6 +108,11 @@ const successResponseSchema = z.discriminatedUnion("kind", [
     kind: z.literal("continue"),
     conversation: conversationPageSchema,
     selectedSessionId: sessionId,
+  }),
+  z.object({
+    kind: z.literal("set-labels"),
+    labels: z.array(conversationLabel).max(20),
+    sessionId,
   }),
 ]);
 

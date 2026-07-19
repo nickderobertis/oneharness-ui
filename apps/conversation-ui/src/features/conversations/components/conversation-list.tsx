@@ -1,14 +1,20 @@
 import type { ConversationSummary } from "@oneharness-ui/ipc-contract";
+import { useMemo, useState } from "react";
 import { RefreshIcon, TerminalIcon } from "@/components/ui/icons";
 import { useInfiniteScroll } from "../hooks/use-infinite-scroll";
+
+type Grouping = "none" | "label" | "project";
 
 export function ConversationList({
   conversations,
   hasMore,
   loadMoreError,
+  labelError,
+  labeling,
   loadingMore,
   onLoadMore,
   onRefresh,
+  onSetLabels,
   onSelect,
   refreshing,
   selectedId,
@@ -17,14 +23,50 @@ export function ConversationList({
   conversations: ConversationSummary[];
   hasMore: boolean;
   loadMoreError: Error | null;
+  labelError: Error | null;
+  labeling: boolean;
   loadingMore: boolean;
   onLoadMore: () => Promise<unknown>;
   onRefresh: () => void;
+  onSetLabels: (id: string, labels: string[]) => Promise<unknown>;
   onSelect: (id: string) => void;
   refreshing: boolean;
   selectedId: string | null;
   totalCount: number;
 }) {
+  const [grouping, setGrouping] = useState<Grouping>("none");
+  const [filter, setFilter] = useState("all");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [labelInput, setLabelInput] = useState("");
+  const choices = useMemo(() => {
+    const values = new Set<string>();
+    for (const conversation of conversations) {
+      if (grouping === "project") values.add(conversation.project || "Project not recorded");
+      if (grouping === "label") {
+        for (const label of conversation.labels) values.add(label);
+        if (conversation.labels.length === 0) values.add("Unlabeled");
+      }
+    }
+    return [...values].sort((a, b) => a.localeCompare(b));
+  }, [conversations, grouping]);
+  const grouped = useMemo(() => {
+    const result = new Map<string, ConversationSummary[]>();
+    for (const conversation of conversations) {
+      const groups =
+        grouping === "project"
+          ? [conversation.project || "Project not recorded"]
+          : grouping === "label"
+            ? conversation.labels.length > 0
+              ? conversation.labels
+              : ["Unlabeled"]
+            : ["History"];
+      for (const group of groups) {
+        if (filter !== "all" && group !== filter) continue;
+        result.set(group, [...(result.get(group) ?? []), conversation]);
+      }
+    }
+    return result;
+  }, [conversations, filter, grouping]);
   const infiniteScroll = useInfiniteScroll({
     automatic: loadMoreError === null,
     hasMore,
@@ -60,6 +102,34 @@ export function ConversationList({
         className="conversation-nav"
         ref={infiniteScroll.rootRef}
       >
+        <div className="conversation-controls">
+          <label htmlFor="group-conversations">Organize by</label>
+          <select
+            id="group-conversations"
+            onChange={(event) => {
+              setGrouping(event.target.value as Grouping);
+              setFilter("all");
+            }}
+            value={grouping}
+          >
+            <option value="none">Recent</option>
+            <option value="label">Label</option>
+            <option value="project">Project</option>
+          </select>
+          {grouping !== "none" ? (
+            <label>
+              Filter {grouping}
+              <select onChange={(event) => setFilter(event.target.value)} value={filter}>
+                <option value="all">All</option>
+                {choices.map((choice) => (
+                  <option key={choice} value={choice}>
+                    {choice}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+        </div>
         <p className="conversation-nav__label">
           History
           <span
@@ -77,31 +147,84 @@ export function ConversationList({
             <span>Enable history in oneharness, then refresh.</span>
           </div>
         ) : (
-          <ul>
-            {conversations.map((conversation) => (
-              <li aria-label={`Session ID ${conversation.id}`} key={conversation.id}>
-                <button
-                  aria-label={`Open conversation ${conversation.name}`}
-                  aria-current={selectedId === conversation.id ? "page" : undefined}
-                  className="conversation-link"
-                  onClick={() => onSelect(conversation.id)}
-                  type="button"
-                >
-                  <span className="conversation-link__top">
-                    <strong>{conversation.name}</strong>
-                  </span>
-                  <span className="conversation-link__project" title={conversation.project}>
-                    {conversation.project || "Project not recorded"}
-                  </span>
-                  <span className="conversation-link__meta">
-                    {conversation.harnesses.join(", ")} · {conversation.turnCount}{" "}
-                    {conversation.turnCount === 1 ? "turn" : "turns"}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
+          [...grouped].map(([group, items]) => (
+            <section aria-labelledby={`group-${group}`} className="conversation-group" key={group}>
+              {grouping !== "none" ? <h2 id={`group-${group}`}>{group}</h2> : null}
+              <ul>
+                {items.map((conversation) => (
+                  <li aria-label={`Session ID ${conversation.id}`} key={conversation.id}>
+                    <button
+                      aria-label={`Open conversation ${conversation.name}`}
+                      aria-current={selectedId === conversation.id ? "page" : undefined}
+                      className="conversation-link"
+                      onClick={() => onSelect(conversation.id)}
+                      type="button"
+                    >
+                      <span className="conversation-link__top">
+                        <strong>{conversation.name}</strong>
+                      </span>
+                      <span className="conversation-link__project" title={conversation.project}>
+                        {conversation.project || "Project not recorded"}
+                      </span>
+                      <span className="conversation-link__meta">
+                        {conversation.harnesses.join(", ")} · {conversation.turnCount}{" "}
+                        {conversation.turnCount === 1 ? "turn" : "turns"}
+                      </span>
+                    </button>
+                    <button
+                      aria-label="Edit labels"
+                      className="label-button"
+                      onClick={() => {
+                        setEditingId(conversation.id);
+                        setLabelInput(conversation.labels.join(", "));
+                      }}
+                      type="button"
+                    >
+                      {conversation.labels.length > 0
+                        ? conversation.labels.join(", ")
+                        : "Add labels"}
+                    </button>
+                    {editingId === conversation.id ? (
+                      <form
+                        className="label-form"
+                        onSubmit={(event) => {
+                          event.preventDefault();
+                          const next = labelInput
+                            .split(",")
+                            .map((value) => value.trim())
+                            .filter(Boolean);
+                          void onSetLabels(conversation.id, next)
+                            .then(() => setEditingId(null))
+                            .catch(() => undefined);
+                        }}
+                      >
+                        <label>
+                          Labels for {conversation.name}
+                          <input
+                            maxLength={1300}
+                            onChange={(event) => setLabelInput(event.target.value)}
+                            value={labelInput}
+                          />
+                        </label>
+                        <button disabled={labeling} type="submit">
+                          Save labels
+                        </button>
+                        <button onClick={() => setEditingId(null)} type="button">
+                          Cancel
+                        </button>
+                      </form>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))
         )}
+        {labelError ? (
+          <p className="pagination__error" role="alert">
+            Couldn’t save labels. {labelError.message}
+          </p>
+        ) : null}
         <div className="pagination">
           {hasMore ? (
             <button

@@ -22,6 +22,13 @@ describe("IPC validation", () => {
     expect(() =>
       bridgeRequestSchema.parse({ kind: "get", sessionId: "valid", turnOffset: -1 }),
     ).toThrow();
+    expect(() =>
+      bridgeRequestSchema.parse({
+        kind: "set-labels",
+        labels: ["<b>".repeat(40)],
+        sessionId: "valid",
+      }),
+    ).toThrow();
   });
 
   test("keeps unknown upstream structured values as data", () => {
