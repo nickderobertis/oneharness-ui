@@ -37,12 +37,12 @@ rules:
       include:
         - ".github/workflows/**/*.yml"
     require_line_attribution: true
-    relevance: permissions exceed runtime needs, except those mandated by an audited reusable workflow that narrows its untrusted job
+    relevance: permissions exceed audited reusable-workflow requirements
   - name: work_goes_through_command_surface
     override: true
     description: Automation uses the command surface required by its execution environment.
     require_line_attribution: true
-    relevance: automation bypasses the command surface, except a reusable capture-command that requires the capture-only script
+    relevance: automation bypasses the required command surface
   - name: live_tier_compiles_and_requires_credential
     override: true
     relevance: the target files define a test tier that connects to a credentialed external service
