@@ -19,7 +19,7 @@ screencomp_command="${ONEHARNESS_VISUAL_SCREENCOMP_COMMAND:-screencomp}"
 readonly docker_command screencomp_command
 
 command -v "$docker_command" >/dev/null 2>&1 || {
-  echo "visual docs: Docker is required to render in the pinned Linux container" >&2
+  echo "visual docs: Docker is required; install and start Docker, then rerun just visual" >&2
   exit 1
 }
 command -v "$screencomp_command" >/dev/null 2>&1 || {

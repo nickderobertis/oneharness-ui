@@ -32,7 +32,7 @@ rules:
     relevance: new core user-facing product behavior lacks a realistic end-to-end journey
   - name: least_privilege_grants
     override: true
-    description: Permissions are limited to runtime needs and audited reusable-workflow contracts.
+    description: Permissions are limited to runtime needs.
     files:
       include:
         - ".github/workflows/**/*.yml"
