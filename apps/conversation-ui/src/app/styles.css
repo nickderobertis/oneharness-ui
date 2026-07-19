@@ -136,11 +136,11 @@
 @media (max-width: 680px) {
   html,
   body {
-    height: auto;
+    height: 100%;
     min-height: 100%;
   }
   body {
-    overflow: visible;
+    overflow: hidden;
   }
 }
 

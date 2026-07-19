@@ -48,8 +48,9 @@ function Workspace() {
   const conversations = list.data?.conversations ?? [];
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-[330px_minmax(0,1fr)] overflow-hidden max-[820px]:grid-cols-[260px_minmax(0,1fr)] max-[680px]:min-h-screen max-[680px]:grid-cols-1 max-[680px]:overflow-visible">
-      <ConversationList
+    <div className="grid h-full min-h-0 grid-cols-[330px_minmax(0,1fr)] overflow-hidden max-[820px]:grid-cols-[260px_minmax(0,1fr)] max-[680px]:min-h-[100dvh] max-[680px]:grid-cols-1">
+      <div className={selectedId ? "contents max-[680px]:hidden" : "contents"}>
+        <ConversationList
         conversations={conversations}
         hasMore={list.hasNextPage}
         loadMoreError={list.isFetchNextPageError ? list.error : null}
@@ -65,7 +66,8 @@ function Workspace() {
         totalCount={list.data?.totalCount ?? 0}
         labelError={labels.error}
         labeling={labels.isPending}
-      />
+        />
+      </div>
       {!selectedId ? (
         <main className="flex min-h-0 items-center justify-center bg-[radial-gradient(circle_at_52%_40%,#1d2118_0,var(--background)_48%)] p-10 max-[680px]:min-h-[58vh]">
           <Card className="max-w-xl border-0 bg-transparent text-center shadow-none">
@@ -94,6 +96,7 @@ function Workspace() {
         </main>
       ) : selected.data ? (
         <ConversationView
+          onBack={() => select(null)}
           conversation={selected.data}
           continueError={continuation.error}
           hasMoreTurns={selected.hasNextPage}
