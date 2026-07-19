@@ -108,7 +108,6 @@ describe("visual docs command contracts", () => {
     const baseEnvironment = {
       ...process.env,
       PATH: `${bin}${delimiter}${process.env.PATH}`,
-      SHOTS_OUT: resolve(root, "shots/current/x86_64"),
       TEST_COMMAND_LOG: log,
       TEST_FAIL_COMMAND: "",
     };
