@@ -24,6 +24,15 @@ if (
   throw new Error("ONEHARNESS_UI_TEST_CLI_BIN must be an existing absolute executable path");
 }
 const historyDir = resolve(repository, ".cache/e2e-history");
+const visualProject = "/tmp/oneharness-ui-visual-project";
+const visualTimestamps: Readonly<Record<string, string>> = {
+  "failed-session": "2025-01-01T00:00:00Z",
+  "ineligible-session": "2025-01-01T00:01:00Z",
+  "json-session": "2025-01-01T00:02:00Z",
+  "markdown-session": "2025-01-01T00:03:00Z",
+  "plain-session": "2025-01-01T00:04:00Z",
+  "tool-session": "2025-01-01T00:05:00Z",
+};
 const provider = resolve(
   repository,
   `target/oneharness-ui-test/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
@@ -47,7 +56,7 @@ async function seed({
   stderr?: string;
   stdout: string;
 }) {
-  return await sdk.run({
+  const result = await sdk.run({
     bins: { "claude-code": provider },
     env: { MOCK_EXIT: String(exit), MOCK_STDERR: stderr, MOCK_STDOUT: stdout },
     events: true,
@@ -58,6 +67,14 @@ async function seed({
     mode: "bypass",
     prompt,
   });
+  if (process.env.ONEHARNESS_UI_TEST_VISUAL === "true") {
+    const { historyFile, record } = await readFixtureHistoryRecord(historyDir, result);
+    record.project = visualProject;
+    record.timestamp = visualTimestamps[name] ?? "2025-01-01T00:06:00Z";
+    await mkdir(visualProject, { recursive: true });
+    await writeFile(historyFile, `${JSON.stringify(record)}\n`);
+  }
+  return result;
 }
 
 const tools = await seed({

@@ -8,6 +8,9 @@ out/
 target/
 test-results/
 playwright-report/
+shots/current/
+shots/verify/
+shots/review/
 *.log
 *.tsbuildinfo
 *.pem

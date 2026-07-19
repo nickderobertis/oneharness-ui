@@ -44,6 +44,13 @@ for tool in bun cargo node uv; do
   fi
 done
 
+if ! command -v screencomp >/dev/null 2>&1; then
+  if ! "$(dirname "$0")/setup-screencomp.sh"; then
+    log "screencomp setup reported an issue; rerun just session-setup after restoring network access"
+    status=1
+  fi
+fi
+
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
   safe_environment_file "$CLAUDE_ENV_FILE" \
     || { log "refusing CLAUDE_ENV_FILE outside the local temporary directory; unset it or point it to a file under ${TMPDIR:-/tmp}"; exit 1; }

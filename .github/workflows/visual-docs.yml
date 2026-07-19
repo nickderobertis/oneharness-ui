@@ -1,0 +1,22 @@
+name: Visual docs
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, closed]
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  visual-docs:
+    uses: nickderobertis/screencomp/.github/workflows/visual-docs-reusable.yml@v0
+    with:
+      capture-command: bash capture.sh
+      container: mcr.microsoft.com/playwright:v1.61.1-noble
+      fail-on-drift: true
+      screencomp-version: v0.4.2
+    secrets:
+      push-token: ${{ secrets.VISUAL_DOCS_PUSH_TOKEN }}

@@ -30,6 +30,8 @@ bun "$ROOT/scripts/build-sidecar.mjs" \
   || fail "sidecar assembly failed; follow the build-sidecar remedy above, then rerun just bootstrap"
 bunx playwright install chromium >/dev/null \
   || fail "Chromium provisioning failed; verify Playwright download access, then rerun just bootstrap"
+"$ROOT/scripts/setup-screencomp.sh" >/dev/null \
+  || fail "screencomp provisioning failed; verify release download access, then rerun just bootstrap"
 uvx --from actionlint-py==1.7.12.24 actionlint --version >/dev/null \
   || fail "actionlint provisioning failed; verify uv package-index access, then rerun just bootstrap"
 uvx --from shellcheck-py==0.11.0.1 shellcheck --version >/dev/null \
