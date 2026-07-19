@@ -24,9 +24,18 @@ describe("visual docs command contracts", () => {
   });
 
   test("keeps the capture paths and container platform on the configured architecture", () => {
+    const captureScript = readFileSync(resolve(root, "capture.sh"), "utf8");
+    const captureTest = readFileSync(
+      resolve(root, "apps/conversation-ui/tests/visual/conversations.visual.ts"),
+      "utf8",
+    );
     expect(screencompConfig).toContain('arches = ["x86_64"]');
     expect(verifyScript).toContain('PLATFORM="linux/amd64"');
     expect(verifyScript).toContain("SHOTS_OUT=$output/x86_64");
+    for (const tree of ["current", "verify"]) {
+      expect(captureScript).toContain(`/shots/${tree}/x86_64`);
+      expect(captureTest).toContain(`/shots/${tree}/x86_64`);
+    }
   });
 
   test("keeps the capture runtime on the workspace Bun pin", () => {

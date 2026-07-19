@@ -28,9 +28,11 @@ agents:
 rules:
   - name: changed_behavior_has_e2e
     override: true
+    description: Core user-facing behavior has realistic end-to-end coverage.
     relevance: new core user-facing product behavior lacks a realistic end-to-end journey
   - name: least_privilege_grants
     override: true
+    description: Permissions are limited to runtime needs and audited reusable-workflow contracts.
     files:
       include:
         - ".github/workflows/**/*.yml"
@@ -38,6 +40,7 @@ rules:
     relevance: permissions exceed runtime needs, except those mandated by an audited reusable workflow that narrows its untrusted job
   - name: work_goes_through_command_surface
     override: true
+    description: Automation uses the command surface required by its execution environment.
     require_line_attribution: true
     relevance: automation bypasses the command surface, except a reusable capture-command that requires the capture-only script
   - name: live_tier_compiles_and_requires_credential
