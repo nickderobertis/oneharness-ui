@@ -116,3 +116,31 @@ export function useContinueConversation(onSelected: (id: string) => void) {
     },
   });
 }
+
+export function useSetConversationLabels() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ labels, sessionId }: { labels: string[]; sessionId: string }) => {
+      const data = dataOrThrow(await invokeBridge({ kind: "set-labels", labels, sessionId }));
+      if (data.kind !== "set-labels") throw new Error("Local bridge returned the wrong response");
+      return data;
+    },
+    onSuccess: ({ labels, sessionId }) => {
+      client.setQueryData<InfiniteData<ConversationListPage, ConversationCursor | undefined>>(
+        conversationKeys.all,
+        (current) =>
+          current
+            ? {
+                ...current,
+                pages: current.pages.map((page) => ({
+                  ...page,
+                  conversations: page.conversations.map((conversation) =>
+                    conversation.id === sessionId ? { ...conversation, labels } : conversation,
+                  ),
+                })),
+              }
+            : current,
+      );
+    },
+  });
+}

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const sessionId = z
+export const sessionIdSchema = z
   .string()
   .trim()
   .min(1)
@@ -9,9 +9,11 @@ const sessionId = z
 
 const harnessId = z.string().min(1).max(100);
 const startedAt = z.string().max(128);
+export const conversationLabelSchema = z.string().trim().min(1).max(64);
+export const conversationLabelsSchema = z.array(conversationLabelSchema).max(20);
 
 export const conversationCursorSchema = z.object({
-  sessionId,
+  sessionId: sessionIdSchema,
   startedAt,
 });
 
@@ -49,7 +51,7 @@ export const conversationTurnSchema = z.object({
 export const conversationSchema = z.object({
   canContinue: z.boolean(),
   harnesses: z.array(harnessId).max(64),
-  id: sessionId,
+  id: sessionIdSchema,
   name: z.string().min(1).max(512),
   project: z.string().max(4096),
   startedAt,
@@ -66,6 +68,7 @@ export const conversationPageSchema = conversationSchema.extend({
 export const conversationSummarySchema = conversationSchema
   .pick({ harnesses: true, id: true, name: true, project: true, startedAt: true })
   .extend({
+    labels: conversationLabelsSchema.optional(),
     turnCount: z.number().int().nonnegative(),
   });
 
@@ -73,13 +76,18 @@ export const bridgeRequestSchema = z.discriminatedUnion("kind", [
   z.object({ cursor: conversationCursorSchema.optional(), kind: z.literal("list") }),
   z.object({
     kind: z.literal("get"),
-    sessionId,
+    sessionId: sessionIdSchema,
     turnOffset: z.number().int().nonnegative().optional(),
   }),
   z.object({
     kind: z.literal("continue"),
     message: z.string().trim().min(1, "Write a message first").max(32_000),
-    sessionId,
+    sessionId: sessionIdSchema,
+  }),
+  z.object({
+    kind: z.literal("set-labels"),
+    labels: conversationLabelsSchema,
+    sessionId: sessionIdSchema,
   }),
 ]);
 
@@ -100,7 +108,12 @@ const successResponseSchema = z.discriminatedUnion("kind", [
   z.object({
     kind: z.literal("continue"),
     conversation: conversationPageSchema,
-    selectedSessionId: sessionId,
+    selectedSessionId: sessionIdSchema,
+  }),
+  z.object({
+    kind: z.literal("set-labels"),
+    labels: conversationLabelsSchema,
+    sessionId: sessionIdSchema,
   }),
 ]);
 

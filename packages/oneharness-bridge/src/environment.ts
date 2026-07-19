@@ -11,6 +11,8 @@ const environmentSchema = z.object({
   ONEHARNESS_UI_HTTP_TOKEN: optionalAuthorization,
   ONEHARNESS_UI_PROVIDER_BIN: optionalPath,
   ONEHARNESS_UI_PROVIDER_HARNESS: z.string().trim().min(1).max(100).optional(),
+  HOME: optionalPath,
+  XDG_STATE_HOME: optionalPath,
 });
 
 function validatedFile(path: string, label: string): string {
@@ -41,6 +43,7 @@ export type BridgeEnvironment = {
   executable?: string;
   historyDir?: string;
   httpAuthorization?: string;
+  labelDir?: string;
   providerBin?: string;
   providerHarness?: string;
 };
@@ -74,12 +77,18 @@ export function readEnvironment(
   const historyDir = parsed.ONEHARNESS_UI_HISTORY_DIR
     ? validatedDirectory(parsed.ONEHARNESS_UI_HISTORY_DIR, "ONEHARNESS_UI_HISTORY_DIR")
     : undefined;
+  const stateRoot =
+    parsed.XDG_STATE_HOME ?? (parsed.HOME ? join(parsed.HOME, ".local", "state") : undefined);
+  if (!historyDir && stateRoot && !isAbsolute(stateRoot)) {
+    throw new Error("label storage root must be an absolute path");
+  }
   const providerBin = parsed.ONEHARNESS_UI_PROVIDER_BIN
     ? validatedFile(parsed.ONEHARNESS_UI_PROVIDER_BIN, "ONEHARNESS_UI_PROVIDER_BIN")
     : undefined;
   return {
     ...(executable ? { executable } : {}),
     ...(historyDir ? { historyDir } : {}),
+    ...(!historyDir && stateRoot ? { labelDir: join(stateRoot, "oneharness-ui") } : {}),
     ...(parsed.ONEHARNESS_UI_HTTP_TOKEN
       ? { httpAuthorization: parsed.ONEHARNESS_UI_HTTP_TOKEN }
       : {}),

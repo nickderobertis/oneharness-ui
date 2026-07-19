@@ -6,6 +6,7 @@ import {
   useContinueConversation,
   useConversation,
   useConversationList,
+  useSetConversationLabels,
 } from "../hooks/use-conversations";
 import { useSessionUrl } from "../hooks/use-session-url";
 import { ConversationList } from "./conversation-list";
@@ -27,6 +28,7 @@ function Workspace() {
   const list = useConversationList();
   const selected = useConversation(selectedId);
   const continuation = useContinueConversation(select);
+  const labels = useSetConversationLabels();
 
   if (list.isLoading)
     return (
@@ -51,10 +53,15 @@ function Workspace() {
         loadingMore={list.isFetchingNextPage}
         onLoadMore={list.fetchNextPage}
         onRefresh={() => void list.refresh()}
+        onSetLabels={async (sessionId, nextLabels) => {
+          await labels.mutateAsync({ labels: nextLabels, sessionId });
+        }}
         onSelect={select}
         refreshing={list.isFetching}
         selectedId={selectedId}
         totalCount={list.data?.totalCount ?? 0}
+        labelError={labels.error}
+        labeling={labels.isPending}
       />
       {!selectedId ? (
         <main className="welcome">
