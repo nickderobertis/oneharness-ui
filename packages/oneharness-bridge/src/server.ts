@@ -1,4 +1,4 @@
-import { randomBytes } from "node:crypto";
+import { randomBytes, timingSafeEqual } from "node:crypto";
 import { realpath, stat } from "node:fs/promises";
 import { extname, isAbsolute, relative, resolve, sep } from "node:path";
 import { bridgeResponseSchema, bridgeRoutes } from "@oneharness-ui/ipc-contract";
@@ -7,6 +7,7 @@ import { authorizationSchema, BridgeService } from "./service.ts";
 
 const MAX_REQUEST_BYTES = 64 * 1024;
 const MAX_COOKIE_BYTES = 4096;
+const MAX_AUTHORIZATION_HEADER_BYTES = 1024;
 const SESSION_COOKIE = "oneharness_ui_capability";
 const DEFAULT_UI_ORIGIN = "http://127.0.0.1:3000";
 export const WEB_DEFAULT_PORT = 4173;
@@ -181,6 +182,23 @@ function isPermittedWebOrigin(request: Request): boolean {
   }
 }
 
+function hasWebAccess(request: Request, expectedToken: string): boolean {
+  const header = request.headers.get("authorization");
+  if (!header || Buffer.byteLength(header) > MAX_AUTHORIZATION_HEADER_BYTES) return false;
+  const prefix = "Basic ";
+  if (!header.startsWith(prefix)) return false;
+  try {
+    const decoded = Buffer.from(header.slice(prefix.length), "base64").toString("utf8");
+    const separator = decoded.indexOf(":");
+    if (separator < 0 || decoded.slice(0, separator) !== "oneharness") return false;
+    const presented = Buffer.from(decoded.slice(separator + 1));
+    const expected = Buffer.from(expectedToken);
+    return presented.length === expected.length && timingSafeEqual(presented, expected);
+  } catch {
+    return false;
+  }
+}
+
 async function staticResponse(root: string, pathname: string): Promise<Response> {
   let decoded: string;
   try {
@@ -221,15 +239,18 @@ async function staticResponse(root: string, pathname: string): Promise<Response>
 }
 
 export async function startWebServer({
+  accessToken,
   hostname = "127.0.0.1",
   port,
   staticDirectory,
 }: {
+  accessToken: string;
   hostname?: string;
   port: number;
   staticDirectory: string;
 }): Promise<ReturnType<typeof Bun.serve>> {
   const authorization = authorizationSchema.parse(randomBytes(32).toString("base64url"));
+  const expectedAccessToken = authorizationSchema.parse(accessToken);
   const root = await realpath(staticDirectory);
   if (!(await stat(root)).isDirectory()) throw new Error("web UI path must be a directory");
   const service = new BridgeService(readEnvironment(), authorization);
@@ -241,6 +262,12 @@ export async function startWebServer({
       const jsonHeaders = { ...SECURITY_HEADERS, "Content-Type": "application/json" };
       if (request.method === "GET" && url.pathname === bridgeRoutes.health) {
         return Response.json({ status: "ok" }, { headers: jsonHeaders });
+      }
+      if (!hasWebAccess(request, expectedAccessToken)) {
+        return new Response("Authentication required", {
+          headers: { ...SECURITY_HEADERS, "WWW-Authenticate": 'Basic realm="oneharness UI"' },
+          status: 401,
+        });
       }
       if (url.pathname === bridgeRoutes.invoke) {
         if (request.method !== "POST") {

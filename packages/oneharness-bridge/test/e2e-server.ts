@@ -94,6 +94,7 @@ process.env.MOCK_STDERR = "";
 process.env.MOCK_STDOUT =
   '{"result":"Continued from the exact desktop session","session_id":"e2e-native-continued"}';
 await startWebServer({
+  accessToken: "oneharness-ui-e2e-browser-access",
   port: 3000,
   staticDirectory: resolve(repository, "apps/conversation-ui/out"),
 });

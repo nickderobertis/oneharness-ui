@@ -100,6 +100,33 @@ test("rejects unsafe web host and port configuration", async () => {
   }
 });
 
+test("defaults web mode to the documented loopback address", async () => {
+  const fixture = await mkdtemp(resolve(tmpdir(), "oneharness-ui-web-default-"));
+  await mkdir(resolve(fixture, "apps/conversation-ui/out"), { recursive: true });
+  await writeFile(resolve(fixture, "apps/conversation-ui/out/index.html"), "web default");
+  const availability = Bun.serve({ port: WEB_DEFAULT_PORT, fetch: () => new Response() });
+  await availability.stop(true);
+  const environment = { ...process.env };
+  delete environment.ONEHARNESS_UI_HOST;
+  delete environment.ONEHARNESS_UI_PORT;
+  const child = Bun.spawn([process.execPath, cli, "web"], {
+    cwd: fixture,
+    env: environment,
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+  try {
+    const reader = child.stdout.getReader();
+    const first = await reader.read();
+    reader.releaseLock();
+    expect(new TextDecoder().decode(first.value)).toContain(`http://127.0.0.1:${WEB_DEFAULT_PORT}`);
+  } finally {
+    child.kill();
+    await child.exited;
+    await rm(fixture, { force: true, recursive: true });
+  }
+});
+
 test("keeps the documented web port aligned with the server default", async () => {
   const readme = await readFile(resolve(import.meta.dir, "../../../README.md"), "utf8");
   expect(readme).toContain(`http://127.0.0.1:${WEB_DEFAULT_PORT}`);

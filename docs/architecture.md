@@ -29,7 +29,8 @@ development and web mode use HTTP adapters backed by the same `BridgeService`.
 Web mode serves the static export and bridge routes from one origin, binds only
 to loopback unless the operator explicitly selects a private LAN address, and
 rejects missing, non-private, or cross-origin browser mutation requests. Its
-bridge capability remains only in server memory. The separate development
+ephemeral HTTP access token gates both UI and bridge routes, while its separate
+bridge capability remains only in server memory. The development
 adapter establishes its capability in a short-lived
 `HttpOnly`/`SameSite=Strict` cookie and checks it again at the service layer.
 Both adapters bound the bytes read from the request stream; no bridge secret is

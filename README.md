@@ -119,6 +119,11 @@ or otherwise publish it to the internet. History remains on the operator's
 computer; the browser reaches oneharness only through the same size-limited,
 schema-validated bridge service used by the desktop IPC path.
 
+The server prints a fresh `oneharness` browser login each time it starts. Enter
+that username and token in the browser's authentication prompt. Anyone who can
+reach the address and obtain that token can use the UI for the lifetime of the
+server; the separate bridge authorization remains only in server memory.
+
 Run the focused browser journey with `just test-e2e`. On Linux or Windows, run
 the additional packaged Tauri journey with `just test-desktop-e2e`; it builds
 the platform installer and drives that release application through

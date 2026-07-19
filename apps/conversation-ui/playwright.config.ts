@@ -11,6 +11,7 @@ export default defineConfig({
   timeout: 30_000,
   use: {
     baseURL: "http://127.0.0.1:3000",
+    httpCredentials: { password: "oneharness-ui-e2e-browser-access", username: "oneharness" },
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },

@@ -26,6 +26,8 @@ const provider =
     repository,
     `target/oneharness-ui-test/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
   );
+const accessToken = "oneharness-ui-web-browser-access";
+const accessHeader = `Basic ${Buffer.from(`oneharness:${accessToken}`).toString("base64")}`;
 let fixtureRoot = "";
 let server: ReturnType<typeof Bun.serve> | undefined;
 const originalHistoryDir = process.env.ONEHARNESS_UI_HISTORY_DIR;
@@ -76,17 +78,22 @@ describe("web UI over the real HTTP, SDK, CLI, provider, and history boundary", 
     process.env.ONEHARNESS_UI_HISTORY_DIR = historyDir;
     if (cliOverride) process.env.ONEHARNESS_BIN = cliOverride;
     server = await startWebServer({
+      accessToken,
       port: 0,
       staticDirectory: resolve(fixtureRoot, "ui"),
     });
 
-    const page = await fetch(`${endpoint()}/`);
+    const page = await fetch(`${endpoint()}/`, { headers: { Authorization: accessHeader } });
     expect(page.status).toBe(200);
     expect(await page.text()).toContain("oneharness UI");
     expect(page.headers.get("content-security-policy")).toContain("connect-src 'self'");
     const response = await fetch(`${endpoint()}/invoke`, {
       body: JSON.stringify({ kind: "list" }),
-      headers: { "Content-Type": "application/json", Origin: endpoint() },
+      headers: {
+        Authorization: accessHeader,
+        "Content-Type": "application/json",
+        Origin: endpoint(),
+      },
       method: "POST",
     });
     expect(response.status).toBe(200);
@@ -98,26 +105,35 @@ describe("web UI over the real HTTP, SDK, CLI, provider, and history boundary", 
 
   test("rejects cross-origin and invalid contract input", async () => {
     server = await startWebServer({
+      accessToken,
       port: 0,
       staticDirectory: resolve(fixtureRoot, "ui"),
     });
     const health = await fetch(`${endpoint()}/health`);
     expect(await health.json()).toEqual({ status: "ok" });
+    const unauthenticated = await fetch(`${endpoint()}/`);
+    expect(unauthenticated.status).toBe(401);
+    expect(unauthenticated.headers.get("www-authenticate")).toContain("Basic");
     const missingOrigin = await fetch(`${endpoint()}/invoke`, {
       body: JSON.stringify({ kind: "list" }),
+      headers: { Authorization: accessHeader },
       method: "POST",
     });
     expect(missingOrigin.status).toBe(403);
     const crossOrigin = await fetch(`${endpoint()}/invoke`, {
       body: JSON.stringify({ kind: "list" }),
-      headers: { Origin: "https://attacker.example" },
+      headers: { Authorization: accessHeader, Origin: "https://attacker.example" },
       method: "POST",
     });
     expect(crossOrigin.status).toBe(403);
 
     const invalid = await fetch(`${endpoint()}/invoke`, {
       body: JSON.stringify({ kind: "continue", message: "", sessionId: "session" }),
-      headers: { "Content-Type": "application/json", Origin: endpoint() },
+      headers: {
+        Authorization: accessHeader,
+        "Content-Type": "application/json",
+        Origin: endpoint(),
+      },
       method: "POST",
     });
     expect(invalid.status).toBe(200);
@@ -125,28 +141,37 @@ describe("web UI over the real HTTP, SDK, CLI, provider, and history boundary", 
       error: { code: "INVALID_REQUEST", message: "The local bridge request is invalid." },
       ok: false,
     });
-    const wrongMethod = await fetch(`${endpoint()}/invoke`);
+    const wrongMethod = await fetch(`${endpoint()}/invoke`, {
+      headers: { Authorization: accessHeader },
+    });
     expect(wrongMethod.status).toBe(405);
     const malformed = await fetch(`${endpoint()}/invoke`, {
       body: "{",
-      headers: { Origin: endpoint() },
+      headers: { Authorization: accessHeader, Origin: endpoint() },
       method: "POST",
     });
     expect(malformed.status).toBe(400);
     const oversized = await fetch(`${endpoint()}/invoke`, {
       body: JSON.stringify({ message: "x".repeat(70_000) }),
-      headers: { Origin: endpoint() },
+      headers: { Authorization: accessHeader, Origin: endpoint() },
       method: "POST",
     });
     expect(oversized.status).toBe(413);
-    const head = await fetch(`${endpoint()}/`, { method: "HEAD" });
+    const head = await fetch(`${endpoint()}/`, {
+      headers: { Authorization: accessHeader },
+      method: "HEAD",
+    });
     expect(head.status).toBe(200);
     expect(await head.text()).toBe("");
-    const staticPost = await fetch(`${endpoint()}/`, { method: "POST" });
+    const staticPost = await fetch(`${endpoint()}/`, {
+      headers: { Authorization: accessHeader },
+      method: "POST",
+    });
     expect(staticPost.status).toBe(405);
-    expect((await fetch(`${endpoint()}/missing`)).status).toBe(404);
-    expect((await fetch(`${endpoint()}/%ZZ`)).status).toBe(400);
-    expect((await fetch(`${endpoint()}/%5Csecret`)).status).toBe(400);
-    expect((await fetch(`${endpoint()}/%2e%2e%2fsecret`)).status).toBe(404);
+    const authenticated = { headers: { Authorization: accessHeader } };
+    expect((await fetch(`${endpoint()}/missing`, authenticated)).status).toBe(404);
+    expect((await fetch(`${endpoint()}/%ZZ`, authenticated)).status).toBe(400);
+    expect((await fetch(`${endpoint()}/%5Csecret`, authenticated)).status).toBe(400);
+    expect((await fetch(`${endpoint()}/%2e%2e%2fsecret`, authenticated)).status).toBe(404);
   });
 });
