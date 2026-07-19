@@ -21,6 +21,23 @@ test("lists, selects, restores a deep link, and expands optional details", async
   await expect(page.getByText("Reasoning", { exact: true })).toHaveCount(0);
 });
 
+test("renders markdown, highlighted code, and JSON without injecting session HTML", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: /markdown-session/i }).click();
+  await expect(page.getByText("safely")).toHaveJSProperty("tagName", "STRONG");
+  await expect(page.getByText("Highlighted code")).toHaveJSProperty("tagName", "STRONG");
+  await expect(page.locator("pre code .hljs-keyword", { hasText: "const" })).toBeVisible();
+  await expect(page.getByRole("main").locator("img, script")).toHaveCount(0);
+
+  await page.getByRole("button", { name: /json-session/i }).click();
+  const json = page.getByLabel("Assistant message formatted JSON");
+  await expect(json).toBeVisible();
+  await expect(json).toContainText('"status": "ready"');
+  await expect(json).toContainText('"items": [');
+});
+
 test("continues the exact session and selects refreshed history", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: /plain-session/i }).click();
