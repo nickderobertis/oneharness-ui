@@ -172,22 +172,24 @@ describe("ConversationShell", () => {
     render(<ConversationShell />);
 
     const organize = await screen.findByRole("combobox", { name: "Organize by" });
-    await user.selectOptions(organize, "label");
+    await user.click(organize);
+    await user.click(screen.getByRole("option", { name: "Label" }));
     expect(screen.getByRole("heading", { name: "Unlabeled" })).toBeTruthy();
-    await user.selectOptions(screen.getByRole("combobox", { name: "Filter label" }), "Unlabeled");
+    await user.click(screen.getByRole("combobox", { name: "Filter label" }));
+    await user.click(screen.getByRole("option", { name: "Unlabeled" }));
     expect(screen.getByRole("button", { name: "Open conversation inspect-login" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Open conversation ship-api" })).toBeNull();
 
-    await user.selectOptions(organize, "project");
+    await user.click(organize);
+    await user.click(screen.getByRole("option", { name: "Project" }));
     expect(screen.getByRole("heading", { name: "/workspace/product" })).toBeTruthy();
-    await user.selectOptions(
-      screen.getByRole("combobox", { name: "Filter project" }),
-      "/workspace/api",
-    );
+    await user.click(screen.getByRole("combobox", { name: "Filter project" }));
+    await user.click(screen.getByRole("option", { name: "/workspace/api" }));
     expect(screen.getByRole("button", { name: "Open conversation ship-api" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Open conversation inspect-login" })).toBeNull();
 
-    await user.selectOptions(organize, "label");
+    await user.click(organize);
+    await user.click(screen.getByRole("option", { name: "Label" }));
     await user.click(screen.getAllByRole("button", { name: "Edit labels" })[0] as HTMLElement);
     await user.type(
       screen.getByRole("textbox", { name: "Labels for inspect-login" }),

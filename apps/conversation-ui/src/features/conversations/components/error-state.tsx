@@ -1,3 +1,6 @@
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { RefreshIcon } from "@/components/ui/icons";
 
 function errorMessage(error: unknown): string {
@@ -14,19 +17,36 @@ function errorDetail(error: unknown): string | null {
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry: () => void }) {
   const detail = errorDetail(error);
   return (
-    <section aria-labelledby="error-title" className="state-card state-card--error" role="alert">
-      <p className="eyebrow">Local connection</p>
-      <h2 id="error-title">Couldn&apos;t load conversations</h2>
-      <p>{errorMessage(error)}</p>
+    <Alert
+      aria-labelledby="error-title"
+      className="max-w-xl border-t-3 border-t-destructive bg-card p-7 shadow-xl"
+      role="alert"
+      variant="destructive"
+    >
+      <p className="text-[10px] font-bold uppercase tracking-[.13em] text-primary">
+        Local connection
+      </p>
+      <AlertTitle className="mt-2 text-2xl text-foreground" id="error-title">
+        Couldn&apos;t load conversations
+      </AlertTitle>
+      <AlertDescription className="leading-relaxed text-muted-foreground">
+        {errorMessage(error)}
+      </AlertDescription>
       {detail ? (
-        <details>
-          <summary>Technical detail</summary>
-          <pre>{detail}</pre>
-        </details>
+        <Collapsible className="my-4">
+          <CollapsibleTrigger className="text-xs text-muted-foreground">
+            Technical detail
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap rounded-md bg-background p-3 text-[10px]">
+              {detail}
+            </pre>
+          </CollapsibleContent>
+        </Collapsible>
       ) : null}
-      <button className="button button--secondary" onClick={onRetry} type="button">
+      <Button onClick={onRetry} type="button" variant="secondary">
         <RefreshIcon /> Retry
-      </button>
-    </section>
+      </Button>
+    </Alert>
   );
 }

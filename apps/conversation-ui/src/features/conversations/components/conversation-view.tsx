@@ -2,6 +2,8 @@
 
 import type { Conversation } from "@oneharness-ui/ipc-contract";
 import { useEffect, useRef } from "react";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
 import { useInfiniteScroll } from "../hooks/use-infinite-scroll";
 import { ReplyForm } from "./reply-form";
 import { StatusBadge } from "./status-badge";
@@ -11,7 +13,11 @@ function ConversationTitle({ name }: { name: string }) {
   const title = useRef<HTMLHeadingElement>(null);
   useEffect(() => title.current?.focus(), []);
   return (
-    <h1 ref={title} tabIndex={-1}>
+    <h1
+      className="my-1 text-xl font-semibold tracking-[-.025em] focus:outline-none"
+      ref={title}
+      tabIndex={-1}
+    >
       {name}
     </h1>
   );
@@ -47,12 +53,17 @@ export function ConversationView({
     onLoadMore: onLoadMoreTurns,
   });
   return (
-    <main className="conversation-pane">
-      <header className="conversation-header">
+    <main className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden max-[680px]:min-h-screen">
+      <header className="relative z-2 flex min-h-[86px] items-center justify-between border-b bg-background/90 px-[clamp(24px,5vw,70px)] py-3.5 backdrop-blur max-[680px]:sticky max-[680px]:top-0">
         <div>
-          <p className="eyebrow">{conversation.harnesses.join(" · ")}</p>
+          <p className="m-0 text-[10px] font-bold uppercase tracking-[.13em] text-primary">
+            {conversation.harnesses.join(" · ")}
+          </p>
           <ConversationTitle key={conversation.id} name={conversation.name} />
-          <p className="project-path" title={conversation.project}>
+          <p
+            className="m-0 max-w-[50vw] truncate font-mono text-[10px] text-subtle"
+            title={conversation.project}
+          >
             {conversation.project}
           </p>
         </div>
@@ -61,12 +72,12 @@ export function ConversationView({
       <section
         aria-busy={loadingMoreTurns}
         aria-label="Conversation turns"
-        className="turns"
+        className="min-h-0 overflow-y-auto px-[clamp(24px,7vw,94px)] pb-14 pt-9 max-[680px]:overflow-visible"
         ref={infiniteScroll.rootRef}
       >
         <p
           aria-label={`${conversation.turns.length} of ${totalTurnCount} turns loaded`}
-          className="turns__count"
+          className="mx-auto mb-5 max-w-[850px] text-right text-[10px] text-subtle"
           role="status"
         >
           {conversation.turns.length < totalTurnCount
@@ -76,31 +87,35 @@ export function ConversationView({
         {conversation.turns.map((turn) => (
           <TurnCard key={turn.id} turn={turn} />
         ))}
-        <div className="pagination">
+        <div className="mx-auto max-w-[850px] text-center">
           {hasMoreTurns ? (
-            <button
-              className="load-more"
+            <Button
+              className="mt-3.5"
               disabled={loadingMoreTurns}
               onClick={infiniteScroll.loadMore}
               type="button"
+              variant="secondary"
             >
               {loadingMoreTurns
                 ? "Loading more turns…"
                 : loadMoreTurnsError
                   ? "Retry loading turns"
                   : "Load more turns"}
-            </button>
+            </Button>
           ) : (
             <p
               aria-label={`All ${totalTurnCount} turns loaded`}
-              className="pagination__status"
+              className="mt-3.5 text-center text-[11px] text-subtle"
               role="status"
             >
               All {totalTurnCount} turns loaded
             </p>
           )}
           {loadMoreTurnsError ? (
-            <p className="pagination__error" role="alert">
+            <p
+              className="mx-auto mt-3.5 max-w-md text-center text-[11px] text-destructive"
+              role="alert"
+            >
               Couldn’t load more turns. {loadMoreTurnsError.message}
             </p>
           ) : null}
@@ -111,14 +126,16 @@ export function ConversationView({
           />
         </div>
       </section>
-      <footer className="composer-area">
+      <footer className="bg-gradient-to-b from-transparent via-background to-background px-[clamp(24px,7vw,94px)] pb-6 pt-6 max-[680px]:sticky max-[680px]:bottom-0">
         {conversation.canContinue ? (
           <ReplyForm error={continueError} onSubmit={onContinue} pending={pending} />
         ) : (
-          <div className="ineligible" role="note">
-            <strong>This session can’t be continued.</strong>
-            <span>The harness did not save an eligible native session handle.</span>
-          </div>
+          <Alert className="mx-auto max-w-[850px] bg-card" role="note">
+            <AlertTitle>This session can’t be continued.</AlertTitle>
+            <AlertDescription>
+              The harness did not save an eligible native session handle.
+            </AlertDescription>
+          </Alert>
         )}
       </footer>
     </main>

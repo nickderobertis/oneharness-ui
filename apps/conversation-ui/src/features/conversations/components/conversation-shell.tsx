@@ -2,6 +2,9 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Component, type ErrorInfo, type ReactNode, useState } from "react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import {
   useContinueConversation,
   useConversation,
@@ -15,10 +18,10 @@ import { ErrorState } from "./error-state";
 
 function LoadingState({ label }: { label: string }) {
   return (
-    <div aria-label={label} className="loading" role="status">
-      <span />
-      <span />
-      <span />
+    <div aria-label={label} className="flex gap-2" role="status">
+      <Skeleton className="size-2 rounded-full bg-primary" />
+      <Skeleton className="size-2 rounded-full bg-primary [animation-delay:120ms]" />
+      <Skeleton className="size-2 rounded-full bg-primary [animation-delay:240ms]" />
     </div>
   );
 }
@@ -32,20 +35,20 @@ function Workspace() {
 
   if (list.isLoading)
     return (
-      <div className="app-state">
+      <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_52%_40%,#1d2118_0,var(--background)_48%)] p-10">
         <LoadingState label="Loading conversations" />
       </div>
     );
   if (list.error && !list.data)
     return (
-      <div className="app-state">
+      <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_52%_40%,#1d2118_0,var(--background)_48%)] p-10">
         <ErrorState error={list.error} onRetry={() => void list.refetch()} />
       </div>
     );
   const conversations = list.data?.conversations ?? [];
 
   return (
-    <div className="desktop-shell">
+    <div className="grid h-full min-h-0 grid-cols-[330px_minmax(0,1fr)] overflow-hidden max-[820px]:grid-cols-[260px_minmax(0,1fr)] max-[680px]:min-h-screen max-[680px]:grid-cols-1 max-[680px]:overflow-visible">
       <ConversationList
         conversations={conversations}
         hasMore={list.hasNextPage}
@@ -64,23 +67,29 @@ function Workspace() {
         labeling={labels.isPending}
       />
       {!selectedId ? (
-        <main className="welcome">
-          <div>
-            <p className="eyebrow">Conversation archive</p>
-            <h1>{conversations.length === 0 ? "No history yet" : "Pick up where you left off"}</h1>
-            <p>
-              {conversations.length === 0
-                ? "Run oneharness with history enabled. Your local sessions will appear here."
-                : "Select a local session to read its turns, inspect tool activity, and continue when supported."}
-            </p>
-          </div>
+        <main className="flex min-h-0 items-center justify-center bg-[radial-gradient(circle_at_52%_40%,#1d2118_0,var(--background)_48%)] p-10 max-[680px]:min-h-[58vh]">
+          <Card className="max-w-xl border-0 bg-transparent text-center shadow-none">
+            <CardContent>
+              <p className="text-[10px] font-bold uppercase tracking-[.13em] text-primary">
+                Conversation archive
+              </p>
+              <h1 className="my-4 text-[clamp(34px,6vw,58px)] leading-none tracking-[-.055em]">
+                {conversations.length === 0 ? "No history yet" : "Pick up where you left off"}
+              </h1>
+              <p className="mx-auto max-w-lg text-[15px] leading-relaxed text-muted-foreground">
+                {conversations.length === 0
+                  ? "Run oneharness with history enabled. Your local sessions will appear here."
+                  : "Select a local session to read its turns, inspect tool activity, and continue when supported."}
+              </p>
+            </CardContent>
+          </Card>
         </main>
       ) : selected.isLoading ? (
-        <main className="welcome">
+        <main className="flex min-h-0 items-center justify-center p-10">
           <LoadingState label="Loading selected conversation" />
         </main>
       ) : selected.error && !selected.data ? (
-        <main className="welcome">
+        <main className="flex min-h-0 items-center justify-center p-10">
           <ErrorState error={selected.error} onRetry={() => void selected.refetch()} />
         </main>
       ) : selected.data ? (
@@ -111,7 +120,7 @@ class FeatureErrorBoundary extends Component<{ children: ReactNode }, { error: E
   override render() {
     if (this.state.error)
       return (
-        <div className="app-state">
+        <div className="flex h-full items-center justify-center p-10">
           <ErrorState error={this.state.error} onRetry={() => this.setState({ error: null })} />
         </div>
       );
@@ -132,7 +141,9 @@ export function ConversationShell() {
   return (
     <FeatureErrorBoundary>
       <QueryClientProvider client={queryClient}>
-        <Workspace />
+        <TooltipProvider>
+          <Workspace />
+        </TooltipProvider>
       </QueryClientProvider>
     </FeatureErrorBoundary>
   );

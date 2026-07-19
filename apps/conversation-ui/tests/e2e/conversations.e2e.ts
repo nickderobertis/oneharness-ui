@@ -54,21 +54,26 @@ test("continues the exact session and selects refreshed history", async ({ page 
 test("organizes sessions by project and round-trips local labels", async ({ page }) => {
   await page.goto("/");
   const organize = page.getByRole("combobox", { name: "Organize by" });
-  await organize.selectOption("project");
+  await organize.click();
+  await page.getByRole("option", { name: "Project" }).click();
   await expect(page.getByRole("heading", { name: /oneharness-ui/ })).toBeVisible();
 
-  await organize.selectOption("label");
+  await organize.click();
+  await page.getByRole("option", { name: "Label" }).click();
   await page.getByRole("button", { name: "Edit labels" }).first().click();
   await page.getByRole("textbox", { name: /Labels for/ }).fill("review, urgent");
   await page.getByRole("button", { name: "Save labels" }).click();
   await expect(page.getByRole("heading", { name: "review" })).toBeVisible();
-  await page.getByRole("combobox", { name: "Filter label" }).selectOption("urgent");
+  await page.getByRole("combobox", { name: "Filter label" }).click();
+  await page.getByRole("option", { name: "urgent" }).click();
   await expect(page.getByRole("listitem", { name: /Session ID/ })).toHaveCount(1);
 
   await page.reload();
-  await page.getByRole("combobox", { name: "Organize by" }).selectOption("label");
+  await page.getByRole("combobox", { name: "Organize by" }).click();
+  await page.getByRole("option", { name: "Label" }).click();
   await expect(page.getByRole("heading", { name: "urgent" })).toBeVisible();
-  await page.getByRole("combobox", { name: "Filter label" }).selectOption("urgent");
+  await page.getByRole("combobox", { name: "Filter label" }).click();
+  await page.getByRole("option", { name: "urgent" }).click();
   await page.getByRole("button", { name: "Edit labels" }).click();
   await page.getByRole("textbox", { name: /Labels for/ }).fill("");
   await page.getByRole("button", { name: "Save labels" }).click();
