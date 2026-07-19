@@ -82,7 +82,8 @@ await seed({
 });
 await seed({
   name: "markdown-session",
-  prompt: "Render **safely** <img src=x onerror=alert('unsafe')>",
+  prompt:
+    "Render **safely** <img src=x onerror=alert('unsafe')><script>globalThis.injected=true</script>",
   stdout: JSON.stringify({
     result: "**Highlighted code**\n\n```ts\nconst answer = 42;\n```",
     session_id: "e2e-native-markdown",

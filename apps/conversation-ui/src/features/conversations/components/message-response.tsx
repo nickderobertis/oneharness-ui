@@ -1,4 +1,3 @@
-import type { ComponentProps, ReactNode } from "react";
 import Markdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 
@@ -31,32 +30,6 @@ const allowedMarkdownElements = [
   "ul",
 ] as const;
 
-type MessageProps = ComponentProps<"div"> & {
-  from: "assistant" | "user";
-};
-
-export function Message({ className = "", from, ...props }: MessageProps) {
-  return (
-    <div
-      className={`ai-message ai-message--${from} ${className}`.trim()}
-      data-message-author={from}
-      {...props}
-    />
-  );
-}
-
-export function MessageContent({ className = "", ...props }: ComponentProps<"div">) {
-  return <div className={`ai-message__content ${className}`.trim()} {...props} />;
-}
-
-export function MessageAvatar({ children }: { children: ReactNode }) {
-  return (
-    <div aria-hidden="true" className="ai-message__avatar">
-      {children}
-    </div>
-  );
-}
-
 function parseJson(source: string): unknown | undefined {
   try {
     return JSON.parse(source);
@@ -69,12 +42,11 @@ export function MessageResponse({ children, label }: { children: string; label: 
   const json = parseJson(children);
   if (json !== undefined) {
     return (
-      <pre aria-label={`${label} formatted JSON`} className="message-json">
+      <pre aria-label={`${label} formatted JSON`} className="message-json whitespace-pre">
         <code>{JSON.stringify(json, null, 2)}</code>
       </pre>
     );
   }
-
   return (
     <div className="message-markdown">
       <Markdown

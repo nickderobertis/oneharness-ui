@@ -1,3 +1,7 @@
+import {
+  conversationLabelMaxLength,
+  conversationLabelsMaxCount,
+} from "@oneharness-ui/ipc-contract";
 import { expect, test } from "@playwright/test";
 
 test("lists, selects, restores a deep link, and expands optional details", async ({ page }) => {
@@ -28,8 +32,11 @@ test("renders markdown, highlighted code, and JSON without injecting session HTM
   await page.getByRole("button", { name: /markdown-session/i }).click();
   await expect(page.getByText("safely")).toHaveJSProperty("tagName", "STRONG");
   await expect(page.getByText("Highlighted code")).toHaveJSProperty("tagName", "STRONG");
-  await expect(page.locator("pre code .hljs-keyword", { hasText: "const" })).toBeVisible();
-  await expect(page.getByRole("main").locator("img, script")).toHaveCount(0);
+  const keyword = page.getByText("const", { exact: true });
+  await expect(keyword).toBeVisible();
+  await expect(keyword).toHaveClass(/hljs-keyword/);
+  await expect(page.getByRole("main").getByRole("img")).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => "injected" in globalThis)).toBe(false);
 
   await page.getByRole("button", { name: /json-session/i }).click();
   const json = page.getByLabel("Assistant message formatted JSON");
@@ -41,6 +48,8 @@ test("renders markdown, highlighted code, and JSON without injecting session HTM
 test("continues the exact session and selects refreshed history", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: /plain-session/i }).click();
+  await page.getByRole("button", { name: "Send reply" }).hover();
+  await expect(page.getByRole("tooltip", { name: "Send reply" })).toBeVisible();
   const before = page.url();
   await page.getByRole("textbox", { name: "Continue this session" }).fill("Continue with a fix");
   await page.getByRole("button", { name: "Send reply" }).click();
@@ -54,21 +63,48 @@ test("continues the exact session and selects refreshed history", async ({ page 
 test("organizes sessions by project and round-trips local labels", async ({ page }) => {
   await page.goto("/");
   const organize = page.getByRole("combobox", { name: "Organize by" });
-  await organize.selectOption("project");
+  await page.getByRole("button", { name: "Refresh conversations" }).hover();
+  await expect(page.getByRole("tooltip", { name: "Refresh conversations" })).toBeVisible();
+  await organize.click();
+  await page.getByRole("option", { name: "Project" }).click();
   await expect(page.getByRole("heading", { name: /oneharness-ui/ })).toBeVisible();
 
-  await organize.selectOption("label");
+  await organize.click();
+  await page.getByRole("option", { name: "Label" }).click();
+  await page.getByRole("button", { name: "Edit labels" }).first().hover();
+  await expect(page.getByRole("tooltip", { name: "Edit labels" })).toBeVisible();
   await page.getByRole("button", { name: "Edit labels" }).first().click();
+  await page.getByRole("textbox", { name: /Labels for/ }).fill("discard-me");
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.getByRole("button", { name: "Edit labels" }).first().click();
+  await page
+    .getByRole("textbox", { name: /Labels for/ })
+    .fill(
+      Array.from({ length: conversationLabelsMaxCount + 1 }, (_, index) => `label-${index}`).join(
+        ",",
+      ),
+    );
+  await page.getByRole("button", { name: "Save labels" }).click();
+  await expect(page.getByRole("alert")).toContainText("no more than 20 labels");
+  await page
+    .getByRole("textbox", { name: /Labels for/ })
+    .fill("x".repeat(conversationLabelMaxLength + 1));
+  await page.getByRole("button", { name: "Save labels" }).click();
+  await expect(page.getByRole("alert")).toContainText("at most 64 characters");
   await page.getByRole("textbox", { name: /Labels for/ }).fill("review, urgent");
   await page.getByRole("button", { name: "Save labels" }).click();
   await expect(page.getByRole("heading", { name: "review" })).toBeVisible();
-  await page.getByRole("combobox", { name: "Filter label" }).selectOption("urgent");
+  await page.getByRole("combobox", { name: "Filter label" }).click();
+  await page.getByRole("option", { name: "urgent" }).click();
   await expect(page.getByRole("listitem", { name: /Session ID/ })).toHaveCount(1);
 
   await page.reload();
-  await page.getByRole("combobox", { name: "Organize by" }).selectOption("label");
+  await page.getByRole("combobox", { name: "Organize by" }).click();
+  await page.getByRole("option", { name: "Label" }).click();
   await expect(page.getByRole("heading", { name: "urgent" })).toBeVisible();
-  await page.getByRole("combobox", { name: "Filter label" }).selectOption("urgent");
+  await page.getByRole("combobox", { name: "Filter label" }).click();
+  await page.getByRole("option", { name: "urgent" }).click();
   await page.getByRole("button", { name: "Edit labels" }).click();
   await page.getByRole("textbox", { name: /Labels for/ }).fill("");
   await page.getByRole("button", { name: "Save labels" }).click();

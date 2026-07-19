@@ -8,9 +8,23 @@ const labels: Readonly<Record<string, string>> = {
 export function StatusBadge({ state }: { state: string }) {
   const tone = Object.hasOwn(labels, state) ? state : "unknown";
   return (
-    <span className={`status status--${tone}`}>
-      <span aria-hidden="true" className="status__dot" />
+    <Badge
+      className={cn("gap-1.5 uppercase tracking-[.03em]", {
+        "text-destructive": tone === "failed",
+        "text-primary": tone === "running",
+        "text-success": tone === "completed",
+        "text-warning": tone === "stopped",
+      })}
+      variant="outline"
+    >
+      <span
+        aria-hidden="true"
+        className={cn("size-1.5 rounded-full bg-current", tone === "running" && "animate-pulse")}
+      />
       {labels[state] ?? state}
-    </span>
+    </Badge>
   );
 }
+
+import { Badge } from "@/components/ui/badge";
+import { cn } from "@/components/utils";
