@@ -7,7 +7,8 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
-import { Message, MessageAvatar, MessageContent, MessageResponse } from "@/components/ui/message";
+import { Message, MessageAvatar, MessageContent } from "@/components/ui/message";
+import { MessageResponse } from "./message-response";
 
 type Turn = Conversation["turns"][number];
 

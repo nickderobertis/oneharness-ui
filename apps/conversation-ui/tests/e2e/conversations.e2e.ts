@@ -41,6 +41,8 @@ test("renders markdown, highlighted code, and JSON without injecting session HTM
 test("continues the exact session and selects refreshed history", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: /plain-session/i }).click();
+  await page.getByRole("button", { name: "Send reply" }).hover();
+  await expect(page.getByRole("tooltip", { name: "Send reply" })).toBeVisible();
   const before = page.url();
   await page.getByRole("textbox", { name: "Continue this session" }).fill("Continue with a fix");
   await page.getByRole("button", { name: "Send reply" }).click();
@@ -54,12 +56,16 @@ test("continues the exact session and selects refreshed history", async ({ page 
 test("organizes sessions by project and round-trips local labels", async ({ page }) => {
   await page.goto("/");
   const organize = page.getByRole("combobox", { name: "Organize by" });
+  await page.getByRole("button", { name: "Refresh conversations" }).hover();
+  await expect(page.getByRole("tooltip", { name: "Refresh conversations" })).toBeVisible();
   await organize.click();
   await page.getByRole("option", { name: "Project" }).click();
   await expect(page.getByRole("heading", { name: /oneharness-ui/ })).toBeVisible();
 
   await organize.click();
   await page.getByRole("option", { name: "Label" }).click();
+  await page.getByRole("button", { name: "Edit labels" }).first().hover();
+  await expect(page.getByRole("tooltip", { name: "Edit labels" })).toBeVisible();
   await page.getByRole("button", { name: "Edit labels" }).first().click();
   await page.getByRole("textbox", { name: /Labels for/ }).fill("review, urgent");
   await page.getByRole("button", { name: "Save labels" }).click();
