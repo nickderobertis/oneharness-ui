@@ -15,8 +15,13 @@ declare global {
 const httpConfigurationSchema = z.object({
   url: z
     .string()
-    .url()
+    .optional()
     .transform((value, context) => {
+      if (value === undefined || value === "") return "";
+      if (!URL.canParse(value)) {
+        context.addIssue({ code: "custom", message: "Bridge URL must be a URL" });
+        return z.NEVER;
+      }
       const url = new URL(value);
       if (
         url.protocol !== "http:" ||

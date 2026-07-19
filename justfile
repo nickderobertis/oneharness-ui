@@ -11,6 +11,11 @@ bootstrap:
 dev:
     @./scripts/run-quiet.sh "desktop development session" "Install the platform's Tauri prerequisites, fix the reported startup error, and rerun 'just dev'." -- bunx tauri dev --config apps/desktop-shell/tauri.conf.json
 
+# Loopback is the safe default. Set ONEHARNESS_UI_HOST explicitly to expose the server on a private LAN.
+serve:
+    @./scripts/run-quiet.sh "web UI build" "Fix the reported static export error, then rerun 'just serve'." -- bun run --cwd apps/conversation-ui build
+    @bun packages/oneharness-bridge/src/cli.ts web
+
 check:
     @ONEHARNESS_QUIET=1 just format-check
     @ONEHARNESS_QUIET=1 just lint

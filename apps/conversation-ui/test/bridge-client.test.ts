@@ -53,6 +53,22 @@ describe("validated bridge client", () => {
     expect(requests[1]?.init?.headers).toEqual({ "Content-Type": "application/json" });
   });
 
+  test("uses the serving origin in web mode", async () => {
+    delete process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_URL;
+    const requests: string[] = [];
+    globalThis.fetch = (async (input) => {
+      requests.push(String(input));
+      if (String(input) === "/session") return new Response(null, { status: 204 });
+      return Response.json({
+        data: { conversations: [], kind: "list", nextCursor: null, totalCount: 0 },
+        ok: true,
+      });
+    }) as typeof fetch;
+
+    await invokeBridge({ kind: "list" });
+    expect(requests).toEqual(["/session", "/invoke"]);
+  });
+
   test("uses only the fixed Tauri bridge command", async () => {
     let failure: Error | undefined;
     const invocations: Array<{ args: unknown; command: string }> = [];
