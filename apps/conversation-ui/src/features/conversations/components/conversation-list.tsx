@@ -28,6 +28,7 @@ import {
   useConversationOrganization,
 } from "../hooks/use-conversation-organization";
 import { useInfiniteScroll } from "../hooks/use-infinite-scroll";
+import { useLabelEditor } from "../hooks/use-label-editor";
 
 export function ConversationList({
   conversations,
@@ -58,18 +59,10 @@ export function ConversationList({
   selectedId: string | null;
   totalCount: number;
 }) {
-  const {
-    choices,
-    editingId,
-    filter,
-    grouped,
-    grouping,
-    labelInput,
-    setEditingId,
-    setFilter,
-    setGrouping,
-    setLabelInput,
-  } = useConversationOrganization(conversations);
+  const { choices, filter, grouped, grouping, setFilter, setGrouping } =
+    useConversationOrganization(conversations);
+  const { closeEditor, editingId, labelInput, openEditor, saveLabels, setLabelInput } =
+    useLabelEditor(onSetLabels);
   const infiniteScroll = useInfiniteScroll({
     automatic: loadMoreError === null,
     hasMore,
@@ -208,9 +201,8 @@ export function ConversationList({
                     <Dialog
                       onOpenChange={(open) => {
                         if (open) {
-                          setEditingId(conversation.id);
-                          setLabelInput((conversation.labels ?? []).join(", "));
-                        } else if (editingId === conversation.id) setEditingId(null);
+                          openEditor(conversation);
+                        } else if (editingId === conversation.id) closeEditor();
                       }}
                       open={editingId === conversation.id}
                     >
@@ -220,8 +212,7 @@ export function ConversationList({
                             aria-label="Edit labels"
                             className="mx-2 h-auto justify-start px-1 py-0.5 text-[10px] text-primary"
                             onClick={() => {
-                              setEditingId(conversation.id);
-                              setLabelInput((conversation.labels ?? []).join(", "));
+                              openEditor(conversation);
                             }}
                             type="button"
                             variant="ghost"
@@ -239,13 +230,7 @@ export function ConversationList({
                           <form
                             onSubmit={(event) => {
                               event.preventDefault();
-                              const next = labelInput
-                                .split(",")
-                                .map((value) => value.trim())
-                                .filter(Boolean);
-                              void onSetLabels(conversation.id, next)
-                                .then(() => setEditingId(null))
-                                .catch(() => undefined);
+                              void saveLabels(conversation.id).catch(() => undefined);
                             }}
                           >
                             <DialogHeader>

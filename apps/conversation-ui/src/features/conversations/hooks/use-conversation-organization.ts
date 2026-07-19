@@ -11,8 +11,6 @@ export type ConversationGrouping = (typeof conversationGroupingOptions)[number][
 export function useConversationOrganization(conversations: ConversationSummary[]) {
   const [grouping, setGrouping] = useState<ConversationGrouping>("none");
   const [filter, setFilter] = useState("all");
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [labelInput, setLabelInput] = useState("");
   const choices = useMemo(() => {
     const values = new Set<string>();
     for (const conversation of conversations) {
@@ -46,14 +44,10 @@ export function useConversationOrganization(conversations: ConversationSummary[]
   }, [conversations, filter, grouping]);
   return {
     choices,
-    editingId,
     filter,
     grouped,
     grouping,
-    labelInput,
-    setEditingId,
     setFilter,
     setGrouping,
-    setLabelInput,
   };
 }

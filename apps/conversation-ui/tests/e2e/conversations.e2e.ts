@@ -28,8 +28,11 @@ test("renders markdown, highlighted code, and JSON without injecting session HTM
   await page.getByRole("button", { name: /markdown-session/i }).click();
   await expect(page.getByText("safely")).toHaveJSProperty("tagName", "STRONG");
   await expect(page.getByText("Highlighted code")).toHaveJSProperty("tagName", "STRONG");
-  await expect(page.getByText("const", { exact: true })).toBeVisible();
+  const keyword = page.getByText("const", { exact: true });
+  await expect(keyword).toBeVisible();
+  await expect(keyword).toHaveClass(/hljs-keyword/);
   await expect(page.getByRole("main").getByRole("img")).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => "injected" in globalThis)).toBe(false);
 
   await page.getByRole("button", { name: /json-session/i }).click();
   const json = page.getByLabel("Assistant message formatted JSON");
