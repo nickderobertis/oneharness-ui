@@ -27,10 +27,13 @@ const historyDir = resolve(repository, ".cache/e2e-history");
 const visualProject = "/tmp/oneharness-ui-visual-project";
 if (process.env.ONEHARNESS_UI_TEST_VISUAL === "true")
   await mkdir(visualProject, { recursive: true });
-const provider = resolve(
-  repository,
-  `target/oneharness-ui-test/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
-);
+const provider =
+  process.env.ONEHARNESS_UI_TEST_VISUAL === "true"
+    ? resolve(repository, "packages/oneharness-bridge/test/fixtures/visual-provider.sh")
+    : resolve(
+        repository,
+        `target/oneharness-ui-test/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
+      );
 
 if (cliOverride) process.env.ONEHARNESS_BIN = cliOverride;
 await rm(historyDir, { force: true, recursive: true });
