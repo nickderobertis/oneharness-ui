@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "..");
-const versions = readFileSync(resolve(root, "scripts/visual-docs-versions.sh"), "utf8");
+const versions = readFileSync(resolve(root, "scripts/visual-docs-versions.env"), "utf8");
 const workflow = readFileSync(resolve(root, ".github/workflows/visual-docs.yml"), "utf8");
 const setup = readFileSync(resolve(root, "scripts/setup-screencomp.sh"), "utf8");
 const screencompConfig = readFileSync(resolve(root, "screencomp.toml"), "utf8");
@@ -15,8 +15,8 @@ const packageManifest = JSON.parse(readFileSync(resolve(root, "package.json"), "
 
 describe("visual docs command contracts", () => {
   test("keeps workflow tool pins aligned with local capture", () => {
-    const screencomp = versions.match(/SCREENCOMP_VERSION="([^"]+)"/)?.[1];
-    const image = versions.match(/VISUAL_PLAYWRIGHT_IMAGE="([^"]+)"/)?.[1];
+    const screencomp = versions.match(/SCREENCOMP_VERSION=([^\n]+)/)?.[1];
+    const image = versions.match(/VISUAL_PLAYWRIGHT_IMAGE=([^\n]+)/)?.[1];
     expect(screencomp).toBe("v0.4.2");
     expect(image).toBe("mcr.microsoft.com/playwright:v1.61.1-noble");
     expect(workflow).toContain(`screencomp-version: ${screencomp}`);

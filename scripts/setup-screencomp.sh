@@ -3,11 +3,12 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 readonly ROOT
-# The version file is resolved from the validated repository root, not the caller's directory.
-# shellcheck disable=SC1091
-source "$ROOT/scripts/visual-docs-versions.sh"
+versions_file="$ROOT/scripts/visual-docs-versions.env"
+readonly versions_file
+SCREENCOMP_VERSION="$(sed -n 's/^SCREENCOMP_VERSION=//p' "$versions_file")"
 [[ "$SCREENCOMP_VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] \
-  || { echo "screencomp setup: invalid pinned version; correct scripts/visual-docs-versions.sh" >&2; exit 2; }
+  || { echo "screencomp setup: invalid pinned version; correct scripts/visual-docs-versions.env" >&2; exit 2; }
+readonly SCREENCOMP_VERSION
 [[ -n "${HOME:-}" && "$HOME" = /* && "${#HOME}" -le 4096 ]] \
   || { echo "screencomp setup: HOME must be an absolute path of reasonable length" >&2; exit 2; }
 readonly INSTALL_DIR="$HOME/.local/bin"

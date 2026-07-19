@@ -3,11 +3,12 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 readonly ROOT
-# The version file is resolved from the validated repository root, not the caller's directory.
-# shellcheck disable=SC1091
-source "$ROOT/scripts/visual-docs-versions.sh"
+versions_file="$ROOT/scripts/visual-docs-versions.env"
+readonly versions_file
+VISUAL_PLAYWRIGHT_IMAGE="$(sed -n 's/^VISUAL_PLAYWRIGHT_IMAGE=//p' "$versions_file")"
 [[ "$VISUAL_PLAYWRIGHT_IMAGE" =~ ^mcr\.microsoft\.com/playwright:v[0-9]+\.[0-9]+\.[0-9]+-noble$ ]] \
-  || { echo "visual docs: invalid container pin; correct scripts/visual-docs-versions.sh" >&2; exit 2; }
+  || { echo "visual docs: invalid container pin; correct scripts/visual-docs-versions.env" >&2; exit 2; }
+readonly VISUAL_PLAYWRIGHT_IMAGE
 readonly PLATFORM="linux/amd64"
 
 docker_command="${ONEHARNESS_VISUAL_DOCKER_COMMAND:-docker}"
