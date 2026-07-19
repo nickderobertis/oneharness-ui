@@ -79,6 +79,9 @@ test("organizes sessions by project and round-trips local labels", async ({ page
     .fill(Array.from({ length: 21 }, (_, index) => `label-${index}`).join(","));
   await page.getByRole("button", { name: "Save labels" }).click();
   await expect(page.getByRole("alert")).toContainText("no more than 20 labels");
+  await page.getByRole("textbox", { name: /Labels for/ }).fill("x".repeat(65));
+  await page.getByRole("button", { name: "Save labels" }).click();
+  await expect(page.getByRole("alert")).toContainText("at most 64 characters");
   await page.getByRole("textbox", { name: /Labels for/ }).fill("review, urgent");
   await page.getByRole("button", { name: "Save labels" }).click();
   await expect(page.getByRole("heading", { name: "review" })).toBeVisible();
