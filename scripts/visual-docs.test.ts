@@ -7,6 +7,8 @@ const root = resolve(import.meta.dir, "..");
 const versions = readFileSync(resolve(root, "scripts/visual-docs-versions.sh"), "utf8");
 const workflow = readFileSync(resolve(root, ".github/workflows/visual-docs.yml"), "utf8");
 const setup = readFileSync(resolve(root, "scripts/setup-screencomp.sh"), "utf8");
+const screencompConfig = readFileSync(resolve(root, "screencomp.toml"), "utf8");
+const verifyScript = readFileSync(resolve(root, "scripts/verify-visual.sh"), "utf8");
 
 describe("visual docs command contracts", () => {
   test("keeps workflow tool pins aligned with local capture", () => {
@@ -16,6 +18,12 @@ describe("visual docs command contracts", () => {
     expect(image).toBe("mcr.microsoft.com/playwright:v1.61.1-noble");
     expect(workflow).toContain(`screencomp-version: ${screencomp}`);
     expect(workflow).toContain(`container: ${image}`);
+  });
+
+  test("keeps the capture paths and container platform on the configured architecture", () => {
+    expect(screencompConfig).toContain('arches = ["x86_64"]');
+    expect(verifyScript).toContain('PLATFORM="linux/amd64"');
+    expect(verifyScript).toContain("SHOTS_OUT=$output/x86_64");
   });
 
   test("pins and verifies the downloaded installer before execution", () => {

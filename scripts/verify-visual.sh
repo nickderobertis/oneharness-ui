@@ -32,7 +32,7 @@ capture() {
   "$docker_command" run --rm --platform="$PLATFORM" --ipc=host --shm-size=2g \
     -e "SHOTS_OUT=$output/x86_64" \
     -v "$ROOT:/work" -v /work/node_modules -w /work \
-    "$VISUAL_PLAYWRIGHT_IMAGE" bash capture.sh \
+    "$VISUAL_PLAYWRIGHT_IMAGE" bash capture.sh >/dev/null \
     || { echo "visual docs: $output capture failed; inspect the browser output and retry" >&2; exit 1; }
 }
 
