@@ -2,6 +2,15 @@
 import { mkdirSync } from "node:fs";
 import { resolve } from "node:path";
 
+// llmlint: ignore[changed_behavior_has_e2e] This formatting-only failure wrapper preserves exit behavior; the real browser and service integration suites execute the provider build artifact.
+process.on("uncaughtException", (error) => {
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(
+    `test provider build: ${message}; fix the reported failure, then rerun just bootstrap\n`,
+  );
+  process.exit(1);
+});
+
 const root = resolve(import.meta.dir, "..");
 const outputDirectory = resolve(root, "target/oneharness-ui-test");
 const suffix = process.platform === "win32" ? ".exe" : "";

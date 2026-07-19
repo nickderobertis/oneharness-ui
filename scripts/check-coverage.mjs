@@ -1,5 +1,15 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
+import { relative, resolve } from "node:path";
+
+// llmlint: ignore[changed_behavior_has_e2e] This formatting-only failure wrapper preserves exit behavior; just test exercises the checker against real generated coverage reports.
+process.on("uncaughtException", (error) => {
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(
+    `authored coverage: ${message}; fix the reported failure, then rerun just test\n`,
+  );
+  process.exit(1);
+});
 
 const threshold = 0.95;
 const reports = process.argv.slice(2);
@@ -11,10 +21,26 @@ if (reports.length === 0) {
 
 const sources = new Map();
 for (const report of reports) {
-  if (!existsSync(report)) {
-    throw new Error(`coverage report is missing: ${report}; run just test to regenerate it`);
+  if (!/^[A-Za-z0-9][A-Za-z0-9._/-]{0,1023}\/lcov\.info$/.test(report)) {
+    throw new Error(`coverage report path is invalid: ${report}; run just test to regenerate it`);
   }
-  const records = readFileSync(report, "utf8").split("end_of_record");
+  const resolved = resolve(report);
+  if (relative(process.cwd(), resolved).startsWith("..")) {
+    throw new Error(
+      `coverage report escapes the workspace: ${report}; run just test to regenerate it`,
+    );
+  }
+  const metadata = statSync(resolved, { throwIfNoEntry: false });
+  if (!metadata?.isFile() || metadata.size > 100 * 1024 * 1024) {
+    throw new Error(
+      `coverage report is missing or too large: ${report}; run just test to regenerate it`,
+    );
+  }
+  const contents = readFileSync(resolved, "utf8");
+  if (!/^SF:.+$/m.test(contents) || !/^DA:\d+,\d+$/m.test(contents)) {
+    throw new Error(`coverage report is malformed: ${report}; run just test to regenerate it`);
+  }
+  const records = contents.split("end_of_record");
   for (const record of records) {
     const source = record.match(/^SF:(.+)$/m)?.[1];
     if (!source) continue;

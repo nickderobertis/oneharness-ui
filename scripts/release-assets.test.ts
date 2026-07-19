@@ -89,6 +89,50 @@ describe("release asset contract", () => {
         platform: "linux-aarch64",
         tag: "v1.2.3",
       }),
-    ).toThrow("must include appimage");
+    ).toThrow(
+      "must include appimage; add it to RELEASE_ASSET_FORMATS and rerun just prepare-release-assets",
+    );
+  });
+
+  test("rejects invalid release formats with an actionable matrix remedy", () => {
+    const bundleDirectory = temporaryDirectory("oneharness-ui-bundles-");
+    const assetDirectory = temporaryDirectory("oneharness-ui-release-assets-");
+
+    expect(() => releaseAssetName("v1.2.3", "macos-aarch64", "msi")).toThrow(
+      "msi is not a release format for macos-aarch64; rerun with one of dmg",
+    );
+    expect(() =>
+      prepareReleaseAssets({
+        assetDirectory,
+        bundleDirectory,
+        formats: [],
+        platform: "linux-aarch64",
+        tag: "v1.2.3",
+      }),
+    ).toThrow(
+      "release asset formats must be a nonempty list without duplicates; correct RELEASE_ASSET_FORMATS and rerun just prepare-release-assets",
+    );
+    expect(() =>
+      prepareReleaseAssets({
+        assetDirectory,
+        bundleDirectory,
+        formats: ["appimage", "appimage"],
+        platform: "linux-aarch64",
+        tag: "v1.2.3",
+      }),
+    ).toThrow(
+      "release asset formats must be a nonempty list without duplicates; correct RELEASE_ASSET_FORMATS and rerun just prepare-release-assets",
+    );
+    expect(() =>
+      prepareReleaseAssets({
+        assetDirectory,
+        bundleDirectory,
+        formats: ["appimage", "msi"],
+        platform: "linux-aarch64",
+        tag: "v1.2.3",
+      }),
+    ).toThrow(
+      "release asset formats for linux-aarch64 must be selected from appimage,deb; correct RELEASE_ASSET_FORMATS and rerun just prepare-release-assets",
+    );
   });
 });

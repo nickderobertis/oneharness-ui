@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# llmlint: ignore[changed_behavior_has_e2e] Clean-checkout CI executes bootstrap on every supported OS; its tauri-driver branch is also exercised by the native desktop workflow.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

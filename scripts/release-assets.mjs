@@ -44,7 +44,9 @@ export function releaseAssetName(tag, platform, format) {
   requirePlatform(platform);
   const allowed = platformFormats[platform];
   if (!allowed.includes(format)) {
-    throw new Error(`${format} is not a release format for ${platform}`);
+    throw new Error(
+      `${format} is not a release format for ${platform}; rerun with one of ${allowed.join(", ")}`,
+    );
   }
   return `${product}-${tag}-${platform}${formatContracts[format].suffix}`;
 }
@@ -66,15 +68,19 @@ export function prepareReleaseAssets({ assetDirectory, bundleDirectory, formats,
   const allowed = platformFormats[platform];
   const uniqueFormats = [...new Set(formats)];
   if (uniqueFormats.length !== formats.length || formats.length === 0) {
-    throw new Error("release asset formats must be a nonempty list without duplicates");
+    throw new Error(
+      "release asset formats must be a nonempty list without duplicates; correct RELEASE_ASSET_FORMATS and rerun just prepare-release-assets",
+    );
   }
   if (formats.some((format) => !allowed.includes(format))) {
     throw new Error(
-      `release asset formats for ${platform} must be selected from ${allowed.join(",")}`,
+      `release asset formats for ${platform} must be selected from ${allowed.join(",")}; correct RELEASE_ASSET_FORMATS and rerun just prepare-release-assets`,
     );
   }
   if (!formats.includes(primaryFormats[platform])) {
-    throw new Error(`release assets for ${platform} must include ${primaryFormats[platform]}`);
+    throw new Error(
+      `release assets for ${platform} must include ${primaryFormats[platform]}; add it to RELEASE_ASSET_FORMATS and rerun just prepare-release-assets`,
+    );
   }
   if (!statSync(bundleDirectory, { throwIfNoEntry: false })?.isDirectory()) {
     throw new Error(`bundle directory does not exist: ${bundleDirectory}; run just bundle first`);

@@ -7,6 +7,7 @@ const webAccessToken = z
   .string()
   .min(32)
   .max(256)
+  // llmlint: ignore[no_hardcoded_secrets] The fallback is freshly generated cryptographic test-server capability material, not an inline literal or reusable credential.
   .parse(process.env.ONEHARNESS_UI_TEST_WEB_ACCESS_TOKEN ?? randomBytes(24).toString("base64url"));
 process.env.ONEHARNESS_UI_TEST_WEB_ACCESS_TOKEN = webAccessToken;
 

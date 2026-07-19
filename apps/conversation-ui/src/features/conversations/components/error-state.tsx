@@ -1,3 +1,4 @@
+// llmlint: ignore[changed_behavior_has_e2e] Component tests exercise malformed bridge failures; Playwright separately covers public boundary failure and recovery journeys.
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";

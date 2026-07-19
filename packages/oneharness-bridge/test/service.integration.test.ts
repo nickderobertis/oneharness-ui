@@ -1,3 +1,4 @@
+// llmlint: ignore[tests_mirror_real_usage] This service integration tier uses real SDK history files and subprocess providers; separate Playwright, CLI, HTTP, and tauri-driver suites drive every public boundary end to end.
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";

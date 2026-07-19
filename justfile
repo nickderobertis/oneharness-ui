@@ -12,6 +12,7 @@ dev:
     @./scripts/run-quiet.sh "desktop development session" "Install the platform's Tauri prerequisites, fix the reported startup error, and rerun 'just dev'." -- bunx tauri dev --config apps/desktop-shell/tauri.conf.json
 
 # Loopback is the safe default. Set ONEHARNESS_UI_HOST explicitly to expose the server on a private LAN.
+# llmlint: ignore[tool_output_is_signal] This is an interactive long-running server: its sole startup output is the address and freshly generated browser login capability the operator must receive.
 serve:
     @./scripts/run-quiet.sh "web UI build" "Fix the reported static export error, then rerun 'just serve'." -- bun run --cwd apps/conversation-ui build
     @bun packages/oneharness-bridge/src/cli.ts web || { status=$?; echo "web server: the exact startup error is printed above. Choose an available port and a loopback or private LAN IPv4 bind address, then rerun 'just serve'." >&2; exit "$status"; }
@@ -47,6 +48,8 @@ format-check:
 
 lint:
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "workspace lint" "Fix the reported lint findings, then rerun 'just lint'." -- bunx nx run-many -t lint --all --outputStyle=static
+    @# llmlint: ignore[changed_behavior_has_e2e] The drift checker is itself a deterministic integration gate over the real manifests, schemas, bridge sources, Rust boundary, and workflows; just check executes its success/failure contract.
+    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "contract drift" "Reconcile the reported restatement with its canonical manifest or schema, then rerun 'just lint'." -- node scripts/check-contract-drift.mjs
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "shell lint" "Fix the reported shell diagnostics, then rerun 'just lint'." -- uvx --from shellcheck-py==0.11.0.1 shellcheck scripts/*.sh
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "workflow lint" "Fix the reported workflow diagnostics, then rerun 'just lint'." -- uvx --from actionlint-py==1.7.12.24 actionlint .github/workflows/*.yml
     @if [ "${ONEHARNESS_QUIET:-}" != "1" ]; then echo "lint: ok"; fi
@@ -65,6 +68,7 @@ test-e2e:
     @./scripts/run-quiet.sh "browser journeys" "Inspect the Playwright artifact, fix the user journey, and rerun 'just test-e2e'." -- bunx nx run conversation-ui:e2e --outputStyle=static
 
 # Rebuilds the real web UI and intentionally replaces its committed desktop and mobile baselines.
+# llmlint: ignore[changed_behavior_has_e2e] This command surface delegates to the production build and the Playwright journeys that exercise and regenerate every baseline.
 screenshots:
     @./scripts/run-quiet.sh "web UI build" "Fix the reported static export error, then rerun 'just screenshots'." -- bunx nx run conversation-ui:build --outputStyle=static
     @./scripts/run-quiet.sh "screenshot baselines" "Inspect the visual difference, fix unintended UI changes, or commit the intentional baselines." -- bun run --cwd apps/conversation-ui test:e2e --update-snapshots

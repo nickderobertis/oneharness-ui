@@ -6,7 +6,7 @@ organization, rich markdown and code, formatted JSON, and the reply/continuation
 desktop and 390 px phone viewports.
 
 `just test-e2e` compares the UI with the committed images under
-`apps/conversation-ui/tests/e2e/__screenshots__`. This comparison is part of `just check`. The
+`apps/conversation-ui/tests/e2e/__screenshots__/screenshots.e2e.ts`. This comparison is part of `just check`. The
 tests request reduced motion, remove transitions and caret rendering, use fixed viewports, and
 permit only a one-percent changed-pixel ratio to absorb minor Linux rasterization differences.
 

@@ -1,6 +1,6 @@
 import { expect, type Locator, test } from "@playwright/test";
 
-async function expectInsidePhoneViewport(locator: Locator) {
+async function expectInsidePhoneWidth(locator: Locator) {
   const box = await locator.boundingBox();
   expect(box).not.toBeNull();
   expect(box?.x).toBeGreaterThanOrEqual(0);
@@ -12,7 +12,7 @@ test("keeps list, detail, and reply controls usable at phone width", async ({ pa
   const history = page.getByRole("navigation", { name: "Conversation history" });
   await expect(history).toBeVisible();
   await expect(page.getByRole("main")).toBeHidden();
-  await expect(page.locator("body")).toHaveJSProperty("scrollWidth", 390);
+  await expect.poll(() => page.evaluate(() => document.body.scrollWidth)).toBe(390);
 
   await page.getByRole("button", { name: /markdown-session/i }).click();
   await expect(history).toBeHidden();
@@ -23,10 +23,10 @@ test("keeps list, detail, and reply controls usable at phone width", async ({ pa
   await expect(back).toBeVisible();
   await expect(reply).toBeVisible();
   await expect(send).toBeVisible();
-  await expect(page.locator("body")).toHaveJSProperty("scrollWidth", 390);
-  await expectInsidePhoneViewport(back);
-  await expectInsidePhoneViewport(reply);
-  await expectInsidePhoneViewport(send);
+  await expect.poll(() => page.evaluate(() => document.body.scrollWidth)).toBe(390);
+  await expectInsidePhoneWidth(back);
+  await expectInsidePhoneWidth(reply);
+  await expectInsidePhoneWidth(send);
 
   await page.getByRole("button", { name: "Back to conversations" }).click();
   await expect(history).toBeVisible();
@@ -45,6 +45,6 @@ test("continues a session without losing the mobile layout", async ({ page }) =>
     timeout: 15_000,
   });
   await expect(page.getByRole("button", { name: "Back to conversations" })).toBeVisible();
-  await expect(page.locator("body")).toHaveJSProperty("scrollWidth", 390);
-  await expectInsidePhoneViewport(page.getByRole("button", { name: "Send reply" }));
+  await expect.poll(() => page.evaluate(() => document.body.scrollWidth)).toBe(390);
+  await expectInsidePhoneWidth(page.getByRole("button", { name: "Send reply" }));
 });

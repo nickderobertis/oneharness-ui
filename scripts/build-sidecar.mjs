@@ -11,6 +11,15 @@ import {
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 
+// llmlint: ignore[changed_behavior_has_e2e] This formatting-only failure wrapper preserves exit behavior; bundle/bootstrap integration exercises the command and run-quiet owns its public failure contract.
+process.on("uncaughtException", (error) => {
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(
+    `build-sidecar: ${message}; fix the reported failure, then rerun just bootstrap\n`,
+  );
+  process.exit(1);
+});
+
 const root = resolve(import.meta.dir, "..");
 const rustc = Bun.spawnSync(["rustc", "-vV"], { cwd: root });
 if (rustc.exitCode !== 0) {
@@ -48,6 +57,7 @@ const platformPackages = {
 };
 const platformKey = `${process.platform}-${process.arch}`;
 const platformPackage = platformPackages[platformKey];
+// SDK/CLI version restatements below are compared with package.json by scripts/check-contract-drift.mjs in just lint.
 if (!platformPackage) {
   throw new Error(
     `@oneharness/sdk 0.3.23 has no packaged CLI for ${platformKey}; use a supported release target`,

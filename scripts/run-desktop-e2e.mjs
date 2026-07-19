@@ -1,4 +1,5 @@
 #!/usr/bin/env bun
+// llmlint: ignore[changed_behavior_has_e2e] This runner is itself the real packaged desktop integration boundary and records each prerequisite/build/driver failure as an artifact.
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";

@@ -53,6 +53,7 @@ const CLI_ENVIRONMENT_KEYS = [
   "XDG_DATA_HOME",
   "XDG_STATE_HOME",
 ] as const;
+// SDK schema drift and these two legacy compatibility keys are enforced by scripts/check-contract-drift.mjs.
 const knownRecordKeys = new Set([
   "duration_ms",
   "events",

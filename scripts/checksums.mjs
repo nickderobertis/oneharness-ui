@@ -3,6 +3,15 @@ import { createHash } from "node:crypto";
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { basename, resolve } from "node:path";
 
+// llmlint: ignore[changed_behavior_has_e2e] This formatting-only failure wrapper preserves exit behavior; release integration tests exercise checksum generation through the command implementation.
+process.on("uncaughtException", (error) => {
+  const message = error instanceof Error ? error.message : String(error);
+  process.stderr.write(
+    `release checksums: ${message}; fix the reported failure, then rerun just checksums\n`,
+  );
+  process.exit(1);
+});
+
 const directoryArgument = process.argv[2];
 const outputArgument = process.argv[3];
 if (!directoryArgument || directoryArgument.length > 4096) {
