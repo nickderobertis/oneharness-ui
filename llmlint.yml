@@ -31,9 +31,14 @@ rules:
     relevance: new behavior lacks a representative realistic success journey and a representative failure or recovery integration test at the boundary under test
   - name: least_privilege_grants
     override: true
+    files:
+      include:
+        - ".github/workflows/**/*.yml"
+    require_line_attribution: true
     relevance: a workflow grants permissions beyond its runtime needs, excluding permissions mandated by the audited reusable-workflow caller contract when that reusable workflow narrows its untrusted capture job
   - name: work_goes_through_command_surface
     override: true
+    require_line_attribution: true
     relevance: automation bypasses the repository command surface, excluding a reusable workflow capture-command that must invoke the capture-only script rather than the local capture-plus-classify command
   - name: live_tier_compiles_and_requires_credential
     override: true
