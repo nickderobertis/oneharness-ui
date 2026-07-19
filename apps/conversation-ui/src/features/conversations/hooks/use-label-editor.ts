@@ -1,4 +1,4 @@
-import type { ConversationSummary } from "@oneharness-ui/ipc-contract";
+import { type ConversationSummary, conversationLabelsSchema } from "@oneharness-ui/ipc-contract";
 import { useState } from "react";
 
 export function useLabelEditor(onSetLabels: (id: string, labels: string[]) => Promise<unknown>) {
@@ -15,10 +15,12 @@ export function useLabelEditor(onSetLabels: (id: string, labels: string[]) => Pr
   }
 
   async function saveLabels(sessionId: string) {
-    const labels = labelInput
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean);
+    const labels = conversationLabelsSchema.parse(
+      labelInput
+        .split(",")
+        .map((value) => value.trim())
+        .filter(Boolean),
+    );
     await onSetLabels(sessionId, labels);
     closeEditor();
   }
