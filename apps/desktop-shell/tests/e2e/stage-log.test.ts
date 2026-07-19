@@ -16,6 +16,8 @@ describe("native desktop stage diagnostics", () => {
     // Node's ESM loader rejects native Windows paths such as `D:\...` because it
     // reads the drive letter as a URL scheme, so `--import` needs a file URL.
     const tsxLoader = pathToFileURL(createRequire(wdioCliPackage).resolve("tsx")).href;
+    const environment = { ...process.env };
+    delete environment.FORCE_COLOR;
     const subprocess = Bun.spawn({
       cmd: [
         "node",
@@ -25,6 +27,7 @@ describe("native desktop stage diagnostics", () => {
         "--eval",
         `const stageLog = await import(${JSON.stringify(stageModule)}); process.stdout.write(stageLog.desktopE2eStageLog);`,
       ],
+      env: environment,
       stderr: "pipe",
       stdout: "pipe",
     });
