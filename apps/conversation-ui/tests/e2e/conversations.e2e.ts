@@ -61,7 +61,7 @@ test("organizes sessions by project and round-trips local labels", async ({ page
 test("rejects labels for an unknown session at the public bridge boundary", async ({ page }) => {
   await page.goto("/");
   const response = await page.evaluate(async () => {
-    const result = await fetch("http://127.0.0.1:4317/invoke", {
+    const result = await fetch("/invoke", {
       body: JSON.stringify({
         kind: "set-labels",
         labels: ["invalid"],
