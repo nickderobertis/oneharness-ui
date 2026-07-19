@@ -12,7 +12,11 @@ source "$ROOT/scripts/visual-docs-versions.sh"
   || { echo "screencomp setup: HOME must be an absolute path of reasonable length" >&2; exit 2; }
 readonly INSTALL_DIR="$HOME/.local/bin"
 readonly INSTALLER_SHA256="dd4e02daf93c3f056b84b0555c03c60b8e8bfb29ecb462e7dfa4b84fd84202b4"
-installer="$(mktemp "${TMPDIR:-/tmp}/screencomp-install.XXXXXX")"
+temporary_root="${TMPDIR:-/tmp}"
+[[ "$temporary_root" = /* && "${#temporary_root}" -le 4096 && -d "$temporary_root" && ! -L "$temporary_root" ]] \
+  || { echo "screencomp setup: TMPDIR must be an absolute, existing non-symlink directory" >&2; exit 2; }
+readonly temporary_root
+installer="$(mktemp "$temporary_root/screencomp-install.XXXXXX")"
 readonly installer
 trap 'rm -f "$installer"' EXIT
 
