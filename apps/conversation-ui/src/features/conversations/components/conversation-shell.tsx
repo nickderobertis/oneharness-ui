@@ -48,7 +48,7 @@ function Workspace() {
   const conversations = list.data?.conversations ?? [];
 
   return (
-    <div className="grid h-full min-h-0 grid-cols-[330px_minmax(0,1fr)] overflow-hidden max-[820px]:grid-cols-[260px_minmax(0,1fr)] max-[680px]:min-h-screen max-[680px]:grid-cols-1 max-[680px]:overflow-visible">
+    <div className="grid h-full min-h-0 grid-cols-[330px_minmax(0,1fr)] overflow-hidden max-[820px]:grid-cols-[260px_minmax(0,1fr)] max-[680px]:h-dvh max-[680px]:grid-cols-1">
       <ConversationList
         conversations={conversations}
         hasMore={list.hasNextPage}
@@ -65,9 +65,10 @@ function Workspace() {
         totalCount={list.data?.totalCount ?? 0}
         labelError={labels.error}
         labeling={labels.isPending}
+        hiddenOnMobile={selectedId !== null}
       />
       {!selectedId ? (
-        <main className="flex min-h-0 items-center justify-center bg-[radial-gradient(circle_at_52%_40%,#1d2118_0,var(--background)_48%)] p-10 max-[680px]:min-h-[58vh]">
+        <main className="flex min-h-0 items-center justify-center bg-[radial-gradient(circle_at_52%_40%,#1d2118_0,var(--background)_48%)] p-10 max-[680px]:hidden">
           <Card className="max-w-xl border-0 bg-transparent text-center shadow-none">
             <CardContent>
               <p className="text-[10px] font-bold uppercase tracking-[.13em] text-primary">
@@ -102,6 +103,7 @@ function Workspace() {
           onContinue={async (message) => {
             await continuation.mutateAsync({ message, sessionId: selected.data.id });
           }}
+          onBack={() => select(null)}
           onLoadMoreTurns={selected.fetchNextPage}
           pending={continuation.isPending}
           totalTurnCount={selected.data.totalTurnCount}

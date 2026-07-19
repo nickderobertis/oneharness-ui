@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { cn } from "@/components/utils";
 import {
   type ConversationGrouping,
   conversationGroupingOptions,
@@ -44,6 +45,7 @@ export function ConversationList({
   refreshing,
   selectedId,
   totalCount,
+  hiddenOnMobile,
 }: {
   conversations: ConversationSummary[];
   hasMore: boolean;
@@ -58,6 +60,7 @@ export function ConversationList({
   refreshing: boolean;
   selectedId: string | null;
   totalCount: number;
+  hiddenOnMobile: boolean;
 }) {
   const { choices, filter, grouped, grouping, setFilter, setGrouping } =
     useConversationOrganization(conversations);
@@ -78,7 +81,12 @@ export function ConversationList({
     onLoadMore,
   });
   return (
-    <aside className="flex min-h-0 min-w-0 flex-col border-r bg-[#151713] max-[680px]:max-h-[42vh] max-[680px]:border-r-0 max-[680px]:border-b">
+    <aside
+      className={cn(
+        "flex min-h-0 min-w-0 flex-col border-r bg-[#151713] max-[680px]:h-dvh max-[680px]:border-r-0",
+        hiddenOnMobile && "max-[680px]:hidden",
+      )}
+    >
       <header className="flex min-h-[86px] items-center justify-between border-b px-4.5 py-4">
         <div className="flex items-center gap-3">
           <span className="flex size-9 items-center justify-center rounded-[9px] bg-primary text-primary-foreground">
@@ -190,6 +198,7 @@ export function ConversationList({
                       className="h-auto w-full flex-col items-stretch gap-1.5 rounded-[11px] border border-transparent px-3 py-3 text-left hover:bg-[#1b1e18] aria-[current=page]:border-input aria-[current=page]:bg-muted aria-[current=page]:shadow-[inset_3px_0_var(--primary)]"
                       onClick={() => onSelect(conversation.id)}
                       type="button"
+                      variant="ghost"
                     >
                       <span className="flex min-w-0 items-center justify-between">
                         <strong className="truncate text-[13px]">{conversation.name}</strong>

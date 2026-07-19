@@ -51,12 +51,13 @@ export function ReplyForm({
           render={({ field }) => (
             <FormItem>
               <FormLabel>Continue this session</FormLabel>
-              <div className="flex items-end gap-2.5 rounded-xl border border-input bg-popover p-2 shadow-[0_18px_60px_rgb(0_0_0/.25)] focus-within:border-primary">
+              <div className="flex min-w-0 max-w-full items-end gap-2.5 overflow-hidden rounded-xl border border-input bg-popover p-2 shadow-[0_18px_60px_rgb(0_0_0/.25)] focus-within:border-primary">
                 <FormControl>
                   <Textarea
                     aria-describedby="reply-help reply-error"
-                    className="max-h-45 min-h-12 resize-y border-0 bg-transparent p-2.5 shadow-none focus-visible:ring-0"
+                    className="max-h-45 min-h-12 min-w-0 w-0 flex-1 resize-y border-0 bg-transparent p-2.5 shadow-none [field-sizing:fixed] focus-visible:ring-0 max-[680px]:max-w-[calc(100vw-90px)]"
                     disabled={pending}
+                    cols={1}
                     onKeyDown={(event) => {
                       if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
                         event.preventDefault();
@@ -83,7 +84,7 @@ export function ReplyForm({
                   <TooltipContent>Send reply</TooltipContent>
                 </Tooltip>
               </div>
-              <div className="flex min-h-4 justify-between px-1 pt-1.5 text-[9px] text-subtle">
+              <div className="flex min-h-4 flex-wrap justify-between gap-x-2 px-1 pt-1.5 text-[9px] text-subtle">
                 <span id="reply-help">
                   Ctrl/⌘ Enter to send · continues the exact native session
                 </span>

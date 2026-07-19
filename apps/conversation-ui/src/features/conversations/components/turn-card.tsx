@@ -34,9 +34,9 @@ function Usage({ usage }: { usage: Turn["usage"] }) {
   const present = entries.filter(([, key]) => Object.hasOwn(usage, key));
   if (present.length === 0) return null;
   return (
-    <dl aria-label="Usage" className="mt-4.5 flex flex-wrap gap-2">
+    <dl aria-label="Usage" className="mt-4.5 flex min-w-0 flex-wrap gap-2">
       {present.map(([label, key, value]) => (
-        <div className="flex gap-1.5 rounded-md bg-muted px-2 py-1" key={key}>
+        <div className="flex max-w-full gap-1.5 rounded-md bg-muted px-2 py-1" key={key}>
           <dt className="text-[9px] uppercase text-subtle">{label}</dt>
           <dd className="m-0 text-[10px] text-muted-foreground">
             {value === null
@@ -56,7 +56,7 @@ export function TurnCard({ turn }: { turn: Turn }) {
   return (
     <article
       aria-label={`Turn ${turn.id} from ${turn.harness}`}
-      className="mx-auto mb-10.5 max-w-[850px]"
+      className="mx-auto mb-10.5 max-w-[850px] overflow-hidden"
     >
       <Message from="user">
         <MessageContent className="mb-8 ml-auto max-w-[min(680px,88%)] rounded-[22px_22px_5px_22px] border bg-popover px-5 py-4.5">

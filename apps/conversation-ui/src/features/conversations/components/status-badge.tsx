@@ -9,7 +9,7 @@ export function StatusBadge({ state }: { state: string }) {
   const tone = Object.hasOwn(labels, state) ? state : "unknown";
   return (
     <Badge
-      className={cn("gap-1.5 uppercase tracking-[.03em]", {
+      className={cn("shrink-0 gap-1.5 uppercase tracking-[.03em]", {
         "text-destructive": tone === "failed",
         "text-primary": tone === "running",
         "text-success": tone === "completed",

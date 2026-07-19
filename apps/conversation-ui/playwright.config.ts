@@ -11,7 +11,10 @@ const webAccessToken = z
 process.env.ONEHARNESS_UI_TEST_WEB_ACCESS_TOKEN = webAccessToken;
 
 export default defineConfig({
-  expect: { timeout: 5_000 },
+  expect: {
+    timeout: 5_000,
+    toHaveScreenshot: { animations: "disabled", maxDiffPixelRatio: 0.01 },
+  },
   fullyParallel: false,
   outputDir: "test-results/playwright",
   reporter: [["list"]],
@@ -38,5 +41,17 @@ export default defineConfig({
     },
   ],
   workers: 1,
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  snapshotPathTemplate: "{testDir}/__screenshots__/{testFilePath}/{arg}-{projectName}{ext}",
+  projects: [
+    {
+      name: "desktop-chromium",
+      testMatch: ["**/conversations.e2e.ts", "**/screenshots.e2e.ts"],
+      use: { ...devices["Desktop Chrome"], viewport: { height: 800, width: 1280 } },
+    },
+    {
+      name: "mobile-chromium",
+      testMatch: ["**/mobile.e2e.ts", "**/screenshots.e2e.ts"],
+      use: { ...devices["Pixel 5"], viewport: { height: 844, width: 390 } },
+    },
+  ],
 });
