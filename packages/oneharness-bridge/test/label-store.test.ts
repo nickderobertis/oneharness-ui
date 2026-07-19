@@ -12,6 +12,9 @@ describe("conversation label storage", () => {
       const environment = readEnvironment({ XDG_STATE_HOME: root });
       await setLabels(environment, "session-1", ["local"]);
       expect(await labelsFor(environment)).toEqual({ "session-1": ["local"] });
+      const homeEnvironment = readEnvironment({ HOME: root });
+      await setLabels(homeEnvironment, "session-2", ["home"]);
+      expect(await labelsFor(homeEnvironment)).toEqual({ "session-2": ["home"] });
       expect(() => readEnvironment({ XDG_STATE_HOME: "relative/state" })).toThrow(
         "must be an absolute path",
       );

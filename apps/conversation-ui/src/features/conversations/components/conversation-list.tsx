@@ -2,6 +2,7 @@ import type { ConversationSummary } from "@oneharness-ui/ipc-contract";
 import { RefreshIcon, TerminalIcon } from "@/components/ui/icons";
 import {
   type ConversationGrouping,
+  conversationGroupingOptions,
   useConversationOrganization,
 } from "../hooks/use-conversation-organization";
 import { useInfiniteScroll } from "../hooks/use-infinite-scroll";
@@ -92,9 +93,11 @@ export function ConversationList({
             }}
             value={grouping}
           >
-            <option value="none">Recent</option>
-            <option value="label">Label</option>
-            <option value="project">Project</option>
+            {conversationGroupingOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
           {grouping !== "none" ? (
             <label>

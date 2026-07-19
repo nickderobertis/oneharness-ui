@@ -1,7 +1,12 @@
 import type { ConversationSummary } from "@oneharness-ui/ipc-contract";
 import { useMemo, useState } from "react";
 
-export type ConversationGrouping = "none" | "label" | "project";
+export const conversationGroupingOptions = [
+  { label: "Recent", value: "none" },
+  { label: "Label", value: "label" },
+  { label: "Project", value: "project" },
+] as const;
+export type ConversationGrouping = (typeof conversationGroupingOptions)[number]["value"];
 
 export function useConversationOrganization(conversations: ConversationSummary[]) {
   const [grouping, setGrouping] = useState<ConversationGrouping>("none");

@@ -58,6 +58,24 @@ test("organizes sessions by project and round-trips local labels", async ({ page
   await expect(page.getByRole("listitem", { name: /Session ID/ })).toHaveCount(0);
 });
 
+test("rejects labels for an unknown session at the public bridge boundary", async ({ page }) => {
+  await page.goto("/");
+  const response = await page.evaluate(async () => {
+    const result = await fetch("http://127.0.0.1:4317/invoke", {
+      body: JSON.stringify({
+        kind: "set-labels",
+        labels: ["invalid"],
+        sessionId: "missing-session",
+      }),
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      method: "POST",
+    });
+    return await result.json();
+  });
+  expect(response).toMatchObject({ ok: false });
+});
+
 test("marks ineligible sessions and recovers from a recorded provider failure", async ({
   page,
 }) => {
