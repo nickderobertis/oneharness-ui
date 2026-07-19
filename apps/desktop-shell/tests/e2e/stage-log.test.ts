@@ -16,15 +16,18 @@ describe("native desktop stage diagnostics", () => {
     // Node's ESM loader rejects native Windows paths such as `D:\...` because it
     // reads the drive letter as a URL scheme, so `--import` needs a file URL.
     const tsxLoader = pathToFileURL(createRequire(wdioCliPackage).resolve("tsx")).href;
+    const node = Bun.which("node");
+    if (!node) throw new Error("Node is required to verify the WebdriverIO TypeScript runtime");
     const subprocess = Bun.spawn({
       cmd: [
-        "node",
+        node,
         "--import",
         tsxLoader,
         "--input-type=module",
         "--eval",
         `const stageLog = await import(${JSON.stringify(stageModule)}); process.stdout.write(stageLog.desktopE2eStageLog);`,
       ],
+      env: { NO_COLOR: "1" },
       stderr: "pipe",
       stdout: "pipe",
     });
