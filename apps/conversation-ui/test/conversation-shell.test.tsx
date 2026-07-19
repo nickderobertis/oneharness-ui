@@ -260,6 +260,47 @@ describe("ConversationShell", () => {
     expect(window.location.search).toBe("?session=session-1");
   });
 
+  test("renders safe markdown, highlighted code, and whole-message JSON", async () => {
+    const richConversation: Conversation = {
+      ...conversation,
+      turns: [
+        {
+          ...conversation.turns[0],
+          assistant: "**Fixed** with:\n\n```ts\nconst safe = true;\n```",
+          user: "Please use *TypeScript*. <img src=x onerror=alert('unsafe')>",
+        },
+        {
+          ...conversation.turns[0],
+          assistant: '{"status":"ready","items":[1,2]}',
+          id: "session-1-1",
+          tools: [],
+          user: "Return JSON",
+        },
+      ],
+    };
+    installBridge((request) =>
+      request.kind === "list"
+        ? listPage([summary])
+        : success({ conversation: detailPage(richConversation), kind: "get" }),
+    );
+    const user = userEvent.setup();
+    const { container } = render(<ConversationShell />);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Open conversation inspect-login" }),
+    );
+    expect(await screen.findByText("Fixed")).toMatchObject({ tagName: "STRONG" });
+    expect(screen.getByText("TypeScript")).toMatchObject({ tagName: "EM" });
+    const highlightedCode = screen.getByText("const");
+    expect(highlightedCode.classList.contains("hljs-keyword")).toBe(true);
+    expect(highlightedCode.closest("pre")).toBeTruthy();
+    expect(screen.getByLabelText("Assistant message formatted JSON").textContent).toContain(
+      '  "status": "ready"',
+    );
+    expect(container.querySelector("img")).toBeNull();
+    expect(container.querySelector("script")).toBeNull();
+  });
+
   test("loads more conversations by keyboard and resets pagination when history changes", async () => {
     const older = { ...summary, id: "session-0", name: "older-session" };
     const newest = { ...summary, id: "session-2", name: "newest-session" };

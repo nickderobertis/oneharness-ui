@@ -1,4 +1,5 @@
 import type { Conversation } from "@oneharness-ui/ipc-contract";
+import { Message, MessageAvatar, MessageContent, MessageResponse } from "@/components/ui/message";
 
 type Turn = Conversation["turns"][number];
 
@@ -42,15 +43,15 @@ export function TurnCard({ turn }: { turn: Turn }) {
   const hasUnknown = Object.keys(turn.unknown).length > 0;
   return (
     <article aria-label={`Turn ${turn.id} from ${turn.harness}`} className="turn">
-      <div className="message message--user">
-        <div className="message__label">You</div>
-        <p>{turn.user}</p>
-      </div>
-      <div className="assistant-row">
-        <div aria-hidden="true" className="assistant-avatar">
-          OH
-        </div>
-        <div className="assistant-content">
+      <Message from="user">
+        <MessageContent>
+          <div className="message__label">You</div>
+          <MessageResponse label="User message">{turn.user}</MessageResponse>
+        </MessageContent>
+      </Message>
+      <Message from="assistant">
+        <MessageAvatar>OH</MessageAvatar>
+        <MessageContent>
           <div className="message__label">
             <span>{turn.harness}</span>
             {turn.model ? <span className="model">{turn.model}</span> : null}
@@ -81,9 +82,7 @@ export function TurnCard({ turn }: { turn: Turn }) {
             </section>
           ) : null}
           {turn.assistant ? (
-            <div className="assistant-text">
-              <p>{turn.assistant}</p>
-            </div>
+            <MessageResponse label="Assistant message">{turn.assistant}</MessageResponse>
           ) : (
             <p className="muted">No assistant text was captured for this run.</p>
           )}
@@ -99,8 +98,8 @@ export function TurnCard({ turn }: { turn: Turn }) {
               <StructuredDetail label="Additional upstream data detail" value={turn.unknown} />
             </details>
           ) : null}
-        </div>
-      </div>
+        </MessageContent>
+      </Message>
     </article>
   );
 }
