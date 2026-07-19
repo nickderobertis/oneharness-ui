@@ -13,12 +13,8 @@ export const labelStoreSchema = z.object({
 type LabelStore = z.infer<typeof labelStoreSchema>;
 
 function storePath(environment: BridgeEnvironment): string {
-  const base = environment.historyDir
-    ? environment.historyDir
-    : join(
-        process.env.XDG_STATE_HOME ?? join(process.env.HOME ?? process.cwd(), ".local", "state"),
-        "oneharness-ui",
-      );
+  const base = environment.historyDir ?? environment.labelDir;
+  if (!base) throw new Error("conversation label storage directory is unavailable");
   return join(base, ".oneharness-ui-labels.json");
 }
 

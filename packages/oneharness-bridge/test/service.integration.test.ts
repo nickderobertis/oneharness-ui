@@ -150,6 +150,36 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     });
   });
 
+  test("retries label persistence after a real storage failure", async () => {
+    await seed("label-session", '{"result":"Ready","session_id":"native-label"}');
+    const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
+    const sessionId =
+      listed.ok && listed.data.kind === "list" ? listed.data.conversations[0]?.id : undefined;
+    expect(sessionId).toBeTruthy();
+    if (!sessionId) throw new Error("label fixture was not discovered");
+    const labelPath = resolve(historyDir, ".oneharness-ui-labels.json");
+    await mkdir(labelPath);
+    const failed = await service().handle(
+      { kind: "set-labels", labels: ["urgent"], sessionId },
+      TEST_AUTHORIZATION,
+    );
+    expect(failed).toMatchObject({ ok: false });
+    await rm(labelPath, { recursive: true });
+    const saved = await service().handle(
+      { kind: "set-labels", labels: ["urgent"], sessionId },
+      TEST_AUTHORIZATION,
+    );
+    expect(saved).toEqual({
+      data: { kind: "set-labels", labels: ["urgent"], sessionId },
+      ok: true,
+    });
+    const refreshed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
+    expect(refreshed).toMatchObject({
+      data: { conversations: [{ labels: ["urgent"] }] },
+      ok: true,
+    });
+  });
+
   test("rejects oversized ambient discovery configuration", async () => {
     process.env.ONEHARNESS_NO_CONFIG = "x".repeat(32_769);
     const result = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
