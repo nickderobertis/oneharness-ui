@@ -4,10 +4,12 @@ import { useState } from "react";
 export function useLabelEditor(onSetLabels: (id: string, labels: string[]) => Promise<unknown>) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [labelInput, setLabelInput] = useState("");
+  const [validationError, setValidationError] = useState<string | null>(null);
 
   function openEditor(conversation: ConversationSummary) {
     setEditingId(conversation.id);
     setLabelInput((conversation.labels ?? []).join(", "));
+    setValidationError(null);
   }
 
   function closeEditor() {
@@ -15,15 +17,28 @@ export function useLabelEditor(onSetLabels: (id: string, labels: string[]) => Pr
   }
 
   async function saveLabels(sessionId: string) {
-    const labels = conversationLabelsSchema.parse(
+    const result = conversationLabelsSchema.safeParse(
       labelInput
         .split(",")
         .map((value) => value.trim())
         .filter(Boolean),
     );
-    await onSetLabels(sessionId, labels);
+    if (!result.success) {
+      setValidationError("Use no more than 20 labels, with at most 64 characters each.");
+      return;
+    }
+    setValidationError(null);
+    await onSetLabels(sessionId, result.data);
     closeEditor();
   }
 
-  return { closeEditor, editingId, labelInput, openEditor, saveLabels, setLabelInput };
+  return {
+    closeEditor,
+    editingId,
+    labelInput,
+    openEditor,
+    saveLabels,
+    setLabelInput,
+    validationError,
+  };
 }

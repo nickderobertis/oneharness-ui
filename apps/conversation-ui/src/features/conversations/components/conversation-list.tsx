@@ -61,8 +61,15 @@ export function ConversationList({
 }) {
   const { choices, filter, grouped, grouping, setFilter, setGrouping } =
     useConversationOrganization(conversations);
-  const { closeEditor, editingId, labelInput, openEditor, saveLabels, setLabelInput } =
-    useLabelEditor(onSetLabels);
+  const {
+    closeEditor,
+    editingId,
+    labelInput,
+    openEditor,
+    saveLabels,
+    setLabelInput,
+    validationError,
+  } = useLabelEditor(onSetLabels);
   const infiniteScroll = useInfiniteScroll({
     automatic: loadMoreError === null,
     hasMore,
@@ -252,6 +259,11 @@ export function ConversationList({
                               {labelError ? (
                                 <p className="text-xs text-destructive" role="alert">
                                   Couldn’t save labels. {labelError.message}
+                                </p>
+                              ) : null}
+                              {validationError ? (
+                                <p className="text-xs text-destructive" role="alert">
+                                  {validationError}
                                 </p>
                               ) : null}
                             </div>
