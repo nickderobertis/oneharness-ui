@@ -4,7 +4,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
 import { HistoryRecordSchema, OneHarness, RunOptionsSchema, type RunReport } from "@oneharness/sdk";
-import { BridgeService } from "../src/service.ts";
+import { BridgeService, MAX_CONVERSATION_PAGE_BYTES } from "../src/service.ts";
 import { readFixtureHistoryRecord } from "./history-fixture.ts";
 
 const repository = resolve(import.meta.dir, "../../..");
@@ -461,7 +461,9 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
     const oversizedPrompt = "oversized history detail ".repeat(25_000);
     const oversizedRecord = HistoryRecordSchema.parse({ ...record, prompt: oversizedPrompt });
-    expect(Buffer.byteLength(JSON.stringify(oversizedRecord))).toBeGreaterThan(512 * 1024);
+    expect(Buffer.byteLength(JSON.stringify(oversizedRecord))).toBeGreaterThan(
+      MAX_CONVERSATION_PAGE_BYTES,
+    );
     await writeFile(historyFile, `${JSON.stringify(oversizedRecord)}\n`);
 
     const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
