@@ -11,10 +11,11 @@ export function useConversationOrganization(conversations: ConversationSummary[]
   const choices = useMemo(() => {
     const values = new Set<string>();
     for (const conversation of conversations) {
+      const labels = conversation.labels ?? [];
       if (grouping === "project") values.add(conversation.project || "Project not recorded");
       if (grouping === "label") {
-        for (const label of conversation.labels) values.add(label);
-        if (conversation.labels.length === 0) values.add("Unlabeled");
+        for (const label of labels) values.add(label);
+        if (labels.length === 0) values.add("Unlabeled");
       }
     }
     return [...values].sort((a, b) => a.localeCompare(b));
@@ -22,12 +23,13 @@ export function useConversationOrganization(conversations: ConversationSummary[]
   const grouped = useMemo(() => {
     const result = new Map<string, ConversationSummary[]>();
     for (const conversation of conversations) {
+      const labels = conversation.labels ?? [];
       const groups =
         grouping === "project"
           ? [conversation.project || "Project not recorded"]
           : grouping === "label"
-            ? conversation.labels.length > 0
-              ? conversation.labels
+            ? labels.length > 0
+              ? labels
               : ["Unlabeled"]
             : ["History"];
       for (const group of groups) {

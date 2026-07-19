@@ -156,12 +156,12 @@ export function ConversationList({
                       className="label-button"
                       onClick={() => {
                         setEditingId(conversation.id);
-                        setLabelInput(conversation.labels.join(", "));
+                        setLabelInput((conversation.labels ?? []).join(", "));
                       }}
                       type="button"
                     >
-                      {conversation.labels.length > 0
-                        ? conversation.labels.join(", ")
+                      {(conversation.labels ?? []).length > 0
+                        ? conversation.labels?.join(", ")
                         : "Add labels"}
                     </button>
                     {editingId === conversation.id ? (

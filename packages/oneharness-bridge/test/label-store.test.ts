@@ -38,11 +38,16 @@ describe("conversation label storage", () => {
     const root = await mkdtemp(resolve(tmpdir(), "oneharness-labels-"));
     const path = resolve(root, ".oneharness-ui-labels.json");
     try {
-      const golden = await readFile(resolve(import.meta.dir, "fixtures/labels-v1.json"), "utf8");
+      const golden = await readFile(resolve(import.meta.dir, "fixtures/labels-v2.json"), "utf8");
       expect(labelStoreSchema.parse(JSON.parse(golden))).toEqual({
         labels: { "session-1": ["frontend", "urgent"] },
-        schemaVersion: 1,
+        schemaVersion: 2,
       });
+      await writeFile(
+        path,
+        JSON.stringify({ labels: { "session-1": ["legacy"] }, schemaVersion: 1 }),
+      );
+      expect(await labelsFor({ historyDir: root })).toEqual({ "session-1": ["legacy"] });
       await setLabels({ historyDir: root }, "session-1", [" urgent ", "frontend", "urgent"]);
       expect(await labelsFor({ historyDir: root })).toEqual({
         "session-1": ["frontend", "urgent"],

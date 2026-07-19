@@ -248,7 +248,7 @@ function toSummary(summary: HistorySessionSummary, labels: string[]): Conversati
   return {
     harnesses: summary.harnesses,
     id: summary.id,
-    labels,
+    ...(labels.length > 0 ? { labels } : {}),
     name: summary.name,
     project: summary.project,
     startedAt: summary.started,

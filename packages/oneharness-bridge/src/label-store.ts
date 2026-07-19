@@ -10,9 +10,13 @@ import { z } from "zod";
 import type { BridgeEnvironment } from "./environment.ts";
 
 const MAX_STORE_BYTES = 256 * 1024;
-export const labelStoreSchema = z.object({
+const labelStoreV1Schema = z.object({
   labels: z.record(sessionIdSchema, conversationLabelsSchema),
   schemaVersion: z.literal(1),
+});
+export const labelStoreSchema = z.object({
+  labels: z.record(sessionIdSchema, conversationLabelsSchema),
+  schemaVersion: z.literal(2),
 });
 type LabelStore = z.infer<typeof labelStoreSchema>;
 
@@ -29,9 +33,13 @@ async function readStore(path: string): Promise<LabelStore> {
       throw new Error("label storage is not a regular file");
     if (stat.size > MAX_STORE_BYTES) throw new Error("label storage is too large");
     const value = await readFile(path, "utf8");
-    return labelStoreSchema.parse(JSON.parse(value));
+    const input: unknown = JSON.parse(value);
+    const current = labelStoreSchema.safeParse(input);
+    if (current.success) return current.data;
+    const previous = labelStoreV1Schema.parse(input);
+    return { labels: previous.labels, schemaVersion: 2 };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { labels: {}, schemaVersion: 1 };
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { labels: {}, schemaVersion: 2 };
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(`conversation label storage is malformed: ${detail}`, { cause: error });
   }

@@ -68,7 +68,7 @@ export const conversationPageSchema = conversationSchema.extend({
 export const conversationSummarySchema = conversationSchema
   .pick({ harnesses: true, id: true, name: true, project: true, startedAt: true })
   .extend({
-    labels: conversationLabelsSchema,
+    labels: conversationLabelsSchema.optional(),
     turnCount: z.number().int().nonnegative(),
   });
 
