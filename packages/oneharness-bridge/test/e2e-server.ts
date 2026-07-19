@@ -4,6 +4,7 @@ import { isAbsolute, resolve } from "node:path";
 import { OneHarness } from "@oneharness/sdk";
 import { z } from "zod";
 import { startWebServer } from "../src/server.ts";
+import { e2eWebPort } from "./e2e-configuration.ts";
 import { readFixtureHistoryRecord } from "./history-fixture.ts";
 
 const repository = resolve(import.meta.dir, "../../..");
@@ -101,6 +102,6 @@ process.env.MOCK_STDOUT =
   '{"result":"Continued from the exact desktop session","session_id":"e2e-native-continued"}';
 await startWebServer({
   accessToken: webAccessToken,
-  port: 3000,
+  port: e2eWebPort,
   staticDirectory: resolve(repository, "apps/conversation-ui/out"),
 });
