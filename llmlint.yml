@@ -28,18 +28,18 @@ agents:
 rules:
   - name: changed_behavior_has_e2e
     override: true
-    relevance: new behavior lacks a representative realistic success journey and a representative failure or recovery integration test at the boundary under test
+    relevance: new core user-facing product behavior lacks a realistic end-to-end journey
   - name: least_privilege_grants
     override: true
     files:
       include:
         - ".github/workflows/**/*.yml"
     require_line_attribution: true
-    relevance: a workflow grants permissions beyond its runtime needs, excluding permissions mandated by the audited reusable-workflow caller contract when that reusable workflow narrows its untrusted capture job
+    relevance: permissions exceed runtime needs, except those mandated by an audited reusable workflow that narrows its untrusted job
   - name: work_goes_through_command_surface
     override: true
     require_line_attribution: true
-    relevance: automation bypasses the repository command surface, excluding a reusable workflow capture-command that must invoke the capture-only script rather than the local capture-plus-classify command
+    relevance: automation bypasses the command surface, except a reusable capture-command that requires the capture-only script
   - name: live_tier_compiles_and_requires_credential
     override: true
     relevance: the target files define a test tier that connects to a credentialed external service

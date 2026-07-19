@@ -9,6 +9,9 @@ const workflow = readFileSync(resolve(root, ".github/workflows/visual-docs.yml")
 const setup = readFileSync(resolve(root, "scripts/setup-screencomp.sh"), "utf8");
 const screencompConfig = readFileSync(resolve(root, "screencomp.toml"), "utf8");
 const verifyScript = readFileSync(resolve(root, "scripts/verify-visual.sh"), "utf8");
+const packageManifest = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")) as {
+  packageManager: string;
+};
 
 describe("visual docs command contracts", () => {
   test("keeps workflow tool pins aligned with local capture", () => {
@@ -24,6 +27,13 @@ describe("visual docs command contracts", () => {
     expect(screencompConfig).toContain('arches = ["x86_64"]');
     expect(verifyScript).toContain('PLATFORM="linux/amd64"');
     expect(verifyScript).toContain("SHOTS_OUT=$output/x86_64");
+  });
+
+  test("keeps the capture runtime on the workspace Bun pin", () => {
+    expect(packageManifest.packageManager).toBe("bun@1.3.14");
+    expect(readFileSync(resolve(root, "capture.sh"), "utf8")).toContain(
+      `npm install --global ${packageManifest.packageManager}`,
+    );
   });
 
   test("pins and verifies the downloaded installer before execution", () => {
