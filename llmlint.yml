@@ -28,7 +28,7 @@ agents:
 rules:
   - name: changed_behavior_has_e2e
     override: true
-    description: Core user-facing behavior has realistic end-to-end coverage.
+    description: New core user-facing behavior has realistic end-to-end coverage.
     relevance: new core user-facing product behavior lacks a realistic end-to-end journey
   - name: least_privilege_grants
     override: true
