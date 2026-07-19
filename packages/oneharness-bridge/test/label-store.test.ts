@@ -3,8 +3,23 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { labelStoreSchema, labelsFor, setLabels } from "../src/label-store.ts";
+import { readEnvironment } from "../src/environment.ts";
 
 describe("conversation label storage", () => {
+  test("uses only validated fallback state directories", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "oneharness-label-state-"));
+    try {
+      const environment = readEnvironment({ XDG_STATE_HOME: root });
+      await setLabels(environment, "session-1", ["local"]);
+      expect(await labelsFor(environment)).toEqual({ "session-1": ["local"] });
+      expect(() => readEnvironment({ XDG_STATE_HOME: "relative/state" })).toThrow(
+        "must be an absolute path",
+      );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   test("round-trips the versioned golden and rejects hostile persisted data", async () => {
     const root = await mkdtemp(resolve(tmpdir(), "oneharness-labels-"));
     const path = resolve(root, ".oneharness-ui-labels.json");

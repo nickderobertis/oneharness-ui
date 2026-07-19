@@ -51,6 +51,11 @@ test("organizes sessions by project and round-trips local labels", async ({ page
   await page.reload();
   await page.getByRole("combobox", { name: "Organize by" }).selectOption("label");
   await expect(page.getByRole("heading", { name: "urgent" })).toBeVisible();
+  await page.getByRole("combobox", { name: "Filter label" }).selectOption("urgent");
+  await page.getByRole("button", { name: "Edit labels" }).click();
+  await page.getByRole("textbox", { name: /Labels for/ }).fill("");
+  await page.getByRole("button", { name: "Save labels" }).click();
+  await expect(page.getByRole("listitem", { name: /Session ID/ })).toHaveCount(0);
 });
 
 test("marks ineligible sessions and recovers from a recorded provider failure", async ({
