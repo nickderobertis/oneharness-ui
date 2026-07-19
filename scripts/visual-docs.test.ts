@@ -118,7 +118,10 @@ describe("visual docs command contracts", () => {
 
     const failure = Bun.spawnSync(["bash", "capture.sh"], {
       cwd: root,
-      env: { ...baseEnvironment, TEST_FAIL_COMMAND: "bun install --frozen-lockfile" },
+      env: {
+        ...baseEnvironment,
+        TEST_FAIL_COMMAND: "bun install --frozen-lockfile --ignore-scripts",
+      },
     });
     expect(failure.exitCode).toBe(1);
     expect(failure.stderr.toString()).toContain("workspace install failed");

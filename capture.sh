@@ -21,7 +21,7 @@ run_quiet() {
 
 run_quiet "Bun provisioning" "verify npm access and retry" npm install --global bun@1.3.14
 run_quiet "workspace install" "restore the lockfile or dependency access and retry" \
-  env LEFTHOOK=0 bun install --frozen-lockfile
+  bun install --frozen-lockfile --ignore-scripts
 run_quiet "test provider build" "fix the provider build diagnostic and retry" \
   bun scripts/build-test-provider.mjs
 run_quiet "sidecar build" "fix the sidecar build diagnostic and retry" \
