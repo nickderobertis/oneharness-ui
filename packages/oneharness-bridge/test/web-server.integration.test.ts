@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { randomBytes } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -26,7 +27,7 @@ const provider =
     repository,
     `target/oneharness-ui-test/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
   );
-const accessToken = "oneharness-ui-web-browser-access";
+const accessToken = randomBytes(24).toString("base64url");
 const accessHeader = `Basic ${Buffer.from(`oneharness:${accessToken}`).toString("base64")}`;
 let fixtureRoot = "";
 let server: ReturnType<typeof Bun.serve> | undefined;
@@ -114,6 +115,14 @@ describe("web UI over the real HTTP, SDK, CLI, provider, and history boundary", 
     const unauthenticated = await fetch(`${endpoint()}/`);
     expect(unauthenticated.status).toBe(401);
     expect(unauthenticated.headers.get("www-authenticate")).toContain("Basic");
+    for (const authorization of [
+      "Basic malformed",
+      `Basic ${Buffer.from("oneharness:incorrect-access-token-value").toString("base64")}`,
+    ]) {
+      expect(
+        (await fetch(`${endpoint()}/`, { headers: { Authorization: authorization } })).status,
+      ).toBe(401);
+    }
     const missingOrigin = await fetch(`${endpoint()}/invoke`, {
       body: JSON.stringify({ kind: "list" }),
       headers: { Authorization: accessHeader },

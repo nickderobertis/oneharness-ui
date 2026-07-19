@@ -68,11 +68,15 @@ test("starts web mode on an explicitly validated host and port", async () => {
   });
   try {
     const reader = child.stdout.getReader();
-    const first = await reader.read();
+    let output = "";
+    while (!output.includes("browser login:")) {
+      const next = await reader.read();
+      if (next.done) break;
+      output += new TextDecoder().decode(next.value);
+    }
     reader.releaseLock();
-    expect(new TextDecoder().decode(first.value)).toContain(
-      `oneharness UI listening on http://${hostname}:${port}`,
-    );
+    expect(output).toContain(`oneharness UI listening on http://${hostname}:${port}`);
+    expect(output).toMatch(/browser login: oneharness \/ [A-Za-z0-9_-]{32}/);
     expect(await (await fetch(`http://${hostname}:${port}/health`)).json()).toEqual({
       status: "ok",
     });

@@ -1,4 +1,9 @@
+import { randomBytes } from "node:crypto";
 import { defineConfig, devices } from "@playwright/test";
+
+const webAccessToken =
+  process.env.ONEHARNESS_UI_TEST_WEB_ACCESS_TOKEN ?? randomBytes(24).toString("base64url");
+process.env.ONEHARNESS_UI_TEST_WEB_ACCESS_TOKEN = webAccessToken;
 
 export default defineConfig({
   expect: { timeout: 5_000 },
@@ -11,7 +16,9 @@ export default defineConfig({
   timeout: 30_000,
   use: {
     baseURL: "http://127.0.0.1:3000",
-    httpCredentials: { password: "oneharness-ui-e2e-browser-access", username: "oneharness" },
+    extraHTTPHeaders: {
+      Authorization: `Basic ${Buffer.from(`oneharness:${webAccessToken}`).toString("base64")}`,
+    },
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },
@@ -19,6 +26,7 @@ export default defineConfig({
     {
       command: "bun packages/oneharness-bridge/test/e2e-server.ts",
       cwd: "../..",
+      env: { ONEHARNESS_UI_TEST_WEB_ACCESS_TOKEN: webAccessToken },
       url: "http://127.0.0.1:3000/health",
       reuseExistingServer: false,
       timeout: 120_000,
