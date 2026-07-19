@@ -27,7 +27,7 @@ import type { BridgeEnvironment } from "./environment.ts";
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 const CONVERSATION_LIST_PAGE_SIZE = 25;
 const CONVERSATION_TURN_PAGE_SIZE = 20;
-const MAX_CONVERSATION_PAGE_BYTES = 512 * 1024;
+export const MAX_CONVERSATION_PAGE_BYTES = 512 * 1024;
 const MAX_ERROR_DETAIL_CHARACTERS = 16_384;
 export const authorizationSchema = z.string().min(32).max(256);
 const environmentValueSchema = z.string().max(32_768);
@@ -230,13 +230,13 @@ function toConversationPage(records: HistoryRecord[], requestedOffset = 0): Conv
     if (!record) break;
     const turn = toTurn(record, index);
     const candidate = { ...conversation, turns: [...conversation.turns, turn] };
-    if (Buffer.byteLength(JSON.stringify(candidate)) > MAX_CONVERSATION_PAGE_BYTES) {
-      if (conversation.turns.length === 0) {
-        throw new Error("history turn exceeds the bounded conversation page contract");
-      }
-      break;
-    }
+    const exceedsPageBudget =
+      Buffer.byteLength(JSON.stringify(candidate)) > MAX_CONVERSATION_PAGE_BYTES;
+    if (exceedsPageBudget && conversation.turns.length > 0) break;
+    // HistoryRecordsSchema validates persisted IO before this soft multi-turn budget is applied.
+    // A single validated turn remains intact and loadable even when it exceeds the budget alone.
     conversation.turns.push(turn);
+    if (exceedsPageBudget) break;
   }
   const nextOffset = requestedOffset + conversation.turns.length;
   conversation.nextTurnOffset = nextOffset < records.length ? nextOffset : null;
