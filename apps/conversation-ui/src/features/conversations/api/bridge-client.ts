@@ -3,6 +3,7 @@ import {
   type BridgeResponse,
   bridgeRequestSchema,
   bridgeResponseSchema,
+  bridgeRoutes,
 } from "@oneharness-ui/ipc-contract";
 import { z } from "zod";
 
@@ -52,11 +53,11 @@ async function invokeTauri(request: BridgeRequest): Promise<unknown> {
 
 async function invokeHttp(request: BridgeRequest): Promise<unknown> {
   const configuration = httpConfiguration();
-  const session = await fetch(`${configuration.url}/session`, {
+  const session = await fetch(`${configuration.url}${bridgeRoutes.session}`, {
     credentials: "include",
   });
   if (!session.ok) throw new Error(`Local bridge session returned HTTP ${session.status}`);
-  const response = await fetch(`${configuration.url}/invoke`, {
+  const response = await fetch(`${configuration.url}${bridgeRoutes.invoke}`, {
     body: JSON.stringify(request),
     credentials: "include",
     headers: {

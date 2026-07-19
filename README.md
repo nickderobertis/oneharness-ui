@@ -103,19 +103,19 @@ binds only to loopback by default:
 just serve
 ```
 
-Then open `http://127.0.0.1:4173`. To opt in to LAN exposure, bind either the
-computer's private IPv4 address or all interfaces, for example:
+Then open `http://127.0.0.1:4173`. To opt in to LAN exposure, bind the
+computer's private IPv4 address, for example:
 
 ```console
-ONEHARNESS_UI_HOST=0.0.0.0 just serve
+ONEHARNESS_UI_HOST=192.168.1.20 just serve
 ```
 
 Find the computer's private LAN address and open `http://<private-ip>:4173` on
 the phone or tablet. `ONEHARNESS_UI_PORT` selects another unprivileged port.
-Wildcard binding exposes conversation history and continuation to devices that
-can reach that port, so use it only on a trusted local network, keep the host
-firewall enabled, and stop the process when finished. Do not port-forward or
-otherwise publish it to the internet. History remains on the operator's
+LAN binding exposes conversation history and continuation to devices that can
+reach that address and port, so use it only on a trusted local network, keep the
+host firewall enabled, and stop the process when finished. Do not port-forward
+or otherwise publish it to the internet. History remains on the operator's
 computer; the browser reaches oneharness only through the same size-limited,
 schema-validated bridge service used by the desktop IPC path.
 

@@ -27,8 +27,8 @@ prompts, answers, reasoning, or environment values.
 Desktop production uses that process-local, scoped sidecar transport. Browser
 development and web mode use HTTP adapters backed by the same `BridgeService`.
 Web mode serves the static export and bridge routes from one origin, binds only
-to loopback unless the operator explicitly selects a private LAN address or
-wildcard binding, and rejects non-private or cross-origin browser requests. The
+to loopback unless the operator explicitly selects a private LAN address, and
+rejects non-private or cross-origin browser requests. The
 adapters establish a server-held capability in a short-lived
 `HttpOnly`/`SameSite=Strict` cookie, check that capability again at the service
 layer, and bound the bytes read from the request stream. No bridge secret is

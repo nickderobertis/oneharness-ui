@@ -1,5 +1,11 @@
 import { z } from "zod";
 
+export const bridgeRoutes = {
+  health: "/health",
+  invoke: "/invoke",
+  session: "/session",
+} as const;
+
 const sessionId = z
   .string()
   .trim()

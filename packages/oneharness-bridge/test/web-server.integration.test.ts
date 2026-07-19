@@ -110,6 +110,13 @@ describe("web UI over the real HTTP, SDK, CLI, provider, and history boundary", 
       port: 0,
       staticDirectory: resolve(fixtureRoot, "ui"),
     });
+    const health = await fetch(`${endpoint()}/health`);
+    expect(await health.json()).toEqual({ status: "ok" });
+    const unauthorized = await fetch(`${endpoint()}/invoke`, {
+      body: JSON.stringify({ kind: "list" }),
+      method: "POST",
+    });
+    expect(unauthorized.status).toBe(401);
     const sessionCookie = await cookie();
     const crossOrigin = await fetch(`${endpoint()}/invoke`, {
       body: JSON.stringify({ kind: "list" }),
@@ -133,5 +140,24 @@ describe("web UI over the real HTTP, SDK, CLI, provider, and history boundary", 
       error: { code: "INVALID_REQUEST", message: "The local bridge request is invalid." },
       ok: false,
     });
+    const wrongMethod = await fetch(`${endpoint()}/invoke`);
+    expect(wrongMethod.status).toBe(405);
+    const malformed = await fetch(`${endpoint()}/invoke`, {
+      body: "{",
+      headers: { Cookie: sessionCookie },
+      method: "POST",
+    });
+    expect(malformed.status).toBe(400);
+    const oversized = await fetch(`${endpoint()}/invoke`, {
+      body: JSON.stringify({ message: "x".repeat(70_000) }),
+      headers: { Cookie: sessionCookie },
+      method: "POST",
+    });
+    expect(oversized.status).toBe(413);
+    const head = await fetch(`${endpoint()}/`, { method: "HEAD" });
+    expect(head.status).toBe(200);
+    expect(await head.text()).toBe("");
+    const staticPost = await fetch(`${endpoint()}/`, { method: "POST" });
+    expect(staticPost.status).toBe(405);
   });
 });

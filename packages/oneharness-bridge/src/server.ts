@@ -1,6 +1,6 @@
 import { realpath, stat } from "node:fs/promises";
 import { extname, isAbsolute, relative, resolve, sep } from "node:path";
-import { bridgeResponseSchema } from "@oneharness-ui/ipc-contract";
+import { bridgeResponseSchema, bridgeRoutes } from "@oneharness-ui/ipc-contract";
 import { readEnvironment } from "./environment.ts";
 import { authorizationSchema, BridgeService } from "./service.ts";
 
@@ -8,6 +8,7 @@ const MAX_REQUEST_BYTES = 64 * 1024;
 const MAX_COOKIE_BYTES = 4096;
 const SESSION_COOKIE = "oneharness_ui_capability";
 const DEFAULT_UI_ORIGIN = "http://127.0.0.1:3000";
+export const WEB_DEFAULT_PORT = 4173;
 const SECURITY_HEADERS = {
   "Content-Security-Policy":
     "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
@@ -221,12 +222,12 @@ async function staticResponse(root: string, pathname: string): Promise<Response>
 export async function startWebServer({
   authorization: expectedAuthorization,
   hostname = "127.0.0.1",
-  port = 4173,
+  port,
   staticDirectory,
 }: {
   authorization: string;
   hostname?: string;
-  port?: number;
+  port: number;
   staticDirectory: string;
 }): Promise<ReturnType<typeof Bun.serve>> {
   const authorization = authorizationSchema.parse(expectedAuthorization);
@@ -239,10 +240,10 @@ export async function startWebServer({
     async fetch(request) {
       const url = new URL(request.url);
       const jsonHeaders = { ...SECURITY_HEADERS, "Content-Type": "application/json" };
-      if (request.method === "GET" && url.pathname === "/health") {
+      if (request.method === "GET" && url.pathname === bridgeRoutes.health) {
         return Response.json({ status: "ok" }, { headers: jsonHeaders });
       }
-      if (request.method === "GET" && url.pathname === "/session") {
+      if (request.method === "GET" && url.pathname === bridgeRoutes.session) {
         if (!sameOrigin(request)) {
           return Response.json(
             { error: "Forbidden origin" },
@@ -257,7 +258,7 @@ export async function startWebServer({
           status: 204,
         });
       }
-      if (url.pathname === "/invoke") {
+      if (url.pathname === bridgeRoutes.invoke) {
         if (request.method !== "POST") {
           return Response.json(
             { error: "Method not allowed" },
