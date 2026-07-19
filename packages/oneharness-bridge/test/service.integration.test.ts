@@ -452,4 +452,40 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     expect(Buffer.byteLength(JSON.stringify(second))).toBeLessThan(512 * 1024);
     expect(second.ok && second.data.kind === "get").toBe(true);
   });
+
+  test("loads an oversized single history turn on its own page", async () => {
+    const report = await seed(
+      "oversized-single-turn",
+      '{"result":"Oversized turn answer","session_id":"native-oversized-single-turn"}',
+    );
+    const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
+    const oversizedPrompt = "oversized history detail ".repeat(25_000);
+    const oversizedRecord = HistoryRecordSchema.parse({ ...record, prompt: oversizedPrompt });
+    expect(Buffer.byteLength(JSON.stringify(oversizedRecord))).toBeGreaterThan(512 * 1024);
+    await writeFile(historyFile, `${JSON.stringify(oversizedRecord)}\n`);
+
+    const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
+    const id =
+      listed.ok && listed.data.kind === "list"
+        ? listed.data.conversations.find(({ name }) => name === "oversized-single-turn")?.id
+        : undefined;
+    const selected = await service().handle(
+      { kind: "get", sessionId: id ?? "" },
+      TEST_AUTHORIZATION,
+    );
+
+    if (!selected.ok || selected.data.kind !== "get") {
+      throw new Error(JSON.stringify(selected));
+    }
+    expect(selected.data.conversation).toMatchObject({
+      nextTurnOffset: null,
+      totalTurnCount: 1,
+      turns: [
+        {
+          assistant: "Oversized turn answer",
+          user: oversizedPrompt,
+        },
+      ],
+    });
+  });
 });

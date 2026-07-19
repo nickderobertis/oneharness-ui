@@ -230,13 +230,11 @@ function toConversationPage(records: HistoryRecord[], requestedOffset = 0): Conv
     if (!record) break;
     const turn = toTurn(record, index);
     const candidate = { ...conversation, turns: [...conversation.turns, turn] };
-    if (Buffer.byteLength(JSON.stringify(candidate)) > MAX_CONVERSATION_PAGE_BYTES) {
-      if (conversation.turns.length === 0) {
-        throw new Error("history turn exceeds the bounded conversation page contract");
-      }
-      break;
-    }
+    const exceedsPageBudget =
+      Buffer.byteLength(JSON.stringify(candidate)) > MAX_CONVERSATION_PAGE_BYTES;
+    if (exceedsPageBudget && conversation.turns.length > 0) break;
     conversation.turns.push(turn);
+    if (exceedsPageBudget) break;
   }
   const nextOffset = requestedOffset + conversation.turns.length;
   conversation.nextTurnOffset = nextOffset < records.length ? nextOffset : null;
