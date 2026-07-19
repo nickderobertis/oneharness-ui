@@ -2,6 +2,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { realpath, stat } from "node:fs/promises";
 import { extname, isAbsolute, relative, resolve, sep } from "node:path";
 import { bridgeResponseSchema, bridgeRoutes } from "@oneharness-ui/ipc-contract";
+import { z } from "zod";
 import { readEnvironment } from "./environment.ts";
 import { authorizationSchema, BridgeService } from "./service.ts";
 
@@ -11,6 +12,18 @@ const MAX_AUTHORIZATION_HEADER_BYTES = 1024;
 const SESSION_COOKIE = "oneharness_ui_capability";
 const DEFAULT_UI_ORIGIN = "http://127.0.0.1:3000";
 export const WEB_DEFAULT_PORT = 4173;
+export const webHostnameSchema = z.union([
+  z.literal("127.0.0.1"),
+  z
+    .ipv4()
+    .refine(
+      (value) =>
+        value.startsWith("10.") ||
+        value.startsWith("192.168.") ||
+        /^172\.(1[6-9]|2\d|3[01])\./.test(value),
+      "host must be loopback or a private LAN IPv4 address",
+    ),
+]);
 const SECURITY_HEADERS = {
   "Content-Security-Policy":
     "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
@@ -168,15 +181,11 @@ function isPermittedWebOrigin(request: Request): boolean {
   try {
     const requestUrl = new URL(request.url);
     const originUrl = new URL(origin);
-    const octets = originUrl.hostname.split(".").map(Number);
-    const privateIpv4 =
-      octets.length === 4 &&
-      octets.every((octet) => Number.isInteger(octet) && octet >= 0 && octet <= 255) &&
-      (octets[0] === 10 ||
-        (octets[0] === 127 && octets[1] === 0 && octets[2] === 0 && octets[3] === 1) ||
-        (octets[0] === 172 && (octets[1] ?? 0) >= 16 && (octets[1] ?? 0) <= 31) ||
-        (octets[0] === 192 && octets[1] === 168));
-    return originUrl.protocol === "http:" && privateIpv4 && originUrl.origin === requestUrl.origin;
+    return (
+      originUrl.protocol === "http:" &&
+      webHostnameSchema.safeParse(originUrl.hostname).success &&
+      originUrl.origin === requestUrl.origin
+    );
   } catch {
     return false;
   }

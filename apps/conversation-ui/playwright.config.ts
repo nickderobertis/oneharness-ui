@@ -1,8 +1,12 @@
 import { randomBytes } from "node:crypto";
 import { defineConfig, devices } from "@playwright/test";
+import { z } from "zod";
 
-const webAccessToken =
-  process.env.ONEHARNESS_UI_TEST_WEB_ACCESS_TOKEN ?? randomBytes(24).toString("base64url");
+const webAccessToken = z
+  .string()
+  .min(32)
+  .max(256)
+  .parse(process.env.ONEHARNESS_UI_TEST_WEB_ACCESS_TOKEN ?? randomBytes(24).toString("base64url"));
 process.env.ONEHARNESS_UI_TEST_WEB_ACCESS_TOKEN = webAccessToken;
 
 export default defineConfig({
