@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { isTheme, type Theme, themeStorageKey, themes } from "./theme";
 
-function applyTheme(theme: Theme) {
+function applyAndPersistTheme(theme: Theme) {
   const dark =
     theme === "dark" ||
     (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
@@ -19,10 +19,10 @@ export function useTheme() {
     const stored = localStorage.getItem(themeStorageKey);
     const initial = isTheme(stored) ? stored : "system";
     setThemeState(initial);
-    applyTheme(initial);
+    applyAndPersistTheme(initial);
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const syncSystem = () => {
-      if (document.documentElement.dataset.theme === "system") applyTheme("system");
+      if (document.documentElement.dataset.theme === "system") applyAndPersistTheme("system");
     };
     media.addEventListener("change", syncSystem);
     return () => media.removeEventListener("change", syncSystem);
@@ -30,7 +30,7 @@ export function useTheme() {
 
   const setTheme = (next: Theme) => {
     setThemeState(next);
-    applyTheme(next);
+    applyAndPersistTheme(next);
   };
   return {
     next: themes[(themes.indexOf(theme) + 1) % themes.length] ?? "system",
