@@ -2,7 +2,8 @@
 
 The interface derives its navy neutrals and restrained spectrum accents from the oneharness
 logo. The theme control defaults to the operating-system preference and persists an explicit
-system, light, or dark selection under `oneharness-theme`.
+system, light, or dark selection. The values and storage key have one source of truth in
+`src/components/theme.ts`.
 
 ## WCAG contrast verification
 

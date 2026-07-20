@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import { themeStorageKey, themes } from "../../src/components/theme";
 
 const shotsOut = (() => {
   const candidate = process.env.SHOTS_OUT;
@@ -66,13 +67,16 @@ async function capture(
 }
 
 for (const viewport of viewports) {
-  for (const theme of ["light", "dark"] as const) {
+  for (const theme of themes.filter((candidate) => candidate !== "system")) {
     test.describe(`${viewport.name} ${theme}`, () => {
       test.use({ viewport: { height: viewport.height, width: viewport.width } });
       test.beforeEach(async ({ page }) => {
-        await page.addInitScript((selectedTheme) => {
-          localStorage.setItem("oneharness-theme", selectedTheme);
-        }, theme);
+        await page.addInitScript(
+          ({ selectedTheme, storageKey }) => {
+            localStorage.setItem(storageKey, selectedTheme);
+          },
+          { selectedTheme: theme, storageKey: themeStorageKey },
+        );
       });
 
       test("conversation organization", async ({ page }) => {
