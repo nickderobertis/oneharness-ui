@@ -190,6 +190,7 @@ export function ConversationList({
                       className="h-auto w-full flex-col items-stretch gap-1.5 rounded-[11px] border border-transparent px-3 py-3 text-left hover:bg-accent aria-[current=page]:border-input aria-[current=page]:bg-muted aria-[current=page]:shadow-[inset_3px_0_var(--primary)]"
                       onClick={() => onSelect(conversation.id)}
                       type="button"
+                      variant="ghost"
                     >
                       <span className="flex min-w-0 items-center justify-between">
                         <strong className="truncate text-[13px]">{conversation.name}</strong>

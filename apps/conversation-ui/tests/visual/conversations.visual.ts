@@ -88,12 +88,10 @@ for (const viewport of viewports) {
         await page.getByRole("option", { name: "Label" }).click();
         await page.getByRole("button", { name: "Edit labels" }).first().click();
         await page.getByRole("textbox", { name: /Labels for/ }).fill("review, visual-docs");
-        await page.getByRole("button", { name: "Save labels" }).click();
-        await expect(page.getByRole("heading", { name: "review" })).toBeVisible();
-        await page.getByRole("button", { name: "Edit labels" }).first().click();
         await expect(page.getByRole("dialog")).toBeVisible();
         await capture(page, "conversation-list-label-dialog", viewport.name, theme);
-        await page.getByRole("button", { name: "Cancel" }).click();
+        await page.getByRole("button", { name: "Save labels" }).click();
+        await expect(page.getByRole("heading", { name: "review" })).toBeVisible();
       });
 
       test("rich conversation content", async ({ page }) => {
