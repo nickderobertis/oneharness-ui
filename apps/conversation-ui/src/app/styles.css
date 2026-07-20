@@ -6,28 +6,99 @@
 @custom-variant dark (&:is(.dark *));
 
 :root {
-  --background: #11130f;
-  --foreground: #f3f2e9;
-  --card: #181a16;
-  --card-foreground: #f3f2e9;
-  --popover: #1e211c;
-  --popover-foreground: #f3f2e9;
-  --primary: #d7ff71;
-  --primary-foreground: #182000;
-  --secondary: #24271f;
-  --secondary-foreground: #f3f2e9;
-  --muted: #24271f;
-  --muted-foreground: #a8ab9c;
-  --accent: #24271f;
-  --accent-foreground: #f3f2e9;
-  --destructive: #ff857a;
-  --border: #30342b;
-  --input: #42483a;
-  --ring: #d7ff71;
+  --background: #f8f9fc;
+  --foreground: #131928;
+  --card: #ffffff;
+  --card-foreground: #131928;
+  --popover: #ffffff;
+  --popover-foreground: #131928;
+  --primary: #4657a8;
+  --primary-foreground: #ffffff;
+  --secondary: #e5e8f1;
+  --secondary-foreground: #20283a;
+  --muted: #e9ebf2;
+  --muted-foreground: #50586a;
+  --accent: #e0e5f4;
+  --accent-foreground: #20283a;
+  --destructive: #a93c45;
+  --destructive-surface: #f8e3e4;
+  --border: #747b8c;
+  --input: #747b8c;
+  --ring: #4657a8;
   --radius: 0.875rem;
-  --success: #9ce7a7;
-  --warning: #ffc96b;
-  --subtle: #777c6d;
+  --success: #28753b;
+  --success-surface: #dfeee1;
+  --warning: #855b0c;
+  --warning-surface: #f6e9c9;
+  --info: #315fa8;
+  --info-surface: #e0e8f6;
+  --subtle: #5c6475;
+  --sidebar: #f1f3f8;
+  --code: #171d2a;
+  --code-foreground: #eef0f5;
+  --code-inline: #354b91;
+  --syntax-red: #df7f85;
+  --syntax-orange: #d99a64;
+  --syntax-yellow: #d8bc6a;
+  --syntax-green: #73ae80;
+  --syntax-blue: #82a9e5;
+  --syntax-indigo: #9ca7df;
+  --syntax-violet: #c18ac8;
+  --spectrum-red: #c85e65;
+  --spectrum-orange: #c77b48;
+  --spectrum-yellow: #b39131;
+  --spectrum-green: #4d9560;
+  --spectrum-blue: #527cbd;
+  --spectrum-indigo: #665fa5;
+  --spectrum-violet: #96609e;
+  color-scheme: light;
+}
+
+.dark {
+  --background: #111622;
+  --foreground: #f1f3f7;
+  --card: #181e2c;
+  --card-foreground: #f1f3f7;
+  --popover: #202737;
+  --popover-foreground: #f1f3f7;
+  --primary: #91a0df;
+  --primary-foreground: #131928;
+  --secondary: #293143;
+  --secondary-foreground: #f1f3f7;
+  --muted: #252c3c;
+  --muted-foreground: #b2b8c7;
+  --accent: #30394d;
+  --accent-foreground: #f1f3f7;
+  --destructive: #f08e94;
+  --destructive-surface: #42262e;
+  --border: #687187;
+  --input: #687187;
+  --ring: #9cabe8;
+  --success: #83c592;
+  --success-surface: #20382c;
+  --warning: #e7bd69;
+  --warning-surface: #40351f;
+  --info: #8eb5eb;
+  --info-surface: #24344c;
+  --subtle: #9da5b8;
+  --sidebar: #151b28;
+  --code: #0d121d;
+  --code-foreground: #e7eaf1;
+  --code-inline: #b4c0f1;
+  --syntax-red: #e88e94;
+  --syntax-orange: #e0a16d;
+  --syntax-yellow: #dbc171;
+  --syntax-green: #7fbd8d;
+  --syntax-blue: #8eb3e9;
+  --syntax-indigo: #aab5ea;
+  --syntax-violet: #c995d0;
+  --spectrum-red: #d66f75;
+  --spectrum-orange: #d58a57;
+  --spectrum-yellow: #c4a248;
+  --spectrum-green: #62a873;
+  --spectrum-blue: #6f96d1;
+  --spectrum-indigo: #817abb;
+  --spectrum-violet: #aa74b1;
   color-scheme: dark;
 }
 
@@ -49,12 +120,27 @@
   --color-accent: var(--accent);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-destructive-surface: var(--destructive-surface);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-success: var(--success);
+  --color-success-surface: var(--success-surface);
   --color-warning: var(--warning);
+  --color-warning-surface: var(--warning-surface);
+  --color-info: var(--info);
+  --color-info-surface: var(--info-surface);
   --color-subtle: var(--subtle);
+  --color-sidebar: var(--sidebar);
+  --color-code: var(--code);
+  --color-code-foreground: var(--code-foreground);
+  --color-spectrum-red: var(--spectrum-red);
+  --color-spectrum-orange: var(--spectrum-orange);
+  --color-spectrum-yellow: var(--spectrum-yellow);
+  --color-spectrum-green: var(--spectrum-green);
+  --color-spectrum-blue: var(--spectrum-blue);
+  --color-spectrum-indigo: var(--spectrum-indigo);
+  --color-spectrum-violet: var(--spectrum-violet);
   --radius-sm: calc(var(--radius) - 6px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -68,6 +154,14 @@
   html,
   body {
     @apply m-0 h-full min-h-0;
+  }
+  ::selection {
+    background: var(--primary);
+    color: var(--primary-foreground);
+  }
+  :focus-visible {
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
   }
   body {
     @apply overflow-hidden bg-background text-foreground;
@@ -102,11 +196,12 @@
     font-family: "JetBrains Mono Variable", monospace;
   }
   .message-markdown :not(pre) > code {
-    @apply rounded-sm bg-muted px-1.5 py-0.5 text-[#e5f5b7];
+    @apply rounded-sm bg-muted px-1.5 py-0.5;
+    color: var(--code-inline);
   }
   .message-markdown pre,
   .message-json {
-    @apply mt-2.5 max-w-full overflow-auto rounded-[10px] border bg-[#0c0e0b] p-3.5 text-xs leading-relaxed text-[#d6dacd];
+    @apply mt-2.5 max-w-full overflow-auto rounded-[10px] border bg-code p-3.5 text-xs leading-relaxed text-code-foreground;
   }
   .message-markdown blockquote {
     @apply ml-0 border-l-2 pl-3.5 text-muted-foreground;
@@ -121,19 +216,53 @@
   .hljs-keyword,
   .hljs-selector-tag,
   .hljs-literal {
-    color: #ff9d8f;
+    color: var(--syntax-red);
   }
   .hljs-string,
   .hljs-attr {
-    @apply text-primary;
+    color: var(--syntax-green);
   }
   .hljs-number,
   .hljs-built_in,
   .hljs-title {
-    color: #8fcfff;
+    color: var(--syntax-blue);
   }
   .hljs-comment {
     @apply text-subtle italic;
+  }
+  .hljs-meta,
+  .hljs-variable,
+  .hljs-template-variable {
+    color: var(--syntax-violet);
+  }
+  .hljs-params,
+  .hljs-property {
+    color: var(--syntax-indigo);
+  }
+  .workspace-surface {
+    background: radial-gradient(circle at 52% 40%, var(--accent) 0, var(--background) 48%);
+  }
+  .brand-header::after {
+    position: absolute;
+    right: 0;
+    bottom: -1px;
+    left: 0;
+    height: 1px;
+    content: "";
+    background: linear-gradient(
+      90deg,
+      var(--spectrum-red),
+      var(--spectrum-orange),
+      var(--spectrum-yellow),
+      var(--spectrum-green),
+      var(--spectrum-blue),
+      var(--spectrum-indigo),
+      var(--spectrum-violet)
+    );
+    opacity: 0.72;
+  }
+  .brand-header {
+    position: relative;
   }
 }
 

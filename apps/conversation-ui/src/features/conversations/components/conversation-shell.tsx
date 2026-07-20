@@ -35,13 +35,13 @@ function Workspace() {
 
   if (list.isLoading)
     return (
-      <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_52%_40%,#1d2118_0,var(--background)_48%)] p-10">
+      <div className="workspace-surface flex h-full items-center justify-center p-10">
         <LoadingState label="Loading conversations" />
       </div>
     );
   if (list.error && !list.data)
     return (
-      <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_52%_40%,#1d2118_0,var(--background)_48%)] p-10">
+      <div className="workspace-surface flex h-full items-center justify-center p-10">
         <ErrorState error={list.error} onRetry={() => void list.refetch()} />
       </div>
     );
@@ -69,7 +69,7 @@ function Workspace() {
         />
       </div>
       {!selectedId ? (
-        <main className="flex min-h-0 items-center justify-center bg-[radial-gradient(circle_at_52%_40%,#1d2118_0,var(--background)_48%)] p-10 max-[680px]:min-h-[58vh]">
+        <main className="workspace-surface flex min-h-0 items-center justify-center p-10 max-[680px]:min-h-[58vh]">
           <Card className="max-w-xl border-0 bg-transparent text-center shadow-none">
             <CardContent>
               <p className="text-[10px] font-bold uppercase tracking-[.13em] text-primary">
