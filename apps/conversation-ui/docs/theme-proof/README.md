@@ -56,8 +56,7 @@ surfaces.
 
 ## Verification
 
-- `bun run --cwd apps/conversation-ui playwright test --config visual.playwright.config.ts`
-  captures the real exported UI and bridge fixture.
+- `just visual` captures the real exported UI and bridge fixture.
 - `just test-e2e` drives theme persistence and the conversation workflows through accessible
   roles, labels, and keyboard focus.
 - `just gate` runs the complete deterministic pre-push gate.

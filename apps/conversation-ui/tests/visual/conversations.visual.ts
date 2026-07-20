@@ -2,19 +2,18 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import { z } from "zod";
 import { themeStorageKey, themes } from "../../src/components/theme";
 
-const shotsOut = (() => {
-  const candidate = process.env.SHOTS_OUT;
-  if (
-    !candidate ||
-    !path.isAbsolute(candidate) ||
-    (!candidate.endsWith("/shots/current/x86_64") && !candidate.endsWith("/shots/verify/x86_64"))
-  ) {
-    throw new Error("SHOTS_OUT must be an absolute screencomp x86_64 capture directory");
-  }
-  return candidate;
-})();
+const shotsOut = z
+  .string()
+  .refine(path.isAbsolute, "SHOTS_OUT must be absolute")
+  .refine(
+    (candidate) =>
+      candidate.endsWith("/shots/current/x86_64") || candidate.endsWith("/shots/verify/x86_64"),
+    "SHOTS_OUT must be a screencomp x86_64 capture directory",
+  )
+  .parse(process.env.SHOTS_OUT);
 const viewports = [
   { height: 800, name: "desktop", width: 1280 },
   { height: 800, name: "mobile", width: 390 },
