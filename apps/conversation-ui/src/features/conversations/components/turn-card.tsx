@@ -16,7 +16,7 @@ function StructuredDetail({ label, value }: { label: string; value: unknown }) {
   return (
     <pre
       aria-label={label}
-      className="max-h-90 overflow-auto whitespace-pre-wrap p-3.5 font-mono text-[11px] leading-relaxed text-[#c8ccbc]"
+      className="max-h-90 overflow-auto whitespace-pre-wrap p-3.5 font-mono text-[11px] leading-relaxed text-code-foreground"
     >
       {JSON.stringify(value, null, 2)}
     </pre>

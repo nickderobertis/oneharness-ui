@@ -2,7 +2,35 @@ import {
   conversationLabelMaxLength,
   conversationLabelsMaxCount,
 } from "@oneharness-ui/ipc-contract";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
+
+async function expectTheme(page: Page, selected: string, next: string, resolved: "dark" | "light") {
+  await expect(
+    page.getByRole("button", { name: `Theme: ${selected}. Switch to ${next}` }),
+  ).toBeVisible();
+  await expect
+    .poll(() => page.evaluate(() => getComputedStyle(document.documentElement).colorScheme))
+    .toBe(resolved);
+}
+
+test("follows the OS theme and persists an explicit accessible theme choice", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/");
+  await expectTheme(page, "system", "light", "dark");
+  await expect(page.getByLabel("oneharness")).toBeVisible();
+
+  const toggle = page.getByRole("button", { name: "Theme: system. Switch to light" });
+  await toggle.click();
+  await expectTheme(page, "light", "dark", "light");
+
+  await page.reload();
+  await expectTheme(page, "light", "dark", "light");
+
+  await page.getByRole("button", { name: "Theme: light. Switch to dark" }).click();
+  await expectTheme(page, "dark", "system", "dark");
+  await page.reload();
+  await expectTheme(page, "dark", "system", "dark");
+});
 
 test("lists, selects, restores a deep link, and expands optional details", async ({ page }) => {
   await page.goto("/");

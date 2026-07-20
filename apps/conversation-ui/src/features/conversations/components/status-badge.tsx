@@ -10,10 +10,10 @@ export function StatusBadge({ state }: { state: string }) {
   return (
     <Badge
       className={cn("gap-1.5 uppercase tracking-[.03em]", {
-        "text-destructive": tone === "failed",
-        "text-primary": tone === "running",
-        "text-success": tone === "completed",
-        "text-warning": tone === "stopped",
+        "border-destructive bg-destructive-surface text-destructive": tone === "failed",
+        "border-info bg-info-surface text-info": tone === "running",
+        "border-success bg-success-surface text-success": tone === "completed",
+        "border-warning bg-warning-surface text-warning": tone === "stopped",
       })}
       variant="outline"
     >

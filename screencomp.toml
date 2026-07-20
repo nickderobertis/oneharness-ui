@@ -11,6 +11,11 @@ key = "viewport"
 label = "Viewport"
 values = ["desktop", "mobile"]
 
+[[toggle]]
+key = "theme"
+label = "Theme"
+values = ["light", "dark"]
+
 [guard]
 paths = [
   "apps/conversation-ui/src/**",

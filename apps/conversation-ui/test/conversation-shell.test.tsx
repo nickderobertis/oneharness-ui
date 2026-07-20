@@ -299,7 +299,7 @@ describe("ConversationShell", () => {
     expect(screen.getByLabelText("Assistant message formatted JSON").textContent).toContain(
       '  "status": "ready"',
     );
-    expect(container.querySelector("img")).toBeNull();
+    expect(screen.getByRole("main").querySelector("img")).toBeNull();
     expect(container.querySelector("script")).toBeNull();
   });
 

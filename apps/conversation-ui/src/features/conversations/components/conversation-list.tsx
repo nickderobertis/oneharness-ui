@@ -1,5 +1,7 @@
 import type { ConversationSummary } from "@oneharness-ui/ipc-contract";
-import { Pencil, RefreshCw, Terminal } from "lucide-react";
+import { Pencil, RefreshCw } from "lucide-react";
+import { Brandmark } from "@/components/brandmark";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -78,34 +80,32 @@ export function ConversationList({
     onLoadMore,
   });
   return (
-    <aside className="flex min-h-0 min-w-0 flex-col border-r bg-[#151713] max-[680px]:h-[100dvh] max-[680px]:border-r-0">
-      <header className="flex min-h-[86px] items-center justify-between border-b px-4.5 py-4">
-        <div className="flex items-center gap-3">
-          <span className="flex size-9 items-center justify-center rounded-[9px] bg-primary text-primary-foreground">
-            <Terminal />
+    <aside className="flex min-h-0 min-w-0 flex-col border-r bg-sidebar max-[680px]:h-[100dvh] max-[680px]:border-r-0">
+      <header className="brand-header flex min-h-[86px] items-center justify-between border-b px-4.5 py-4">
+        <div className="flex flex-col gap-0.5">
+          <Brandmark />
+          <span className="pl-10.5 text-[10px] uppercase tracking-[.08em] text-subtle">
+            Local sessions
           </span>
-          <div className="flex flex-col gap-0.5">
-            <strong className="text-[15px] tracking-tight">oneharness</strong>
-            <span className="text-[11px] uppercase tracking-[.06em] text-subtle">
-              Local sessions
-            </span>
-          </div>
         </div>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              aria-label="Refresh conversations"
-              disabled={refreshing}
-              onClick={onRefresh}
-              size="icon"
-              type="button"
-              variant="ghost"
-            >
-              <RefreshCw className={refreshing ? "animate-spin" : undefined} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>Refresh conversations</TooltipContent>
-        </Tooltip>
+        <div className="flex items-center">
+          <ThemeToggle />
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                aria-label="Refresh conversations"
+                disabled={refreshing}
+                onClick={onRefresh}
+                size="icon"
+                type="button"
+                variant="ghost"
+              >
+                <RefreshCw className={refreshing ? "animate-spin" : undefined} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Refresh conversations</TooltipContent>
+          </Tooltip>
+        </div>
       </header>
       <nav
         aria-busy={loadingMore}
@@ -187,9 +187,10 @@ export function ConversationList({
                     <Button
                       aria-label={`Open conversation ${conversation.name}`}
                       aria-current={selectedId === conversation.id ? "page" : undefined}
-                      className="h-auto w-full flex-col items-stretch gap-1.5 rounded-[11px] border border-transparent px-3 py-3 text-left hover:bg-[#1b1e18] aria-[current=page]:border-input aria-[current=page]:bg-muted aria-[current=page]:shadow-[inset_3px_0_var(--primary)]"
+                      className="h-auto w-full flex-col items-stretch gap-1.5 rounded-[11px] border border-transparent px-3 py-3 text-left hover:bg-accent aria-[current=page]:border-input aria-[current=page]:bg-muted aria-[current=page]:shadow-[inset_3px_0_var(--primary)]"
                       onClick={() => onSelect(conversation.id)}
                       type="button"
+                      variant="ghost"
                     >
                       <span className="flex min-w-0 items-center justify-between">
                         <strong className="truncate text-[13px]">{conversation.name}</strong>

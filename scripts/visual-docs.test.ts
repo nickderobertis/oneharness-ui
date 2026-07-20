@@ -8,6 +8,10 @@ const versions = readFileSync(resolve(root, "scripts/visual-docs-versions.env"),
 const workflow = readFileSync(resolve(root, ".github/workflows/visual-docs.yml"), "utf8");
 const setup = readFileSync(resolve(root, "scripts/setup-screencomp.sh"), "utf8");
 const screencompConfig = readFileSync(resolve(root, "screencomp.toml"), "utf8");
+const themeSource = readFileSync(
+  resolve(root, "apps/conversation-ui/src/components/theme.ts"),
+  "utf8",
+);
 const verifyScript = readFileSync(resolve(root, "scripts/verify-visual.sh"), "utf8");
 const packageManifest = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")) as {
   packageManager: string;
@@ -36,6 +40,17 @@ describe("visual docs command contracts", () => {
       expect(captureScript).toContain(`/shots/${tree}/x86_64`);
       expect(captureTest).toContain(`/shots/${tree}/x86_64`);
     }
+  });
+
+  test("keeps gallery theme values aligned with captured application themes", () => {
+    const applicationThemes = JSON.parse(
+      themeSource.match(/themes = (\[[^\]]+\])/)?.[1] ?? "null",
+    ) as string[] | null;
+    const galleryThemes = JSON.parse(
+      screencompConfig.match(/key = "theme"\s+label = "Theme"\s+values = (\[[^\]]+\])/)?.[1] ??
+        "null",
+    ) as string[] | null;
+    expect(galleryThemes).toEqual(applicationThemes?.filter((theme) => theme !== "system"));
   });
 
   test("keeps the capture runtime on the workspace Bun pin", () => {
