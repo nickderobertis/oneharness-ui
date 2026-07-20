@@ -4,7 +4,7 @@ import { isAbsolute, resolve } from "node:path";
 import { OneHarness } from "@oneharness/sdk";
 import { z } from "zod";
 import { startWebServer } from "../src/server.ts";
-import { e2eWebPort } from "./e2e-configuration.ts";
+import { e2eProject, e2eWebPort } from "./e2e-configuration.ts";
 import { readFixtureHistoryRecord } from "./history-fixture.ts";
 
 const repository = resolve(import.meta.dir, "../../..");
@@ -25,15 +25,17 @@ if (
 }
 const historyDir = resolve(repository, ".cache/e2e-history");
 const visualProject = "/tmp/oneharness-ui-visual-project";
-if (process.env.ONEHARNESS_UI_TEST_VISUAL === "true")
-  await mkdir(visualProject, { recursive: true });
-const provider =
-  process.env.ONEHARNESS_UI_TEST_VISUAL === "true"
-    ? resolve(repository, "packages/oneharness-bridge/test/fixtures/visual-provider.sh")
-    : resolve(
-        repository,
-        `target/oneharness-ui-test/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
-      );
+const visualMode =
+  z.enum(["true"]).optional().parse(process.env.ONEHARNESS_UI_TEST_VISUAL) === "true";
+await mkdir(visualMode ? visualProject : e2eProject, {
+  recursive: true,
+});
+const provider = visualMode
+  ? resolve(repository, "packages/oneharness-bridge/test/fixtures/visual-provider.sh")
+  : resolve(
+      repository,
+      `target/oneharness-ui-test/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
+    );
 
 if (cliOverride) process.env.ONEHARNESS_BIN = cliOverride;
 await rm(historyDir, { force: true, recursive: true });
@@ -63,9 +65,9 @@ async function seed({
     historyName: name,
     mode: "bypass",
     prompt,
-    ...(process.env.ONEHARNESS_UI_TEST_VISUAL === "true" ? { cwd: visualProject } : {}),
+    cwd: visualMode ? visualProject : e2eProject,
   });
-  if (process.env.ONEHARNESS_UI_TEST_VISUAL === "true") {
+  if (visualMode) {
     await Bun.sleep(1_100);
   }
   return result;

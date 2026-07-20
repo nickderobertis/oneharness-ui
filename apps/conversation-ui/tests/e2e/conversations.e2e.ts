@@ -1,8 +1,12 @@
+import { basename } from "node:path";
 import {
   conversationLabelMaxLength,
   conversationLabelsMaxCount,
 } from "@oneharness-ui/ipc-contract";
 import { expect, type Page, test } from "@playwright/test";
+import { e2eProject } from "../../../../packages/oneharness-bridge/test/e2e-configuration";
+
+const e2eProjectHeading = new RegExp(`${basename(e2eProject)}$`);
 
 async function expectTheme(page: Page, selected: string, next: string, resolved: "dark" | "light") {
   await expect(
@@ -109,7 +113,7 @@ test("organizes sessions by project and round-trips local labels", async ({ page
   await expect(page.getByRole("tooltip", { name: "Refresh conversations" })).toBeVisible();
   await organize.click();
   await page.getByRole("option", { name: "Project" }).click();
-  await expect(page.getByRole("heading", { name: /oneharness-ui/ })).toBeVisible();
+  await expect(page.getByRole("heading", { name: e2eProjectHeading })).toBeVisible();
 
   await organize.click();
   await page.getByRole("option", { name: "Label" }).click();
