@@ -7,7 +7,7 @@
     "test:e2e": "wdio run wdio.conf.ts"
   },
   "devDependencies": {
-    "@oneharness/sdk": "0.3.23",
+    "@oneharness/sdk": "0.5.2",
     "@types/bun": "^1.3.14",
     "@wdio/cli": "9.29.1",
     "@wdio/globals": "9.29.1",
