@@ -8,5 +8,5 @@
     },
     "rootDir": "../.."
   },
-  "include": ["src/**/*.ts"]
+  "include": ["src/**/*.ts", "test/public-ui.test.tsx"]
 }

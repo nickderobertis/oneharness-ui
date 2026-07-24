@@ -46,7 +46,7 @@ rules:
   - name: live_tier_compiles_and_requires_credential
     override: true
     description: Live lint runs compile and require an explicit credential.
-    relevance: the target files define a test tier that connects to a credentialed external service
+    relevance: the target defines a credentialed live tier
 plugins:
   - "https://raw.githubusercontent.com/nickderobertis/llmlint/main/assets/config_lint.yml@1"
   - "https://raw.githubusercontent.com/nickderobertis/dero-skills/main/skills/bootstrap/create-repo/assets/llmlint/base.llmlint.yml@1"
