@@ -1,11 +1,11 @@
 "use client";
 
-import type { Conversation } from "@oneharness-ui/ipc-contract";
 import { ArrowLeft } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useInfiniteScroll } from "../hooks/use-infinite-scroll";
+import type { Conversation } from "../presentational-types";
 import { ReplyForm } from "./reply-form";
 import { StatusBadge } from "./status-badge";
 import { TurnCard } from "./turn-card";

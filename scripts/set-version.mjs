@@ -42,6 +42,7 @@ const manifests = [
   "apps/conversation-ui/package.json",
   "packages/ipc-contract/package.json",
   "packages/oneharness-bridge/package.json",
+  "packages/ui/package.json",
   "apps/desktop-shell/tauri.conf.json",
 ].map((relative) => {
   const path = resolve(root, relative);

@@ -1,0 +1,31 @@
+{
+  "name": "ui",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/ui/src",
+  "tags": ["scope:ui", "type:library"],
+  "implicitDependencies": [],
+  "targets": {
+    "build": {
+      "command": "bun run --cwd packages/ui build",
+      "outputs": ["{projectRoot}/dist"]
+    },
+    "test": {
+      "command": "bun run --cwd packages/ui build && bun test --preload ./apps/conversation-ui/test/setup.ts --coverage --coverage-dir coverage/ui packages/ui/test",
+      "outputs": ["{workspaceRoot}/coverage/ui"]
+    },
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "commands": [
+          "bunx biome check --error-on-warnings packages/ui",
+          "node scripts/check-boundaries.mjs"
+        ],
+        "parallel": false
+      }
+    },
+    "format": { "command": "bunx biome format --write packages/ui" },
+    "typecheck": { "command": "bunx tsc -p packages/ui/tsconfig.json --noEmit" },
+    "format-check": { "command": "bunx biome format packages/ui" }
+  }
+}

@@ -1,4 +1,3 @@
-import type { Conversation } from "@oneharness-ui/ipc-contract";
 import { Terminal } from "lucide-react";
 import {
   Accordion,
@@ -7,10 +6,11 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
+import type { ConversationTurn } from "../presentational-types";
 import { Message, MessageAvatar, MessageContent } from "./message";
 import { MessageResponse } from "./message-response";
 
-type Turn = Conversation["turns"][number];
+type Turn = ConversationTurn;
 
 function StructuredDetail({ label, value }: { label: string; value: unknown }) {
   return (
