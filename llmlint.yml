@@ -45,6 +45,7 @@ rules:
     relevance: automation bypasses the required command surface
   - name: live_tier_compiles_and_requires_credential
     override: true
+    description: Live test tiers compile without credentials and require credentials before execution.
     relevance: the target files define a test tier that connects to a credentialed external service
 plugins:
   - "https://raw.githubusercontent.com/nickderobertis/llmlint/main/assets/config_lint.yml@1"
