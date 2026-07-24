@@ -34,5 +34,8 @@ const publish = Bun.spawnSync(
 if (publish.exitCode !== 0) {
   process.stdout.write(publish.stdout);
   process.stderr.write(publish.stderr);
+  process.stderr.write(
+    "npm package publish: verify provenance, package version, and NPM_TOKEN access, then rerun 'just publish-ui'\n",
+  );
   process.exit(publish.exitCode);
 }

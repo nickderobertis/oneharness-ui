@@ -45,7 +45,7 @@ rules:
     relevance: the target automates repository operations
   - name: live_tier_compiles_and_requires_credential
     override: true
-    description: Live lint runs compile and require an explicit credential.
+    description: Live lint compiles and refuses to run without credentials.
     relevance: the target defines a credentialed live tier
 plugins:
   - "https://raw.githubusercontent.com/nickderobertis/llmlint/main/assets/config_lint.yml@1"
