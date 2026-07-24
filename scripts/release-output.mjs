@@ -6,7 +6,9 @@ const semver = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 export function releaseOutputs(version) {
   if (version === undefined) return { released: "false" };
   if (!semver.test(version)) {
-    throw new Error("release output version must be a valid semantic version");
+    throw new Error(
+      "release output version must be a valid semantic version; pass semantic-release's nextRelease.version and rerun the version workflow",
+    );
   }
   return { released: "true", version };
 }

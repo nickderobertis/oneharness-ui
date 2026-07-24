@@ -7,7 +7,9 @@ import { releaseOutputs, writeReleaseOutputs } from "./release-output.mjs";
 describe("version workflow release handoff", () => {
   test("a no-release push does not authorize npm publication", () => {
     expect(releaseOutputs()).toEqual({ released: "false" });
-    expect(() => releaseOutputs("not-semver")).toThrow("valid semantic version");
+    expect(() => releaseOutputs("not-semver")).toThrow(
+      "pass semantic-release's nextRelease.version",
+    );
     expect(() => writeReleaseOutputs(undefined)).toThrow("GITHUB_OUTPUT is missing");
   });
 
@@ -26,6 +28,7 @@ describe("version workflow release handoff", () => {
     const releaseConfig = readFileSync(".releaserc.json", "utf8");
 
     expect(workflow).toContain("if: steps.release.outputs.released == 'true'");
+    expect(workflow).toContain("just init-release-output");
     expect(workflow).toContain("RELEASE_VERSION: $" + "{{ steps.release.outputs.version }}");
     expect(releaseConfig).toContain(
       "bun scripts/release-output.mjs '" + "$" + "{nextRelease.version}'",

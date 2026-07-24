@@ -27,8 +27,12 @@ const publish = Bun.spawnSync(
   ["npm", "publish", "packages/ui", "--access", "public", "--provenance"],
   {
     cwd: root,
-    stderr: "inherit",
-    stdout: "inherit",
+    stderr: "pipe",
+    stdout: "pipe",
   },
 );
-if (publish.exitCode !== 0) process.exit(publish.exitCode);
+if (publish.exitCode !== 0) {
+  process.stdout.write(publish.stdout);
+  process.stderr.write(publish.stderr);
+  process.exit(publish.exitCode);
+}

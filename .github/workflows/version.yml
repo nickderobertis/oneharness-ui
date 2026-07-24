@@ -46,7 +46,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
         run: |
-          bun scripts/release-output.mjs
+          just init-release-output
           just publish-release
       - name: Publish the React component library
         if: steps.release.outputs.released == 'true'
