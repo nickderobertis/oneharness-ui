@@ -1,4 +1,4 @@
-import type { ConversationSummary } from "@oneharness-ui/ipc-contract";
+import type { ConversationSummary } from "@oneharness/ui";
 import { useMemo, useState } from "react";
 
 export const conversationGroupingOptions = [

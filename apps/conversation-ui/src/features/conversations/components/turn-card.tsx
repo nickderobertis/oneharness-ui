@@ -1,4 +1,4 @@
-import type { Conversation } from "@oneharness-ui/ipc-contract";
+import type { Conversation } from "@oneharness/ui";
 import { Terminal } from "lucide-react";
 import {
   Accordion,

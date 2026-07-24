@@ -40,6 +40,7 @@ function versionedDocument(path) {
 const manifests = [
   "package.json",
   "apps/conversation-ui/package.json",
+  "packages/ui/package.json",
   "packages/ipc-contract/package.json",
   "packages/oneharness-bridge/package.json",
   "apps/desktop-shell/tauri.conf.json",

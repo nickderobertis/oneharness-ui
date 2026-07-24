@@ -1,6 +1,6 @@
 "use client";
 
-import type { Conversation } from "@oneharness-ui/ipc-contract";
+import type { Conversation } from "@oneharness/ui";
 import { ArrowLeft } from "lucide-react";
 import { useEffect, useRef } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";

@@ -1,0 +1,29 @@
+{
+  "name": "ui",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/ui/src",
+  "tags": ["scope:ui", "type:library"],
+  "targets": {
+    "build": {
+      "command": "bun run --cwd packages/ui build",
+      "outputs": ["{projectRoot}/dist"]
+    },
+    "test": {
+      "command": "bun test --preload ./apps/conversation-ui/test/setup.ts packages/ui/test",
+      "dependsOn": ["build"]
+    },
+    "lint": {
+      "command": "bunx biome check --error-on-warnings packages/ui"
+    },
+    "format": {
+      "command": "bunx biome format --write packages/ui"
+    },
+    "typecheck": {
+      "command": "bunx tsc -p packages/ui/tsconfig.json --noEmit"
+    },
+    "format-check": {
+      "command": "bunx biome format packages/ui"
+    }
+  }
+}

@@ -1,9 +1,7 @@
 "use client";
 
-import { zodResolver } from "@hookform/resolvers/zod";
 import { Send } from "lucide-react";
 import { useForm } from "react-hook-form";
-import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import {
   Form,
@@ -16,10 +14,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
-const formSchema = z.object({
-  message: z.string().trim().min(1, "Write a message first").max(32_000),
-});
-type FormValues = z.infer<typeof formSchema>;
+type FormValues = { message: string };
 
 export function ReplyForm({
   error,
@@ -32,7 +27,6 @@ export function ReplyForm({
 }) {
   const form = useForm<FormValues>({
     defaultValues: { message: "" },
-    resolver: zodResolver(formSchema),
   });
   const submit = form.handleSubmit(async ({ message }) => {
     try {
@@ -48,6 +42,10 @@ export function ReplyForm({
         <FormField
           control={form.control}
           name="message"
+          rules={{
+            maxLength: { message: "Use at most 32,000 characters", value: 32_000 },
+            validate: (message) => message.trim().length > 0 || "Write a message first",
+          }}
           render={({ field }) => (
             <FormItem>
               <FormLabel>Continue this session</FormLabel>

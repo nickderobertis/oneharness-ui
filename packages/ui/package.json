@@ -1,0 +1,71 @@
+{
+  "name": "@oneharness/ui",
+  "version": "0.1.0",
+  "description": "Presentational React components for oneharness conversation transcripts",
+  "type": "module",
+  "sideEffects": [
+    "./dist/styles.css"
+  ],
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/types/packages/ui/src/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./primitives": {
+      "types": "./dist/types/packages/ui/src/primitives.d.ts",
+      "import": "./dist/primitives.js"
+    },
+    "./styles.css": {
+      "types": "./dist/types/packages/ui/src/styles.d.ts",
+      "default": "./dist/styles.css"
+    }
+  },
+  "types": "./dist/types/packages/ui/src/index.d.ts",
+  "scripts": {
+    "build": "tsdown && tsc -p tsconfig.build.json && tailwindcss -i ../../apps/conversation-ui/src/app/styles.css -o dist/styles.css --minify",
+    "prepack": "bun run build",
+    "test": "bun test --preload ../../apps/conversation-ui/test/setup.ts test",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "biome check src test package.json tsconfig.json tsconfig.build.json tsdown.config.ts project.json",
+    "format:check": "biome format src test package.json tsconfig.json tsconfig.build.json tsdown.config.ts project.json"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "peerDependencies": {
+    "@radix-ui/react-accordion": "^1.2.16",
+    "@radix-ui/react-alert-dialog": "^1.1.19",
+    "@radix-ui/react-avatar": "^1.2.2",
+    "@radix-ui/react-collapsible": "^1.1.16",
+    "@radix-ui/react-dialog": "^1.1.19",
+    "@radix-ui/react-label": "^2.1.11",
+    "@radix-ui/react-popover": "^1.1.19",
+    "@radix-ui/react-scroll-area": "^1.2.14",
+    "@radix-ui/react-select": "^2.3.3",
+    "@radix-ui/react-separator": "^1.1.11",
+    "@radix-ui/react-slot": "^1.3.0",
+    "@radix-ui/react-tabs": "^1.1.17",
+    "@radix-ui/react-tooltip": "^1.2.12",
+    "lucide-react": "^1.25.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-hook-form": "^7.71.2",
+    "react-markdown": "^10.1.0",
+    "rehype-highlight": "^7.0.2"
+  },
+  "dependencies": {
+    "class-variance-authority": "^0.7.1",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^3.6.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.2.14",
+    "@types/react-dom": "^19.2.3",
+    "typescript": "7.0.2"
+  }
+}

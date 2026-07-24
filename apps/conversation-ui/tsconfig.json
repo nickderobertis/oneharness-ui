@@ -5,7 +5,10 @@
     "jsx": "preserve",
     "plugins": [{ "name": "next" }],
     "types": ["bun", "node"],
-    "paths": { "@/*": ["./src/*"] }
+    "paths": {
+      "@/*": ["./src/*"],
+      "@oneharness/ui": ["../../packages/ui/src/index.ts"]
+    }
   },
   "include": [
     "next-env.d.ts",

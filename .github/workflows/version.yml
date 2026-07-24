@@ -45,6 +45,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
         run: just publish-release
+      - name: Publish the React component library
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: just publish-ui
       - name: Reconcile the latest native artifact run
         env:
           GH_TOKEN: ${{ github.token }}

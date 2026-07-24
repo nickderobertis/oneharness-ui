@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "paths": {
+      "@/*": ["../../apps/conversation-ui/src/*"],
+      "@oneharness/ui": ["./src/index.ts"]
+    },
+    "rootDir": "../.."
+  },
+  "include": ["src/**/*.ts"]
+}

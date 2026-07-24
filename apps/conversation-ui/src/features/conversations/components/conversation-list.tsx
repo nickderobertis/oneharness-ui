@@ -1,7 +1,6 @@
-import type { ConversationSummary } from "@oneharness-ui/ipc-contract";
+import type { ConversationSummary } from "@oneharness/ui";
 import { Pencil, RefreshCw } from "lucide-react";
-import { Brandmark } from "@/components/brandmark";
-import { ThemeToggle } from "@/components/theme-toggle";
+import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -46,6 +45,8 @@ export function ConversationList({
   refreshing,
   selectedId,
   totalCount,
+  header,
+  headerActions,
 }: {
   conversations: ConversationSummary[];
   hasMore: boolean;
@@ -60,6 +61,8 @@ export function ConversationList({
   refreshing: boolean;
   selectedId: string | null;
   totalCount: number;
+  header?: ReactNode;
+  headerActions?: ReactNode;
 }) {
   const { choices, filter, grouped, grouping, setFilter, setGrouping } =
     useConversationOrganization(conversations);
@@ -83,13 +86,13 @@ export function ConversationList({
     <aside className="flex min-h-0 min-w-0 flex-col border-r bg-sidebar max-[680px]:h-[100dvh] max-[680px]:border-r-0">
       <header className="brand-header flex min-h-[86px] items-center justify-between border-b px-4.5 py-4">
         <div className="flex flex-col gap-0.5">
-          <Brandmark />
+          {header ?? <strong className="text-sm">oneharness</strong>}
           <span className="pl-10.5 text-[10px] uppercase tracking-[.08em] text-subtle">
             Local sessions
           </span>
         </div>
         <div className="flex items-center">
-          <ThemeToggle />
+          {headerActions}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

@@ -1,10 +1,8 @@
-import {
-  type ConversationSummary,
-  conversationLabelMaxLength,
-  conversationLabelsMaxCount,
-  conversationLabelsSchema,
-} from "@oneharness-ui/ipc-contract";
+import type { ConversationSummary } from "@oneharness/ui";
 import { useState } from "react";
+
+const conversationLabelMaxLength = 64;
+const conversationLabelsMaxCount = 20;
 
 export function useLabelEditor(onSetLabels: (id: string, labels: string[]) => Promise<unknown>) {
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -22,20 +20,21 @@ export function useLabelEditor(onSetLabels: (id: string, labels: string[]) => Pr
   }
 
   async function saveLabels(sessionId: string) {
-    const result = conversationLabelsSchema.safeParse(
-      labelInput
-        .split(",")
-        .map((value) => value.trim())
-        .filter(Boolean),
-    );
-    if (!result.success) {
+    const labels = labelInput
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+    if (
+      labels.length > conversationLabelsMaxCount ||
+      labels.some((label) => label.length > conversationLabelMaxLength)
+    ) {
       setValidationError(
         `Use no more than ${conversationLabelsMaxCount} labels, with at most ${conversationLabelMaxLength} characters each.`,
       );
       return;
     }
     setValidationError(null);
-    await onSetLabels(sessionId, result.data);
+    await onSetLabels(sessionId, labels);
     closeEditor();
   }
 
