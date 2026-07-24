@@ -191,10 +191,16 @@ describe("ConversationShell", () => {
     await user.click(organize);
     await user.click(screen.getByRole("option", { name: "Label" }));
     await user.click(screen.getAllByRole("button", { name: "Edit labels" })[0] as HTMLElement);
+    const labelsInput = screen.getByRole("textbox", { name: "Labels for inspect-login" });
     await user.type(
-      screen.getByRole("textbox", { name: "Labels for inspect-login" }),
-      "urgent, frontend",
+      labelsInput,
+      Array.from({ length: 21 }, (_, index) => `label-${index}`).join(","),
     );
+    await user.click(screen.getByRole("button", { name: "Save labels" }));
+    expect(screen.getByRole("alert").textContent).toContain("Use no more than 20 labels");
+    expect(savedLabels).toEqual([]);
+    await user.clear(labelsInput);
+    await user.type(labelsInput, "urgent, frontend");
     await user.click(screen.getByRole("button", { name: "Save labels" }));
     expect((await screen.findByRole("alert")).textContent).toContain("Label storage is busy");
     await user.click(screen.getByRole("button", { name: "Save labels" }));

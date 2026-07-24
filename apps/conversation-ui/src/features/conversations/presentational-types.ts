@@ -1,3 +1,8 @@
+export const conversationLabelLimits = {
+  maxCount: 20,
+  maxLength: 64,
+} as const;
+
 export interface ConversationUsage {
   cacheReadTokens?: number | null | undefined;
   cacheWriteTokens?: number | null | undefined;

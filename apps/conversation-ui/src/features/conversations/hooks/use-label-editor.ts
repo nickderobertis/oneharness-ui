@@ -1,8 +1,5 @@
 import { useState } from "react";
-import type { ConversationSummary } from "../presentational-types";
-
-const conversationLabelMaxLength = 64;
-const conversationLabelsMaxCount = 20;
+import { type ConversationSummary, conversationLabelLimits } from "../presentational-types";
 
 export function useLabelEditor(onSetLabels: (id: string, labels: string[]) => Promise<unknown>) {
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -25,11 +22,11 @@ export function useLabelEditor(onSetLabels: (id: string, labels: string[]) => Pr
       .map((value) => value.trim())
       .filter(Boolean);
     if (
-      labels.length > conversationLabelsMaxCount ||
-      labels.some((label) => label.length > conversationLabelMaxLength)
+      labels.length > conversationLabelLimits.maxCount ||
+      labels.some((label) => label.length > conversationLabelLimits.maxLength)
     ) {
       setValidationError(
-        `Use no more than ${conversationLabelsMaxCount} labels, with at most ${conversationLabelMaxLength} characters each.`,
+        `Use no more than ${conversationLabelLimits.maxCount} labels, with at most ${conversationLabelLimits.maxLength} characters each.`,
       );
       return;
     }

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { readFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { ReplyForm, StatusBadge, TooltipProvider } from "@oneharness/ui";
 import { render, screen } from "@testing-library/react";
@@ -35,4 +36,37 @@ describe("@oneharness/ui public package", () => {
     expect(css).toContain(".message-json");
     expect(css).toContain(".hljs-keyword");
   });
+
+  test("packs and resolves from a fresh external consumer", async () => {
+    const temporaryRoot = await mkdtemp(resolve(tmpdir(), "oneharness-ui-consumer-"));
+    try {
+      const packageRoot = resolve(import.meta.dir, "..");
+      const packed = Bun.spawnSync(["npm", "pack", "--json", "--pack-destination", temporaryRoot], {
+        cwd: packageRoot,
+      });
+      expect(packed.exitCode).toBe(0);
+      const [{ filename }] = JSON.parse(packed.stdout.toString()) as [{ filename: string }];
+      const consumerRoot = resolve(temporaryRoot, "consumer");
+      await writeFile(
+        resolve(temporaryRoot, "package.json"),
+        `${JSON.stringify({
+          dependencies: {
+            "@oneharness/ui": `file:${resolve(temporaryRoot, filename)}`,
+          },
+          private: true,
+          scripts: {
+            verify:
+              'bun -e \'import { StatusBadge } from "@oneharness/ui"; if (typeof StatusBadge !== "function") process.exit(1)\'',
+          },
+        })}\n`,
+      );
+      const install = Bun.spawnSync(["bun", "install", "--offline"], { cwd: temporaryRoot });
+      expect(install.exitCode).toBe(0);
+      const verify = Bun.spawnSync(["bun", "run", "verify"], { cwd: temporaryRoot });
+      expect(verify.exitCode).toBe(0);
+      expect(consumerRoot).toContain("consumer");
+    } finally {
+      await rm(temporaryRoot, { force: true, recursive: true });
+    }
+  }, 20_000);
 });

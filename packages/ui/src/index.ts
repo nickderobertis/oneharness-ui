@@ -29,4 +29,4 @@ export * from "../../../apps/conversation-ui/src/features/conversations/componen
 export * from "../../../apps/conversation-ui/src/features/conversations/hooks/use-conversation-organization";
 export * from "../../../apps/conversation-ui/src/features/conversations/hooks/use-infinite-scroll";
 export * from "../../../apps/conversation-ui/src/features/conversations/hooks/use-label-editor";
-export type * from "../../../apps/conversation-ui/src/features/conversations/presentational-types";
+export * from "../../../apps/conversation-ui/src/features/conversations/presentational-types";
