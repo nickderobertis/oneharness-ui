@@ -37,6 +37,7 @@ export interface ConversationTurn {
 export interface Conversation {
   canContinue: boolean;
   harnesses: string[];
+  historyLabels?: Record<string, string> | undefined;
   id: string;
   name: string;
   project: string;

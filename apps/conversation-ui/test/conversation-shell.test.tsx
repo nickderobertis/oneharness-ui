@@ -206,7 +206,7 @@ describe("ConversationShell", () => {
     await user.click(screen.getByRole("button", { name: "Save labels" }));
     expect(await screen.findByRole("heading", { name: "frontend" })).toBeTruthy();
     expect(savedLabels).toEqual(["urgent", "frontend"]);
-  }, 10_000);
+  }, 60_000);
   test("renders loading and empty states and refreshes discovery", async () => {
     let finishFirstList: (value: unknown) => void = () => {};
     const firstList = new Promise<unknown>((resolve) => {

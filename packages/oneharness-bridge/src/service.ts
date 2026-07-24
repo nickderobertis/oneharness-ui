@@ -58,8 +58,12 @@ const knownRecordKeys = new Set([
   "events",
   "exit_code",
   "failure_kind",
+  "finished_at",
   "harness",
+  "history_id",
+  "labels",
   "model",
+  "model_ms",
   "name",
   "permission_mode",
   "project",
@@ -69,10 +73,13 @@ const knownRecordKeys = new Set([
   "session",
   "session_id",
   "status",
+  "started_at",
   "text",
   "text_source",
   "timestamp",
+  "time_to_first_token_ms",
   "thinking",
+  "tool_ms",
   "usage",
 ]);
 
@@ -213,6 +220,9 @@ function toConversationPage(records: HistoryRecord[], requestedOffset = 0): Conv
   const conversation: ConversationPage = {
     canContinue,
     harnesses,
+    ...(first.labels && Object.keys(first.labels).length > 0
+      ? { historyLabels: first.labels }
+      : {}),
     id: first.session,
     name: first.name,
     project: first.project,
@@ -247,6 +257,9 @@ function toConversationPage(records: HistoryRecord[], requestedOffset = 0): Conv
 function toSummary(summary: HistorySessionSummary, labels: string[]): ConversationSummary {
   return {
     harnesses: summary.harnesses,
+    ...(summary.labels && Object.keys(summary.labels).length > 0
+      ? { historyLabels: summary.labels }
+      : {}),
     id: summary.id,
     ...(labels.length > 0 ? { labels } : {}),
     name: summary.name,
@@ -384,6 +397,9 @@ export class BridgeService {
       harnesses: [latest.harness],
       history: true,
       historyName: latest.name,
+      ...(latest.labels && Object.keys(latest.labels).length > 0
+        ? { historyLabels: latest.labels }
+        : {}),
       mode: latest.permission_mode,
       prompt: message,
       resume: latest.session_id,

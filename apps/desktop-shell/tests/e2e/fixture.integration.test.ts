@@ -54,7 +54,7 @@ async function invoke(args: string[]): Promise<JsonObject[]> {
 }
 
 describe("native desktop fixture", () => {
-  test("creates SDK-valid stopped, optional-thinking, and recoverable records", async () => {
+  test("creates schema 1.0 stopped, paginated, and recoverable records", async () => {
     const fixture = await createDesktopFixture();
     const historyDir = fixture.environment.ONEHARNESS_UI_HISTORY_DIR;
     const fixtureRoot = dirname(historyDir);
@@ -115,9 +115,9 @@ describe("native desktop fixture", () => {
       ]);
       expect(stopped).toHaveLength(45);
       expect(stopped[0]).toMatchObject({
+        schema_version: "1.0",
         session_id: "native-stopped-session",
         status: "timeout",
-        thinking: "I checked the native command boundary before answering.",
       });
 
       const failedSummary = listed.find(

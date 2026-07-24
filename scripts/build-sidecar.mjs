@@ -50,7 +50,7 @@ const platformKey = `${process.platform}-${process.arch}`;
 const platformPackage = platformPackages[platformKey];
 if (!platformPackage) {
   throw new Error(
-    `@oneharness/sdk 0.3.23 has no packaged CLI for ${platformKey}; use a supported release target`,
+    `@oneharness/sdk 0.5.4 has no packaged CLI for ${platformKey}; use a supported release target`,
   );
 }
 const sourceBuiltCli = resolve(root, "target/oneharness-ui-upstream/bin", `oneharness${suffix}`);
@@ -65,7 +65,7 @@ if (existsSync(sourceBuiltCli)) {
     );
   }
   const version = Bun.spawnSync([sourceBuiltCli, "--version"], { cwd: root });
-  if (version.exitCode !== 0 || version.stdout.toString().trim() !== "oneharness 0.3.23") {
+  if (version.exitCode !== 0 || version.stdout.toString().trim() !== "oneharness 0.5.4") {
     const stdout = version.stdout.toString().trim().slice(0, 500);
     const stderr = version.stderr.toString().trim().slice(0, 500);
     const observed = [
@@ -74,7 +74,7 @@ if (existsSync(sourceBuiltCli)) {
       stderr ? `stderr ${JSON.stringify(stderr)}` : "empty stderr",
     ].join(", ");
     throw new Error(
-      `source-built oneharness CLI at ${sourceBuiltCli} does not match version 0.3.23 (${observed}); clear target/oneharness-ui-upstream and rerun just bundle`,
+      `source-built oneharness CLI at ${sourceBuiltCli} does not match version 0.5.4 (${observed}); clear target/oneharness-ui-upstream and rerun just bundle`,
     );
   }
 } else {
@@ -94,13 +94,13 @@ if (existsSync(sourceBuiltCli)) {
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     throw new Error(
-      `could not resolve @oneharness/sdk 0.3.23's packaged CLI: ${detail}; run bun install --frozen-lockfile with optional dependencies enabled, then rerun just bootstrap`,
+      `could not resolve @oneharness/sdk 0.5.4's packaged CLI: ${detail}; run bun install --frozen-lockfile with optional dependencies enabled, then rerun just bootstrap`,
     );
   }
 }
 if (!existsSync(upstream)) {
   throw new Error(
-    `@oneharness/sdk 0.3.23 packaged CLI is missing at ${upstream}; reinstall with optional dependencies enabled, then rerun just bootstrap`,
+    `@oneharness/sdk 0.5.4 packaged CLI is missing at ${upstream}; reinstall with optional dependencies enabled, then rerun just bootstrap`,
   );
 }
 copyFileSync(upstream, resolve(outputDirectory, `oneharness-${host}${suffix}`));

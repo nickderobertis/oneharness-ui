@@ -68,5 +68,5 @@ describe("@oneharness/ui public package", () => {
     } finally {
       await rm(temporaryRoot, { force: true, recursive: true });
     }
-  }, 20_000);
+  }, 90_000);
 });

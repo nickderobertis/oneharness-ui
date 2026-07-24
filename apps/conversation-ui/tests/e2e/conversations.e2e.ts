@@ -36,14 +36,11 @@ test("follows the OS theme and persists an explicit accessible theme choice", as
   await expectTheme(page, "dark", "system", "dark");
 });
 
-test("lists, selects, restores a deep link, and expands optional details", async ({ page }) => {
+test("lists, selects, restores a deep link, and expands tool details", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("navigation", { name: "Conversation history" })).toBeVisible();
   await page.getByRole("button", { name: /tool-session/i }).click();
   await expect(page.getByRole("heading", { name: "tool-session" })).toBeFocused();
-  await expect(page.getByText("I checked the command boundary first.")).toBeHidden();
-  await page.getByText("Reasoning", { exact: true }).click();
-  await expect(page.getByText("I checked the command boundary first.")).toBeVisible();
   await page.getByText("Bash", { exact: true }).click();
   await expect(page.getByText(/"command": "pwd"/)).toBeVisible();
   await expect(page.getByText("0", { exact: true })).toBeVisible();

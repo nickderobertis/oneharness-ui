@@ -1,11 +1,10 @@
 import { existsSync } from "node:fs";
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
 import { OneHarness } from "@oneharness/sdk";
 import { z } from "zod";
 import { startWebServer } from "../src/server.ts";
 import { e2eProject, e2eWebPort } from "./e2e-configuration.ts";
-import { readFixtureHistoryRecord } from "./history-fixture.ts";
 
 const repository = resolve(import.meta.dir, "../../..");
 const webAccessToken = z
@@ -40,6 +39,7 @@ const provider = visualMode
 if (cliOverride) process.env.ONEHARNESS_BIN = cliOverride;
 await rm(historyDir, { force: true, recursive: true });
 await mkdir(historyDir, { recursive: true });
+delete process.env.ONEHARNESS_HISTORY_LABELS;
 const sdk = new OneHarness();
 
 async function seed({
@@ -73,7 +73,7 @@ async function seed({
   return result;
 }
 
-const tools = await seed({
+await seed({
   name: "tool-session",
   prompt: "Inspect the tool boundary",
   stdout: [
@@ -81,13 +81,6 @@ const tools = await seed({
     '{"type":"result","result":"Tool inspection complete","session_id":"e2e-native-tool","usage":{"input_tokens":0,"output_tokens":5}}',
   ].join("\n"),
 });
-const { historyFile: toolsHistoryFile, record: toolRecord } = await readFixtureHistoryRecord(
-  historyDir,
-  tools,
-);
-toolRecord.reasoning = "I checked the command boundary first.";
-await writeFile(toolsHistoryFile, `${JSON.stringify(toolRecord)}\n`);
-
 await seed({
   name: "plain-session",
   prompt: "Answer without reasoning",

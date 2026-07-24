@@ -45,7 +45,7 @@ test.skipIf(process.platform !== "linux")(
       expect(readlinkSync(cli.link)).toBe("../share/oneharness/oneharness");
       expect(statSync(cli.payload).size).toBe(statSync(cliSource).size);
       expect(Bun.spawnSync([cli.link, "--version"]).stdout.toString().trim()).toBe(
-        "oneharness 0.3.23",
+        "oneharness 0.5.4",
       );
 
       const override = JSON.parse(appImageOverride(layoutRoot));
