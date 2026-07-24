@@ -49,3 +49,5 @@ export interface ConversationSummary {
   startedAt: string;
   turnCount: number;
 }
+export const conversationLabelMaxLength = 64;
+export const conversationLabelsMaxCount = 20;

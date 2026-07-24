@@ -1,6 +1,5 @@
 "use client";
 
-import { ConversationList, ConversationView, ErrorState } from "@oneharness/ui";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Component, type ErrorInfo, type ReactNode, useState } from "react";
 import { Brandmark } from "@/components/brandmark";
@@ -15,6 +14,9 @@ import {
   useSetConversationLabels,
 } from "../hooks/use-conversations";
 import { useSessionUrl } from "../hooks/use-session-url";
+import { ConversationList } from "./conversation-list";
+import { ConversationView } from "./conversation-view";
+import { ErrorState } from "./error-state";
 
 function LoadingState({ label }: { label: string }) {
   return (

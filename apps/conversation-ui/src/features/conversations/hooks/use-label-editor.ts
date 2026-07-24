@@ -1,8 +1,9 @@
-import type { ConversationSummary } from "@oneharness/ui";
+import {
+  type ConversationSummary,
+  conversationLabelMaxLength,
+  conversationLabelsMaxCount,
+} from "@oneharness/ui";
 import { useState } from "react";
-
-const conversationLabelMaxLength = 64;
-const conversationLabelsMaxCount = 20;
 
 export function useLabelEditor(onSetLabels: (id: string, labels: string[]) => Promise<unknown>) {
   const [editingId, setEditingId] = useState<string | null>(null);
