@@ -15,8 +15,7 @@ run_quiet() {
   local operation="$1"
   local remedy="$2"
   shift 2
-  "$@" >/dev/null \
-    || { echo "visual capture: $operation failed; $remedy" >&2; exit 1; }
+  ONEHARNESS_QUIET=1 "$ROOT/scripts/run-quiet.sh" "visual capture: $operation" "$remedy" -- "$@"
 }
 
 run_quiet "Bun provisioning" "verify npm access and retry" npm install --global bun@1.3.14

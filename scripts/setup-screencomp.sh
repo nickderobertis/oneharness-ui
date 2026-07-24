@@ -30,5 +30,6 @@ if ! actual_sha256="$(bun -e 'const file = Bun.file(process.argv[1]); console.lo
 fi
 [ "$actual_sha256" = "$INSTALLER_SHA256" ] \
   || { echo "screencomp setup: installer checksum mismatch; do not execute the download" >&2; exit 1; }
-sh "$installer" --version "$SCREENCOMP_VERSION" --to "$INSTALL_DIR" >/dev/null \
-  || { echo "screencomp setup: verified installer failed; inspect the release assets and retry" >&2; exit 1; }
+ONEHARNESS_QUIET=1 "$ROOT/scripts/run-quiet.sh" "screencomp setup" \
+  "the verified installer failed; inspect the release assets and retry" -- \
+  sh "$installer" --version "$SCREENCOMP_VERSION" --to "$INSTALL_DIR"

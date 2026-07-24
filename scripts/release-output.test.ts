@@ -32,7 +32,7 @@ describe("version workflow release handoff", () => {
     expect(workflow).toContain("just init-release-output");
     expect(workflow).toContain("RELEASE_VERSION: $" + "{{ steps.release.outputs.version }}");
     expect(releaseConfig).toContain(
-      "bun scripts/release-output.mjs '" + "$" + "{nextRelease.version}'",
+      "just record-release-output '" + "$" + "{nextRelease.version}'",
     );
   });
 });

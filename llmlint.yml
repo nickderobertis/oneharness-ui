@@ -32,19 +32,20 @@ rules:
     relevance: the target adds core user-facing behavior
   - name: least_privilege_grants
     override: true
-    description: Permissions are limited to runtime needs.
+    description: Workflow grants are justified and minimal.
     files:
       include:
         - ".github/workflows/**/*.yml"
     require_line_attribution: true
-    relevance: permissions exceed audited reusable-workflow requirements
+    relevance: the target defines workflow permissions
   - name: work_goes_through_command_surface
     override: true
-    description: Automation uses the command surface required by its execution environment.
+    description: Automation invokes the repository's public command surface.
     require_line_attribution: true
-    relevance: automation bypasses the required command surface
+    relevance: the target automates repository operations
   - name: live_tier_compiles_and_requires_credential
     override: true
+    description: Live lint runs compile and require an explicit credential.
     relevance: the target files define a test tier that connects to a credentialed external service
 plugins:
   - "https://raw.githubusercontent.com/nickderobertis/llmlint/main/assets/config_lint.yml@1"

@@ -138,7 +138,7 @@ describe("visual docs command contracts", () => {
       },
     });
     expect(failure.exitCode).toBe(1);
-    expect(failure.stderr.toString()).toContain("workspace install failed");
+    expect(failure.stderr.toString()).toContain("visual capture: workspace install: failed");
   });
 
   test("reports verification failures from the screencomp boundary", () => {

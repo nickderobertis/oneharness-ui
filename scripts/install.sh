@@ -20,7 +20,7 @@ err() { printf 'oneharness UI installer: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
 usage() {
-  cat >&2 <<EOF
+  cat <<EOF
 Install a checksum-verified oneharness UI release.
 
 Usage: install.sh [--version <tag>] [--to <dir>]

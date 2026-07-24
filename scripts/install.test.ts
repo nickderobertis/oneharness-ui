@@ -58,6 +58,13 @@ afterEach(() => {
 });
 
 describe("release platform selection", () => {
+  test("prints help to standard output without requiring platform discovery", () => {
+    const result = runInstaller(["--help"], {});
+    expect(result.exitCode).toBe(0);
+    expect(result.stdout.toString()).toContain("Usage: install.sh");
+    expect(result.stderr.toString()).toBe("");
+  });
+
   for (const [os, arch, asset] of [
     ["Linux", "x86_64", "oneharness-ui-v1.2.3-linux-x86_64.AppImage"],
     ["Linux", "aarch64", "oneharness-ui-v1.2.3-linux-aarch64.AppImage"],

@@ -19,6 +19,13 @@ screencomp_command="${ONEHARNESS_VISUAL_SCREENCOMP_COMMAND:-screencomp}"
 }
 readonly docker_command screencomp_command
 
+run_quiet() {
+  local operation="$1"
+  local remedy="$2"
+  shift 2
+  ONEHARNESS_QUIET=1 "$ROOT/scripts/run-quiet.sh" "visual docs: $operation" "$remedy" -- "$@"
+}
+
 command -v "$docker_command" >/dev/null 2>&1 || {
   echo "visual docs: Docker is required; install and start Docker, then rerun just visual" >&2
   exit 1
@@ -30,20 +37,20 @@ command -v "$screencomp_command" >/dev/null 2>&1 || {
 
 capture() {
   local output="$1"
-  "$docker_command" run --rm --platform="$PLATFORM" --ipc=host --shm-size=2g \
+  run_quiet "$output capture" "inspect the browser output and retry" \
+    "$docker_command" run --rm --platform="$PLATFORM" --ipc=host --shm-size=2g \
     -e "SHOTS_OUT=$output/x86_64" \
     -v "$ROOT:/work" -v /work/node_modules -w /work \
-    "$VISUAL_PLAYWRIGHT_IMAGE" bash capture.sh >/dev/null \
-    || { echo "visual docs: $output capture failed; inspect the browser output and retry" >&2; exit 1; }
+    "$VISUAL_PLAYWRIGHT_IMAGE" bash capture.sh
 }
 
 capture shots/current
 capture shots/verify
-"$screencomp_command" doctor --input shots/current --baseline-manifest shots/baseline/x86_64.json \
-  --arch x86_64 --exit-code >/dev/null \
-  || { echo "visual docs: capture index is invalid; fix capture.sh and retry" >&2; exit 1; }
-"$screencomp_command" verify --first shots/current --second shots/verify --arch x86_64 >/dev/null \
-  || { echo "visual docs: captures are not reproducible; remove nondeterministic UI state and retry" >&2; exit 1; }
-"$screencomp_command" classify --baseline-manifest shots/baseline/x86_64.json \
-  --current shots/current --arch x86_64 --exit-code >/dev/null \
-  || { echo "visual docs: capture drifted; review it and update the manifest if intentional" >&2; exit 1; }
+run_quiet "capture index validation" "fix capture.sh and retry" \
+  "$screencomp_command" doctor --input shots/current --baseline-manifest shots/baseline/x86_64.json \
+  --arch x86_64 --exit-code
+run_quiet "capture reproducibility" "captures are not reproducible; remove nondeterministic UI state and retry" \
+  "$screencomp_command" verify --first shots/current --second shots/verify --arch x86_64
+run_quiet "capture classification" "review it and update the manifest if intentional" \
+  "$screencomp_command" classify --baseline-manifest shots/baseline/x86_64.json \
+  --current shots/current --arch x86_64 --exit-code

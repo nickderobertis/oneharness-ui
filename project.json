@@ -22,7 +22,7 @@
       "command": "bunx biome format .claude/settings.json .releaserc.json biome.json gh-secrets.json nx.json package.json project.json scripts tsconfig.base.json"
     },
     "test": {
-      "command": "bun test scripts/build-native.test.ts scripts/release-output.test.ts scripts/visual-docs.test.ts"
+      "command": "bun test scripts/build-native.test.ts scripts/release-output.test.ts scripts/toolchain-pins.test.ts scripts/visual-docs.test.ts"
     }
   }
 }

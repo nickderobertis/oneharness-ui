@@ -97,6 +97,9 @@ publish-release:
 init-release-output:
     @./scripts/run-quiet.sh "release output initialization" "Run this command from the version workflow with GITHUB_OUTPUT available." -- bun scripts/release-output.mjs
 
+record-release-output version:
+    @./scripts/run-quiet.sh "release output recording" "Pass semantic-release's valid next version from the version workflow." -- bun scripts/release-output.mjs {{quote(version)}}
+
 publish-ui:
     @./scripts/run-quiet.sh "npm package publish" "Verify RELEASE_VERSION matches the semantic-release output and NPM_TOKEN can publish @oneharness/ui publicly, then rerun 'just publish-ui'." -- bun scripts/publish-ui.mjs
 

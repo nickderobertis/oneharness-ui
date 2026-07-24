@@ -21,7 +21,7 @@
       "@semantic-release/exec",
       {
         "prepareCmd": "RELEASE_VERSION='${nextRelease.version}' just set-version",
-        "successCmd": "bun scripts/release-output.mjs '${nextRelease.version}'"
+        "successCmd": "just record-release-output '${nextRelease.version}'"
       }
     ],
     "@semantic-release/github"

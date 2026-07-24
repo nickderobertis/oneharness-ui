@@ -35,7 +35,7 @@ describe("published package", () => {
         devDependencies: {
           "@types/react": "^19.2.14",
           "@types/react-dom": "^19.2.3",
-          typescript: "7.0.2",
+          typescript: "5.9.3",
         },
         private: true,
         scripts: { build: "tsc --noEmit" },
@@ -81,6 +81,7 @@ export const transcript = (
 
     const install = Bun.spawnSync(["npm", "install", "--ignore-scripts"], {
       cwd: directory,
+      env: { ...process.env, npm_config_cache: join(directory, ".npm-cache") },
       stderr: "pipe",
       stdout: "pipe",
     });
@@ -93,5 +94,5 @@ export const transcript = (
     if (build.exitCode !== 0) {
       throw new Error(`${build.stdout.toString()}\n${build.stderr.toString()}`);
     }
-  }, 60_000);
+  }, 180_000);
 });
