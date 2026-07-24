@@ -28,6 +28,7 @@ describe("version workflow release handoff", () => {
     const releaseConfig = readFileSync(".releaserc.json", "utf8");
 
     expect(workflow).toContain("if: steps.release.outputs.released == 'true'");
+    expect(workflow).toContain("id-token: write");
     expect(workflow).toContain("just init-release-output");
     expect(workflow).toContain("RELEASE_VERSION: $" + "{{ steps.release.outputs.version }}");
     expect(releaseConfig).toContain(
