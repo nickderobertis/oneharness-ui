@@ -95,8 +95,7 @@ publish-release:
     @./scripts/run-quiet.sh "semantic release" "Verify the protected-main history and built-in GitHub token permissions, then rerun 'just publish-release'." -- bunx semantic-release
 
 publish-ui:
-    @[[ -n "${NODE_AUTH_TOKEN:-}" ]] || { echo "npm publish: NODE_AUTH_TOKEN is missing; configure the NPM_TOKEN repository secret, then rerun 'just publish-ui'" >&2; exit 2; }
-    @./scripts/run-quiet.sh "npm package publish" "Verify NPM_TOKEN can publish @oneharness/ui publicly, then rerun 'just publish-ui'." -- npm publish packages/ui --access public --provenance
+    @./scripts/run-quiet.sh "npm package publish" "Verify RELEASE_VERSION matches the semantic-release output and NPM_TOKEN can publish @oneharness/ui publicly, then rerun 'just publish-ui'." -- bun scripts/publish-ui.mjs
 
 seed-release:
     @./scripts/run-quiet.sh "initial release seed" "Verify GITHUB_SHA and built-in GitHub token permissions, then rerun 'just seed-release'." -- ./scripts/seed-release.sh

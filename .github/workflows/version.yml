@@ -41,13 +41,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: just seed-release
       - name: Compute, tag, and publish release
+        id: release
         env:
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
-        run: just publish-release
+        run: |
+          bun scripts/release-output.mjs
+          just publish-release
       - name: Publish the React component library
+        if: steps.release.outputs.released == 'true'
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          RELEASE_VERSION: ${{ steps.release.outputs.version }}
         run: just publish-ui
       - name: Reconcile the latest native artifact run
         env:
