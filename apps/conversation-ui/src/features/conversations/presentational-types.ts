@@ -48,6 +48,7 @@ export interface Conversation {
 
 export interface ConversationSummary {
   harnesses: string[];
+  historyLabels?: Record<string, string> | undefined;
   id: string;
   labels?: string[] | undefined;
   name: string;

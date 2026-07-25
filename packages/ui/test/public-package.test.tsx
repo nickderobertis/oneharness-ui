@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { basename, isAbsolute, resolve } from "node:path";
 import { ReplyForm, StatusBadge, TooltipProvider } from "@oneharness/ui";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -45,7 +45,22 @@ describe("@oneharness/ui public package", () => {
         cwd: packageRoot,
       });
       expect(packed.exitCode).toBe(0);
-      const [{ filename }] = JSON.parse(packed.stdout.toString()) as [{ filename: string }];
+      const packOutput: unknown = JSON.parse(packed.stdout.toString());
+      if (
+        !Array.isArray(packOutput) ||
+        packOutput.length !== 1 ||
+        typeof packOutput[0] !== "object" ||
+        packOutput[0] === null ||
+        !("filename" in packOutput[0]) ||
+        typeof packOutput[0].filename !== "string" ||
+        packOutput[0].filename.length > 255 ||
+        isAbsolute(packOutput[0].filename) ||
+        basename(packOutput[0].filename) !== packOutput[0].filename ||
+        !packOutput[0].filename.endsWith(".tgz")
+      ) {
+        throw new Error("npm pack returned an invalid package filename");
+      }
+      const filename = packOutput[0].filename;
       const consumerRoot = resolve(temporaryRoot, "consumer");
       await writeFile(
         resolve(temporaryRoot, "package.json"),
