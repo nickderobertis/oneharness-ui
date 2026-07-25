@@ -48,9 +48,19 @@ rules:
     description: Automation uses the command surface required by its execution environment.
     require_line_attribution: true
     relevance: automation bypasses the required command surface
+  - name: no_unjustified_any_or_non_null
+    override: true
+    description: Type-system bypasses have adjacent justification.
+    require_line_attribution: true
+    relevance: authored TypeScript uses an explicit any type or non-null assertion
+  - name: tool_output_is_signal
+    override: true
+    description: Successful non-help commands emit only concise results.
+    require_line_attribution: true
+    relevance: non-help successful command emits output beyond a concise result
   - name: live_tier_compiles_and_requires_credential
     override: true
-    description: Compiles without credentials and requires credentials before execution.
+    description: Live tier compiles credential-free and blocks execution until credentials exist.
     relevance: test tier connects to a credentialed external service
 plugins:
   - "https://raw.githubusercontent.com/nickderobertis/llmlint/main/assets/config_lint.yml@1"
