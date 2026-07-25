@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { $, browser, expect } from "@wdio/globals";
+import { $, $$, browser, expect } from "@wdio/globals";
 import { validateProviderArgvPath } from "./capabilities.ts";
 import { desktopE2eStageLog, runDesktopStage } from "./stage-log.ts";
 import { type ScrollSnapshot, wheelUntilNextPage } from "./wheel-scroll.ts";
@@ -101,19 +101,16 @@ async function expectUniqueAccessibleIds(
   ids: string[],
   accessibleName: (id: string) => string,
 ): Promise<void> {
-  const expectedNames = ids.map(accessibleName);
-  const counts = await browser.execute((names: string[]) => {
-    const expected = new Set(names);
-    const occurrences = new Map(names.map((name) => [name, 0]));
-    for (const element of document.querySelectorAll("[aria-label]")) {
-      const name = element.getAttribute("aria-label");
-      if (name !== null && expected.has(name)) {
-        occurrences.set(name, (occurrences.get(name) ?? 0) + 1);
-      }
+  const batchSize = 5;
+  for (let start = 0; start < ids.length; start += batchSize) {
+    const batch = ids.slice(start, start + batchSize);
+    const matches = await Promise.all(
+      batch.map(async (id) => await $$(`aria/${accessibleName(id)}`)),
+    );
+    for (const match of matches) {
+      expect(match).toHaveLength(1);
     }
-    return names.map((name) => occurrences.get(name) ?? 0);
-  }, expectedNames);
-  expect(counts).toEqual(expectedNames.map(() => 1));
+  }
 }
 
 async function conversation(name: string) {
