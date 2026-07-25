@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { lstatSync, mkdtempSync, readlinkSync, rmSync, statSync } from "node:fs";
+import { lstatSync, mkdtempSync, readFileSync, readlinkSync, rmSync, statSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { appImageOverride, requiresSourceBuiltCli, stageAppImageSidecar } from "./build-native.mjs";
@@ -44,8 +44,11 @@ test.skipIf(process.platform !== "linux")(
       expect(lstatSync(cli.link).isSymbolicLink()).toBe(true);
       expect(readlinkSync(cli.link)).toBe("../share/oneharness/oneharness");
       expect(statSync(cli.payload).size).toBe(statSync(cliSource).size);
+      const bridgeManifest = JSON.parse(
+        readFileSync(resolve(root, "packages/oneharness-bridge/package.json"), "utf8"),
+      );
       expect(Bun.spawnSync([cli.link, "--version"]).stdout.toString().trim()).toBe(
-        "oneharness 0.5.4",
+        `oneharness ${bridgeManifest.dependencies["@oneharness/sdk"]}`,
       );
 
       const override = JSON.parse(appImageOverride(layoutRoot));

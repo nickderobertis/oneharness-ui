@@ -10,7 +10,8 @@
       "options": {
         "commands": [
           "bunx biome check --error-on-warnings .claude/settings.json .releaserc.json biome.json gh-secrets.json nx.json package.json project.json scripts tsconfig.base.json",
-          "node scripts/check-boundaries.mjs"
+          "node scripts/check-boundaries.mjs",
+          "node scripts/check-version-drift.mjs"
         ],
         "parallel": false
       }
@@ -22,7 +23,7 @@
       "command": "bunx biome format .claude/settings.json .releaserc.json biome.json gh-secrets.json nx.json package.json project.json scripts tsconfig.base.json"
     },
     "test": {
-      "command": "bun test scripts/build-native.test.ts scripts/visual-docs.test.ts"
+      "command": "bun test scripts/build-native.test.ts scripts/check-version-drift.test.ts scripts/visual-docs.test.ts"
     }
   }
 }
