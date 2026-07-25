@@ -17,6 +17,8 @@ const harnessId = z.string().min(1).max(100);
 const startedAt = z.string().max(128);
 export const conversationLabelMaxLength = 64;
 export const conversationLabelsMaxCount = 20;
+export const conversationListPageSize = 25;
+export const conversationTurnPageSize = 20;
 export const conversationLabelSchema = z.string().trim().min(1).max(conversationLabelMaxLength);
 export const conversationLabelsSchema = z
   .array(conversationLabelSchema)
@@ -74,7 +76,7 @@ export const conversationSchema = z.object({
 export const conversationPageSchema = conversationSchema.extend({
   nextTurnOffset: z.number().int().nonnegative().nullable(),
   totalTurnCount: z.number().int().nonnegative(),
-  turns: z.array(conversationTurnSchema).max(20),
+  turns: z.array(conversationTurnSchema).max(conversationTurnPageSize),
 });
 
 export const conversationSummarySchema = conversationSchema
@@ -118,7 +120,7 @@ export const bridgeErrorSchema = z.object({
 
 const successResponseSchema = z.discriminatedUnion("kind", [
   z.object({
-    conversations: z.array(conversationSummarySchema).max(25),
+    conversations: z.array(conversationSummarySchema).max(conversationListPageSize),
     kind: z.literal("list"),
     nextCursor: conversationCursorSchema.nullable(),
     totalCount: z.number().int().nonnegative(),
