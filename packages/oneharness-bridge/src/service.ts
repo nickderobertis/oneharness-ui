@@ -5,6 +5,7 @@ import { basename, extname } from "node:path";
 import {
   HistoryListSchema,
   type HistoryRecord,
+  HistoryRecordSchema,
   HistoryRecordsSchema,
   type HistorySessionSummary,
   OneHarness,
@@ -53,34 +54,17 @@ const CLI_ENVIRONMENT_KEYS = [
   "XDG_DATA_HOME",
   "XDG_STATE_HOME",
 ] as const;
+type HistoryRecordJsonSchema = {
+  anyOf?: Array<{ properties?: Record<string, unknown> }>;
+};
+const historyRecordJsonSchema = HistoryRecordSchema.toJSONSchema() as HistoryRecordJsonSchema;
 const knownRecordKeys = new Set([
-  "duration_ms",
-  "events",
-  "exit_code",
-  "failure_kind",
-  "finished_at",
-  "harness",
-  "history_id",
-  "labels",
-  "model",
-  "model_ms",
-  "name",
-  "permission_mode",
-  "project",
-  "prompt",
+  ...(historyRecordJsonSchema.anyOf ?? []).flatMap((variant) =>
+    Object.keys(variant.properties ?? {}),
+  ),
+  // Legacy SDK records may carry either alias outside the current schema.
   "reasoning",
-  "schema_version",
-  "session",
-  "session_id",
-  "status",
-  "started_at",
-  "text",
-  "text_source",
-  "timestamp",
-  "time_to_first_token_ms",
   "thinking",
-  "tool_ms",
-  "usage",
 ]);
 
 type Executable = { command: string; prefix: string[] };
