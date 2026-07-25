@@ -7,7 +7,21 @@ if (requestedRoot !== undefined && !isAbsolute(requestedRoot)) {
   throw new Error("version drift root must be absolute; pass an absolute fixture path");
 }
 const root = requestedRoot ?? resolve(import.meta.dirname, "..");
-const read = (path) => readFileSync(resolve(root, path), "utf8");
+const read = (path) => {
+  try {
+    return readFileSync(resolve(root, path), "utf8");
+  } catch {
+    throw new Error(`could not read ${path}; restore the required file and rerun just check`);
+  }
+};
+const readJson = (path) => {
+  try {
+    return JSON.parse(read(path));
+  } catch (error) {
+    if (error instanceof Error && error.message.startsWith("could not read ")) throw error;
+    throw new Error(`${path} must contain valid JSON; fix the manifest and rerun just check`);
+  }
+};
 const versions = Object.fromEntries(
   read(".tool-versions")
     .trim()
@@ -22,7 +36,15 @@ for (const tool of requiredTools) {
 }
 
 const workflowDirectory = resolve(root, ".github/workflows");
-for (const entry of readdirSync(workflowDirectory, { withFileTypes: true })) {
+let workflowEntries;
+try {
+  workflowEntries = readdirSync(workflowDirectory, { withFileTypes: true });
+} catch {
+  throw new Error(
+    "could not read .github/workflows; restore the workflow directory and rerun just check",
+  );
+}
+for (const entry of workflowEntries) {
   if (!entry.isFile() || !entry.name.endsWith(".yml")) continue;
   const workflow = read(`.github/workflows/${entry.name}`);
   const expectations = [
@@ -40,16 +62,16 @@ for (const entry of readdirSync(workflowDirectory, { withFileTypes: true })) {
   }
 }
 
-const bridgeManifest = JSON.parse(read("packages/oneharness-bridge/package.json"));
-const desktopManifest = JSON.parse(read("apps/desktop-shell/package.json"));
-const rootManifest = JSON.parse(read("package.json"));
+const bridgeManifest = readJson("packages/oneharness-bridge/package.json");
+const desktopManifest = readJson("apps/desktop-shell/package.json");
+const rootManifest = readJson("package.json");
 const typescriptVersion = rootManifest.devDependencies?.typescript;
 const typescriptManifests = [
-  ["apps/conversation-ui/package.json", JSON.parse(read("apps/conversation-ui/package.json"))],
+  ["apps/conversation-ui/package.json", readJson("apps/conversation-ui/package.json")],
   ["apps/desktop-shell/package.json", desktopManifest],
-  ["packages/ipc-contract/package.json", JSON.parse(read("packages/ipc-contract/package.json"))],
+  ["packages/ipc-contract/package.json", readJson("packages/ipc-contract/package.json")],
   ["packages/oneharness-bridge/package.json", bridgeManifest],
-  ["packages/ui/package.json", JSON.parse(read("packages/ui/package.json"))],
+  ["packages/ui/package.json", readJson("packages/ui/package.json")],
 ];
 if (typeof typescriptVersion !== "string") {
   throw new Error("root package.json must pin TypeScript; add its stable pinned version");

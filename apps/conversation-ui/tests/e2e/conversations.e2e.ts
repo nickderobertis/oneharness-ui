@@ -111,7 +111,9 @@ test("keeps conversation navigation usable in a phone-sized viewport", async ({ 
   await expect(page).toHaveURL(/\/$/);
 });
 
-test("organizes sessions by project and round-trips local labels", async ({ page }) => {
+test("validates label limits, organizes sessions, and round-trips local labels", async ({
+  page,
+}) => {
   await page.goto("/");
   const organize = page.getByRole("combobox", { name: "Organize by" });
   await page.getByRole("button", { name: "Refresh conversations" }).hover();

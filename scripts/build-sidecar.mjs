@@ -13,9 +13,16 @@ import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "..");
-const bridgeManifest = JSON.parse(
-  readFileSync(resolve(root, "packages/oneharness-bridge/package.json"), "utf8"),
-);
+let bridgeManifest;
+try {
+  bridgeManifest = JSON.parse(
+    readFileSync(resolve(root, "packages/oneharness-bridge/package.json"), "utf8"),
+  );
+} catch {
+  throw new Error(
+    "could not read packages/oneharness-bridge/package.json as valid JSON; restore or fix the manifest, then rerun just bootstrap",
+  );
+}
 const sdkVersion = bridgeManifest.dependencies?.["@oneharness/sdk"];
 if (typeof sdkVersion !== "string" || !/^\d+\.\d+\.\d+$/.test(sdkVersion)) {
   throw new Error(

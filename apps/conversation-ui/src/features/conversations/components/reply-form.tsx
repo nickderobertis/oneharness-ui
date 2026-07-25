@@ -1,11 +1,11 @@
 "use client";
 
 import { Send } from "lucide-react";
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useReplyForm } from "../hooks/use-reply-form";
 
 export function ReplyForm({
   error,
@@ -16,28 +16,7 @@ export function ReplyForm({
   onSubmit: (message: string) => Promise<void>;
   pending: boolean;
 }) {
-  const [message, setMessage] = useState("");
-  const [validationError, setValidationError] = useState<string | null>(null);
-
-  async function submit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const value = message.trim();
-    if (!value) {
-      setValidationError("Write a message first");
-      return;
-    }
-    if (value.length > 32_000) {
-      setValidationError("Message must contain at most 32000 characters");
-      return;
-    }
-    setValidationError(null);
-    try {
-      await onSubmit(value);
-      setMessage("");
-    } catch {
-      // The mutation error is rendered below; retain the draft for a retry.
-    }
-  }
+  const { message, setMessage, submit, validationError } = useReplyForm(onSubmit);
 
   return (
     <form className="mx-auto max-w-[850px]" onSubmit={submit}>
