@@ -101,9 +101,15 @@ async function expectUniqueAccessibleIds(
   ids: string[],
   accessibleName: (id: string) => string,
 ): Promise<void> {
-  const matches = await Promise.all(ids.map(async (id) => await $$(`aria/${accessibleName(id)}`)));
-  for (const match of matches) {
-    expect(match).toHaveLength(1);
+  const batchSize = 5;
+  for (let start = 0; start < ids.length; start += batchSize) {
+    const batch = ids.slice(start, start + batchSize);
+    const matches = await Promise.all(
+      batch.map(async (id) => await $$(`aria/${accessibleName(id)}`)),
+    );
+    for (const match of matches) {
+      expect(match).toHaveLength(1);
+    }
   }
 }
 
