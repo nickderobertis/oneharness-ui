@@ -72,7 +72,7 @@ describe("@oneharness/ui public package", () => {
           private: true,
           scripts: {
             verify:
-              'bun -e \'import { StatusBadge } from "@oneharness/ui"; if (typeof StatusBadge !== "function") process.exit(1)\'',
+              'bun -e \'import { createElement } from "react"; import { renderToStaticMarkup } from "react-dom/server"; import { StatusBadge } from "@oneharness/ui"; const html = renderToStaticMarkup(createElement(StatusBadge, { state: "running" })); if (!html.includes("Running")) process.exit(1)\'',
           },
         })}\n`,
       );
