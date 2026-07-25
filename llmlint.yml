@@ -28,7 +28,7 @@ agents:
 rules:
   - name: changed_behavior_has_e2e
     override: true
-    description: Each new core user-facing behavior and its failure and recovery paths are exercised through the real product boundary; only paid model execution may use the deterministic provider seam.
+    description: Coverage drives realistic product boundaries, including failure and recovery paths; paid model execution may use the deterministic provider seam.
     relevance: the target adds core user-facing behavior
   - name: tests_mirror_real_usage
     override: true
@@ -37,7 +37,7 @@ rules:
     relevance: user-reachable boundary bypass outside validated paid-model, malformed, oversized, or pagination fixture setup
   - name: least_privilege_grants
     override: true
-    description: Workflows use read-only defaults and grant write scopes only to jobs whose documented operation requires them.
+    description: Read-only defaults; write scopes only for jobs that require them.
     files:
       include:
         - ".github/workflows/**/*.yml"
@@ -45,19 +45,23 @@ rules:
     relevance: workflows grant permissions
   - name: work_goes_through_command_surface
     override: true
-    description: Repository automation invokes documented just recipes; workflow-only setup and platform commands may remain direct when no recipe exists.
+    description: Use documented just recipes; direct commands are allowed only when no recipe exists.
     require_line_attribution: true
     relevance: automation invokes repository tooling
   - name: no_unjustified_any_or_non_null
     override: true
     description: Type-system bypasses have adjacent justification.
+    files:
+      include:
+        - "**/*.ts"
+        - "**/*.tsx"
     require_line_attribution: true
-    relevance: authored TypeScript uses an explicit any type or non-null assertion
+    relevance: authored code uses an explicit any type or non-null assertion
   - name: tool_output_is_signal
     override: true
-    description: Successful non-help commands emit only concise results.
+    description: Output is limited to a concise result.
     require_line_attribution: true
-    relevance: non-help successful command emits output beyond a concise result
+    relevance: noisy successful non-help command output
   - name: live_tier_compiles_and_requires_credential
     override: true
     description: Credential-free compilation succeeds; execution requires credentials.
