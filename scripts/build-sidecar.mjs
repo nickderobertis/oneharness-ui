@@ -18,9 +18,10 @@ try {
   bridgeManifest = JSON.parse(
     readFileSync(resolve(root, "packages/oneharness-bridge/package.json"), "utf8"),
   );
-} catch {
+} catch (error) {
+  const detail = error instanceof Error ? error.message : String(error);
   throw new Error(
-    "could not read packages/oneharness-bridge/package.json as valid JSON; restore or fix the manifest, then rerun just bootstrap",
+    `could not read packages/oneharness-bridge/package.json as valid JSON: ${detail}; restore or fix the manifest, then rerun just bootstrap`,
   );
 }
 const sdkVersion = bridgeManifest.dependencies?.["@oneharness/sdk"];

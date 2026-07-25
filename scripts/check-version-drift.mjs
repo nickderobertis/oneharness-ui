@@ -10,8 +10,11 @@ const root = requestedRoot ?? resolve(import.meta.dirname, "..");
 const read = (path) => {
   try {
     return readFileSync(resolve(root, path), "utf8");
-  } catch {
-    throw new Error(`could not read ${path}; restore the required file and rerun just check`);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `could not read ${path}: ${detail}; restore the required file and rerun just check`,
+    );
   }
 };
 const readJson = (path) => {
@@ -19,7 +22,10 @@ const readJson = (path) => {
     return JSON.parse(read(path));
   } catch (error) {
     if (error instanceof Error && error.message.startsWith("could not read ")) throw error;
-    throw new Error(`${path} must contain valid JSON; fix the manifest and rerun just check`);
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `${path} must contain valid JSON: ${detail}; fix the manifest and rerun just check`,
+    );
   }
 };
 const versions = Object.fromEntries(
@@ -44,9 +50,10 @@ const workflowDirectory = resolve(root, ".github/workflows");
 let workflowEntries;
 try {
   workflowEntries = readdirSync(workflowDirectory, { withFileTypes: true });
-} catch {
+} catch (error) {
+  const detail = error instanceof Error ? error.message : String(error);
   throw new Error(
-    "could not read .github/workflows; restore the workflow directory and rerun just check",
+    `could not read .github/workflows: ${detail}; restore the workflow directory and rerun just check`,
   );
 }
 for (const entry of workflowEntries) {

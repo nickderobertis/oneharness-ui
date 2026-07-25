@@ -34,7 +34,7 @@ rules:
     override: true
     description: Tests drive public product boundaries.
     require_line_attribution: true
-    relevance: tests bypass a public product boundary other than the permitted deterministic provider seam
+    relevance: tests bypass a user-reachable product boundary, excluding validated fixture setup for paid-model, malformed, oversized, and pagination states
   - name: least_privilege_grants
     override: true
     description: Permissions are limited to runtime needs.
