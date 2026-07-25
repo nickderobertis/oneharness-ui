@@ -79,8 +79,16 @@ test("continues the exact session and selects refreshed history", async ({ page 
   await page.getByRole("button", { name: /plain-session/i }).click();
   await page.getByRole("button", { name: "Send reply" }).hover();
   await expect(page.getByRole("tooltip", { name: "Send reply" })).toBeVisible();
+  const reply = page.getByRole("textbox", { name: "Continue this session" });
+  await reply.fill("x".repeat(32_001));
+  await page.getByRole("button", { name: "Send reply" }).click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "at most 32000 characters" }),
+  ).toBeVisible();
+  await expect(reply).toHaveValue("x".repeat(32_001));
+
   const before = page.url();
-  await page.getByRole("textbox", { name: "Continue this session" }).fill("Continue with a fix");
+  await reply.fill("Continue with a fix");
   await page.getByRole("button", { name: "Send reply" }).click();
   await expect(page.getByText("Continued from the exact desktop session")).toBeVisible({
     timeout: 15_000,

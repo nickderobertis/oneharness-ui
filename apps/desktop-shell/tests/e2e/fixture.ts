@@ -220,6 +220,9 @@ async function patchRecord(
   historyFile: string,
   changes: Readonly<Record<string, unknown>>,
 ): Promise<void> {
+  // The packaged CLI creates the canonical record first. Mutate only validated
+  // fixture fields that the deterministic provider cannot express; the test
+  // still drives the real UI → Tauri → sidecar → SDK → CLI/session boundary.
   const lines = (await readFile(historyFile, "utf8")).trim().split("\n");
   const parsed = lines.map((line) => HistoryLineSchema.parse(JSON.parse(line)));
   const runIndex = parsed.findLastIndex((line) => line.type === "run");
@@ -264,6 +267,9 @@ function historyLines(record: ReturnType<typeof HistoryRecordSchema.parse>): str
 async function seedOversizedHistory(
   historyFile: string,
 ): Promise<{ bytes: number; sessionIds: string[] }> {
+  // Paid model execution cannot deterministically produce a history corpus
+  // above the legacy bridge limit. Derive every synthetic record from a real
+  // packaged-CLI record and validate it with the SDK schema before persistence.
   const template = await readFirstHistoryRecord(historyFile);
   const prompt = "Deterministic oversized native history prompt. ".repeat(2_100);
   const summaries: Array<Record<string, unknown>> = [];

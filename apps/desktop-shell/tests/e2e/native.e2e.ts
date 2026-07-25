@@ -101,14 +101,9 @@ async function expectUniqueAccessibleIds(
   ids: string[],
   accessibleName: (id: string) => string,
 ): Promise<void> {
-  const expectedNames = ids.map(accessibleName);
-  const actualNames = await browser.execute(() =>
-    Array.from(document.querySelectorAll("[aria-label]"), (element) =>
-      element.getAttribute("aria-label"),
-    ),
-  );
-  for (const expectedName of expectedNames) {
-    expect(actualNames.filter((actualName) => actualName === expectedName)).toHaveLength(1);
+  const matches = await Promise.all(ids.map(async (id) => await $$(`aria/${accessibleName(id)}`)));
+  for (const match of matches) {
+    expect(match).toHaveLength(1);
   }
 }
 

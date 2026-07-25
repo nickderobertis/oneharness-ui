@@ -16,7 +16,9 @@ const versions = Object.fromEntries(
 );
 const requiredTools = ["bun", "nodejs", "just", "uv"];
 for (const tool of requiredTools) {
-  if (!versions[tool]) throw new Error(`.tool-versions is missing ${tool}`);
+  if (!versions[tool]) {
+    throw new Error(`.tool-versions is missing ${tool}; add its stable pinned version`);
+  }
 }
 
 const workflowDirectory = resolve(root, ".github/workflows");

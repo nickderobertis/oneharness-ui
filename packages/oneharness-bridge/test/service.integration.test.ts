@@ -175,6 +175,8 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     const outside = resolve(historyDir, "..", `${basename(historyDir)}-outside.jsonl`);
     const multiple = resolve(historyDir, "multiple.jsonl");
     try {
+      // These deliberately malformed filesystem preconditions exercise the
+      // public history-file trust boundary; no user workflow can create them.
       await writeFile(outside, `${historyLines(record)}\n`);
       await expect(
         readFixtureHistoryRecord(historyDir, { ...report, history_file: outside }),

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, isAbsolute, resolve } from "node:path";
 import { ReplyForm, StatusBadge, TooltipProvider } from "@oneharness/ui";
@@ -62,8 +62,9 @@ describe("@oneharness/ui public package", () => {
       }
       const filename = packOutput[0].filename;
       const consumerRoot = resolve(temporaryRoot, "consumer");
+      await mkdir(consumerRoot);
       await writeFile(
-        resolve(temporaryRoot, "package.json"),
+        resolve(consumerRoot, "package.json"),
         `${JSON.stringify({
           dependencies: {
             "@oneharness/ui": `file:${resolve(temporaryRoot, filename)}`,
@@ -75,11 +76,10 @@ describe("@oneharness/ui public package", () => {
           },
         })}\n`,
       );
-      const install = Bun.spawnSync(["bun", "install", "--offline"], { cwd: temporaryRoot });
+      const install = Bun.spawnSync(["bun", "install", "--offline"], { cwd: consumerRoot });
       expect(install.exitCode).toBe(0);
-      const verify = Bun.spawnSync(["bun", "run", "verify"], { cwd: temporaryRoot });
+      const verify = Bun.spawnSync(["bun", "run", "verify"], { cwd: consumerRoot });
       expect(verify.exitCode).toBe(0);
-      expect(consumerRoot).toContain("consumer");
     } finally {
       await rm(temporaryRoot, { force: true, recursive: true });
     }
