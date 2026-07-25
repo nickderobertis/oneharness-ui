@@ -21,14 +21,14 @@ import {
   type ConversationPage,
   type ConversationSummary,
   type ConversationTurn,
-  conversationListPageSize,
-  conversationTurnPageSize,
 } from "@oneharness-ui/ipc-contract";
 import { z } from "zod";
 import type { BridgeEnvironment } from "./environment.ts";
 import { labelsFor, setLabels } from "./label-store.ts";
 
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
+const CONVERSATION_LIST_PAGE_SIZE = 25;
+const CONVERSATION_TURN_PAGE_SIZE = 20;
 export const MAX_CONVERSATION_PAGE_BYTES = 512 * 1024;
 const MAX_ERROR_DETAIL_CHARACTERS = 16_384;
 export const authorizationSchema = z.string().min(32).max(256);
@@ -218,7 +218,7 @@ function toConversationPage(records: HistoryRecord[], requestedOffset = 0): Conv
   };
   for (
     let index = requestedOffset;
-    index < records.length && index < requestedOffset + conversationTurnPageSize;
+    index < records.length && index < requestedOffset + CONVERSATION_TURN_PAGE_SIZE;
     index += 1
   ) {
     const record = records[index];
@@ -357,7 +357,7 @@ export class BridgeService {
     const remaining = cursor
       ? discovered.filter((summary) => followsCursor(summary, cursor))
       : discovered;
-    const page = remaining.slice(0, conversationListPageSize);
+    const page = remaining.slice(0, CONVERSATION_LIST_PAGE_SIZE);
     const last = page.at(-1);
     return {
       conversations: page.map((summary) => toSummary(summary, storedLabels[summary.id] ?? [])),
