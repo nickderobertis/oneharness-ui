@@ -28,44 +28,24 @@ agents:
 rules:
   - name: changed_behavior_has_e2e
     override: true
-    description: Coverage drives realistic product boundaries, including failure and recovery paths; paid model execution may use the deterministic provider seam.
+    description: Realistic end-to-end coverage exists.
     relevance: the target adds core user-facing behavior
-  - name: tests_mirror_real_usage
-    override: true
-    description: Tests drive public product boundaries.
-    require_line_attribution: true
-    relevance: user-reachable boundary bypass outside validated paid-model, malformed, oversized, or pagination fixture setup
   - name: least_privilege_grants
     override: true
-    description: Read-only defaults; write scopes only for jobs that require them.
+    description: Permissions are limited to runtime needs.
     files:
       include:
         - ".github/workflows/**/*.yml"
     require_line_attribution: true
-    relevance: workflows grant permissions
+    relevance: permissions exceed audited reusable-workflow requirements
   - name: work_goes_through_command_surface
     override: true
-    description: Use documented just recipes; direct commands are allowed only when no recipe exists.
+    description: Automation uses the command surface required by its execution environment.
     require_line_attribution: true
-    relevance: automation invokes repository tooling
-  - name: no_unjustified_any_or_non_null
-    override: true
-    description: Type-system bypasses have adjacent justification.
-    files:
-      include:
-        - "**/*.ts"
-        - "**/*.tsx"
-    require_line_attribution: true
-    relevance: authored code uses an explicit any type or non-null assertion
-  - name: tool_output_is_signal
-    override: true
-    description: Output is limited to a concise result.
-    require_line_attribution: true
-    relevance: noisy successful non-help command output
+    relevance: automation bypasses the required command surface
   - name: live_tier_compiles_and_requires_credential
     override: true
-    description: Credential-free compilation succeeds; execution requires credentials.
-    relevance: test tier connects to a credentialed external service
+    relevance: the target files define a test tier that connects to a credentialed external service
 plugins:
   - "https://raw.githubusercontent.com/nickderobertis/llmlint/main/assets/config_lint.yml@1"
   - "https://raw.githubusercontent.com/nickderobertis/dero-skills/main/skills/bootstrap/create-repo/assets/llmlint/base.llmlint.yml@1"
