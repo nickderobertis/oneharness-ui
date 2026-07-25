@@ -3,6 +3,7 @@ coverage = true
 coverageReporter = ["text", "lcov"]
 coverageThreshold = 0.0
 coverageSkipTestFiles = true
+coveragePathIgnorePatterns = ["**/dist/**"]
 
 [install]
 exact = false
