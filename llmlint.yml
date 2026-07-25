@@ -42,12 +42,12 @@ rules:
       include:
         - ".github/workflows/**/*.yml"
     require_line_attribution: true
-    relevance: permissions exceed audited reusable-workflow requirements
+    relevance: workflows grant permissions
   - name: work_goes_through_command_surface
     override: true
     description: Automation uses the command surface required by its execution environment.
     require_line_attribution: true
-    relevance: automation bypasses the required command surface
+    relevance: automation invokes repository tooling
   - name: no_unjustified_any_or_non_null
     override: true
     description: Type-system bypasses have adjacent justification.
@@ -60,7 +60,7 @@ rules:
     relevance: non-help successful command emits output beyond a concise result
   - name: live_tier_compiles_and_requires_credential
     override: true
-    description: Live tier compiles credential-free and blocks execution until credentials exist.
+    description: Credential-free compilation succeeds; execution requires credentials.
     relevance: test tier connects to a credentialed external service
 plugins:
   - "https://raw.githubusercontent.com/nickderobertis/llmlint/main/assets/config_lint.yml@1"
