@@ -28,7 +28,7 @@ bun "$ROOT/scripts/build-test-provider.mjs" \
   || fail "deterministic provider build failed; follow the build-test-provider remedy above, then rerun just bootstrap"
 bun "$ROOT/scripts/build-sidecar.mjs" \
   || fail "sidecar assembly failed; follow the build-sidecar remedy above, then rerun just bootstrap"
-bunx playwright install chromium >/dev/null \
+bun run --cwd apps/conversation-ui playwright install chromium >/dev/null \
   || fail "Chromium provisioning failed; verify Playwright download access, then rerun just bootstrap"
 "$ROOT/scripts/setup-screencomp.sh" >/dev/null \
   || fail "screencomp provisioning failed; verify release download access, then rerun just bootstrap"
