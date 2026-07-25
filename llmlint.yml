@@ -32,7 +32,8 @@ rules:
     relevance: the target adds core user-facing behavior
   - name: tests_mirror_real_usage
     override: true
-    description: Tests drive public boundaries; validated deterministic fixtures may replace paid model output.
+    description: Tests drive public product boundaries.
+    require_line_attribution: true
     relevance: tests bypass a public product boundary other than the permitted deterministic provider seam
   - name: least_privilege_grants
     override: true
@@ -50,6 +51,7 @@ rules:
   - name: live_tier_compiles_and_requires_credential
     override: true
     description: Compiles without credentials and requires credentials before execution.
+    require_line_attribution: true
     relevance: the target files define a test tier that connects to a credentialed external service
 plugins:
   - "https://raw.githubusercontent.com/nickderobertis/llmlint/main/assets/config_lint.yml@1"
