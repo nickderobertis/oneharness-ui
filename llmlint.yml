@@ -28,8 +28,12 @@ agents:
 rules:
   - name: changed_behavior_has_e2e
     override: true
-    description: Behavior has realistic end-to-end coverage.
+    description: Realistic end-to-end coverage exists.
     relevance: the target adds core user-facing behavior
+  - name: tests_mirror_real_usage
+    override: true
+    description: Tests drive public boundaries; validated deterministic fixtures may replace paid model output.
+    relevance: tests bypass a public product boundary other than the permitted deterministic provider seam
   - name: least_privilege_grants
     override: true
     description: Permissions are limited to runtime needs.

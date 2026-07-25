@@ -13,6 +13,7 @@ test("accepts reconciled versions and rejects workflow drift with a remedy", asy
       mkdir(resolve(root, "packages/ipc-contract"), { recursive: true }),
       mkdir(resolve(root, "packages/oneharness-bridge"), { recursive: true }),
       mkdir(resolve(root, "packages/ui"), { recursive: true }),
+      mkdir(resolve(root, "docs"), { recursive: true }),
       mkdir(resolve(root, "scripts"), { recursive: true }),
     ]);
     await Promise.all([
@@ -52,6 +53,11 @@ test("accepts reconciled versions and rejects workflow drift with a remedy", asy
         'readonly UPSTREAM_VERSION="1.2.3"\n',
       ),
       writeFile(
+        resolve(root, "README.md"),
+        "oneharness 1.2.3 CLI\n`@oneharness/sdk` package to `1.2.3`\n",
+      ),
+      writeFile(resolve(root, "docs/native-desktop-e2e.md"), "oneharness 1.2.3 CLI\n"),
+      writeFile(
         resolve(root, ".github/workflows/check.yml"),
         [
           "uses: actions/setup-node@example",
@@ -67,6 +73,11 @@ test("accepts reconciled versions and rejects workflow drift with a remedy", asy
 
     const valid = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
     expect(valid.exitCode).toBe(0);
+    await writeFile(resolve(root, "docs/native-desktop-e2e.md"), "oneharness 1.2.2 CLI\n");
+    const documentationDrift = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
+    expect(documentationDrift.exitCode).toBe(1);
+    expect(documentationDrift.stderr.toString()).toContain("documentation together");
+    await writeFile(resolve(root, "docs/native-desktop-e2e.md"), "oneharness 1.2.3 CLI\n");
     await writeFile(
       resolve(root, "packages/ui/package.json"),
       JSON.stringify({ devDependencies: { typescript: "5.9.3" } }),

@@ -33,6 +33,11 @@ for (const tool of requiredTools) {
   if (!versions[tool]) {
     throw new Error(`.tool-versions is missing ${tool}; add its stable pinned version`);
   }
+  if (!/^\d+\.\d+\.\d+$/.test(versions[tool])) {
+    throw new Error(
+      `.tool-versions ${tool} must be an exact stable version; replace it with an X.Y.Z pin`,
+    );
+  }
 }
 
 const workflowDirectory = resolve(root, ".github/workflows");
@@ -97,4 +102,18 @@ if (!compatibleBuild.includes(`readonly UPSTREAM_VERSION="${sdkVersion}"`)) {
   throw new Error(
     "build-compatible-cli.sh UPSTREAM_VERSION must match @oneharness/sdk; update its pinned revision and version",
   );
+}
+const sdkDocumentation = [
+  ["README.md", `oneharness ${sdkVersion} CLI`, `@oneharness/sdk\` package to \`${sdkVersion}`],
+  ["docs/native-desktop-e2e.md", `oneharness ${sdkVersion} CLI`],
+];
+for (const [path, ...expectedValues] of sdkDocumentation) {
+  const documentation = read(path);
+  for (const expected of expectedValues) {
+    if (!documentation.includes(expected)) {
+      throw new Error(
+        `${path} must document @oneharness/sdk ${sdkVersion}; update the package pins and documentation together`,
+      );
+    }
+  }
 }
