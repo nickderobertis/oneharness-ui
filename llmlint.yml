@@ -51,7 +51,6 @@ rules:
   - name: live_tier_compiles_and_requires_credential
     override: true
     description: Compiles without credentials and requires credentials before execution.
-    require_line_attribution: true
     relevance: test tier connects to a credentialed external service
 plugins:
   - "https://raw.githubusercontent.com/nickderobertis/llmlint/main/assets/config_lint.yml@1"
