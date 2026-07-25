@@ -28,7 +28,7 @@ agents:
 rules:
   - name: changed_behavior_has_e2e
     override: true
-    description: Realistic end-to-end coverage exists.
+    description: Each new core user-facing behavior and its failure and recovery paths are exercised through the real product boundary; only paid model execution may use the deterministic provider seam.
     relevance: the target adds core user-facing behavior
   - name: tests_mirror_real_usage
     override: true
@@ -37,7 +37,7 @@ rules:
     relevance: user-reachable boundary bypass outside validated paid-model, malformed, oversized, or pagination fixture setup
   - name: least_privilege_grants
     override: true
-    description: Permissions are limited to runtime needs.
+    description: Workflows use read-only defaults and grant write scopes only to jobs whose documented operation requires them.
     files:
       include:
         - ".github/workflows/**/*.yml"
@@ -45,7 +45,7 @@ rules:
     relevance: workflows grant permissions
   - name: work_goes_through_command_surface
     override: true
-    description: Automation uses the command surface required by its execution environment.
+    description: Repository automation invokes documented just recipes; workflow-only setup and platform commands may remain direct when no recipe exists.
     require_line_attribution: true
     relevance: automation invokes repository tooling
   - name: no_unjustified_any_or_non_null
