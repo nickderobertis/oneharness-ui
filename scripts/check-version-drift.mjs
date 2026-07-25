@@ -42,6 +42,25 @@ for (const entry of readdirSync(workflowDirectory, { withFileTypes: true })) {
 
 const bridgeManifest = JSON.parse(read("packages/oneharness-bridge/package.json"));
 const desktopManifest = JSON.parse(read("apps/desktop-shell/package.json"));
+const rootManifest = JSON.parse(read("package.json"));
+const typescriptVersion = rootManifest.devDependencies?.typescript;
+const typescriptManifests = [
+  ["apps/conversation-ui/package.json", JSON.parse(read("apps/conversation-ui/package.json"))],
+  ["apps/desktop-shell/package.json", desktopManifest],
+  ["packages/ipc-contract/package.json", JSON.parse(read("packages/ipc-contract/package.json"))],
+  ["packages/oneharness-bridge/package.json", bridgeManifest],
+  ["packages/ui/package.json", JSON.parse(read("packages/ui/package.json"))],
+];
+if (typeof typescriptVersion !== "string") {
+  throw new Error("root package.json must pin TypeScript; add its stable pinned version");
+}
+for (const [path, manifest] of typescriptManifests) {
+  if (manifest.devDependencies?.typescript !== typescriptVersion) {
+    throw new Error(
+      `${path} TypeScript pin must match root package.json; update both manifests together`,
+    );
+  }
+}
 const sdkVersion = bridgeManifest.dependencies?.["@oneharness/sdk"];
 if (
   typeof sdkVersion !== "string" ||
