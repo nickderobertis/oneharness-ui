@@ -34,5 +34,8 @@
     "semantic-release": "^25.0.8",
     "typescript": "6.0.3",
     "zod": "^4.4.3"
+  },
+  "patchedDependencies": {
+    "minimatch@9.0.9": "patches/minimatch@9.0.9.patch"
   }
 }

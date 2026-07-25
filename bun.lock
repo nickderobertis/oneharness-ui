@@ -152,6 +152,9 @@
       },
     },
   },
+  "patchedDependencies": {
+    "minimatch@9.0.9": "patches/minimatch@9.0.9.patch",
+  },
   "overrides": {
     "@wdio/native-utils": "2.5.0",
     "axios": "1.18.0",
