@@ -71,10 +71,94 @@ describe("@oneharness/ui public package", () => {
           },
           private: true,
           scripts: {
-            verify:
-              'bun -e \'import { createElement } from "react"; import { renderToStaticMarkup } from "react-dom/server"; import { StatusBadge } from "@oneharness/ui"; const html = renderToStaticMarkup(createElement(StatusBadge, { state: "running" })); if (!html.includes("Running")) process.exit(1)\'',
+            verify: "bun verify.ts",
           },
         })}\n`,
+      );
+      await writeFile(
+        resolve(consumerRoot, "verify.ts"),
+        `import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import {
+  ConversationList,
+  ConversationView,
+  StatusBadge,
+  TooltipProvider,
+  TurnCard,
+} from "@oneharness/ui";
+
+const turn = {
+  assistant: "Consumer answer",
+  failureKind: null,
+  harness: "codex",
+  id: "turn-1",
+  model: "model",
+  reasoning: null,
+  status: "completed",
+  timestamp: "2026-07-25T00:00:00Z",
+  tools: [],
+  unknown: {},
+  usage: {},
+  user: "Consumer question",
+};
+const summary = {
+  harnesses: ["codex"],
+  id: "session-1",
+  name: "Public session",
+  project: "/consumer",
+  startedAt: "2026-07-25T00:00:00Z",
+  turnCount: 1,
+};
+const conversation = {
+  ...summary,
+  canContinue: false,
+  name: "Transcript session",
+  state: "completed",
+  turns: [turn],
+};
+const html = renderToStaticMarkup(
+  createElement(
+    TooltipProvider,
+    null,
+    createElement(
+      "div",
+      null,
+      createElement(StatusBadge, { state: "running" }),
+      createElement(ConversationList, {
+        conversations: [summary],
+        hasMore: false,
+        labelError: null,
+        labeling: false,
+        loadMoreError: null,
+        loadingMore: false,
+        onLoadMore: async () => undefined,
+        onRefresh: () => undefined,
+        onSelect: () => undefined,
+        onSetLabels: async () => undefined,
+        refreshing: false,
+        selectedId: null,
+        totalCount: 1,
+      }),
+      createElement(ConversationView, {
+        conversation,
+        continueError: null,
+        hasMoreTurns: false,
+        loadMoreTurnsError: null,
+        loadingMoreTurns: false,
+        onBack: () => undefined,
+        onContinue: async () => undefined,
+        onLoadMoreTurns: async () => undefined,
+        pending: false,
+        totalTurnCount: 1,
+      }),
+      createElement(TurnCard, { turn }),
+    ),
+  ),
+);
+for (const text of ["Running", "Public session", "Transcript session", "Consumer question"]) {
+  if (!html.includes(text)) process.exit(1);
+}
+`,
       );
       const install = Bun.spawnSync(["bun", "install", "--offline"], { cwd: consumerRoot });
       expect(install.exitCode).toBe(0);
