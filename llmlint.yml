@@ -34,7 +34,7 @@ rules:
     override: true
     description: Tests drive public product boundaries.
     require_line_attribution: true
-    relevance: tests bypass a user-reachable product boundary, excluding validated fixture setup for paid-model, malformed, oversized, and pagination states
+    relevance: user-reachable boundary bypass outside validated paid-model, malformed, oversized, or pagination fixture setup
   - name: least_privilege_grants
     override: true
     description: Permissions are limited to runtime needs.
@@ -52,7 +52,7 @@ rules:
     override: true
     description: Compiles without credentials and requires credentials before execution.
     require_line_attribution: true
-    relevance: the target files define a test tier that connects to a credentialed external service
+    relevance: test tier connects to a credentialed external service
 plugins:
   - "https://raw.githubusercontent.com/nickderobertis/llmlint/main/assets/config_lint.yml@1"
   - "https://raw.githubusercontent.com/nickderobertis/dero-skills/main/skills/bootstrap/create-repo/assets/llmlint/base.llmlint.yml@1"
