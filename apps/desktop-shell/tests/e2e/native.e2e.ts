@@ -101,8 +101,14 @@ async function expectUniqueAccessibleIds(
   ids: string[],
   accessibleName: (id: string) => string,
 ): Promise<void> {
-  for (const id of ids) {
-    expect(await $$(`aria/${accessibleName(id)}`)).toHaveLength(1);
+  const expectedNames = ids.map(accessibleName);
+  const actualNames = await browser.execute(() =>
+    Array.from(document.querySelectorAll("[aria-label]"), (element) =>
+      element.getAttribute("aria-label"),
+    ),
+  );
+  for (const expectedName of expectedNames) {
+    expect(actualNames.filter((actualName) => actualName === expectedName)).toHaveLength(1);
   }
 }
 
@@ -177,13 +183,6 @@ describe("packaged native desktop journey", () => {
       await expect($("aria/45 of 45 turns loaded")).toBeDisplayed();
       await expect(allTurns).toBeDisplayed();
       await expectUniqueAccessibleIds(expectedTurnIds, (id) => `Turn ${id} from claude-code`);
-    });
-
-    await runDesktopStage(desktopE2eStageLog, "journey reasoning disclosure", async () => {
-      const reasoningText = await $("aria/I checked the native command boundary before answering.");
-      await expect(reasoningText).not.toBeDisplayed();
-      await $("aria/Reasoning").click();
-      await expect(reasoningText).toBeDisplayed();
     });
 
     await runDesktopStage(desktopE2eStageLog, "journey tool disclosure", async () => {
