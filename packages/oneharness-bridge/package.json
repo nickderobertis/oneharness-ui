@@ -14,7 +14,7 @@
     "format:check": "biome format src test package.json tsconfig.json project.json"
   },
   "dependencies": {
-    "@oneharness/sdk": "0.5.4",
+    "@oneharness/sdk": "0.5.5",
     "@oneharness-ui/ipc-contract": "workspace:*",
     "zod": "^4.4.3"
   },

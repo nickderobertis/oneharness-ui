@@ -109,7 +109,7 @@ async function seed(
     mode: "bypass",
     prompt: options.prompt ?? "Inspect the repository",
   });
-  expect(report.oneharness_version).toBe("0.5.4");
+  expect(report.oneharness_version).toBe("0.5.5");
   return report;
 }
 
@@ -134,8 +134,8 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       ),
     ) as { dependencies?: Record<string, string>; version?: string };
     expect(manifest).toMatchObject({
-      dependencies: { "oneharness-cli": "0.5.4" },
-      version: "0.5.4",
+      dependencies: { "oneharness-cli": "0.5.5" },
+      version: "0.5.5",
     });
     expect(
       RunOptionsSchema.safeParse({ prompt: "Valid prompt", repositoryOwnedOption: true }).success,

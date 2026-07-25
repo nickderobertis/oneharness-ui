@@ -138,7 +138,7 @@ the failing path and suggest the relevant setting.
 
 Linux `aarch64` Tauri and AppImage artifacts are built natively on Ubuntu 22.04
 so the desktop startup ABI remains compatible with glibc 2.35. The bundle also
-builds the SDK-matched oneharness 0.5.4 CLI from its immutable upstream commit
+builds the SDK-matched oneharness 0.5.5 CLI from its immutable upstream commit
 on that runner instead of copying its Ubuntu 24.04 prebuilt binary. Linux
 `x86_64` artifacts continue to build on Ubuntu 24.04.
 
@@ -149,7 +149,7 @@ session, refreshes the list, and selects that result.
 
 ## SDK package pin
 
-The bridge reproducibly pins the public `@oneharness/sdk` package to `0.5.4`.
+The bridge reproducibly pins the public `@oneharness/sdk` package to `0.5.5`.
 That package owns the generated TypeScript contracts and Zod schemas and brings
 the matching packaged `oneharness-cli` binary for each supported platform. The
 repository keeps only its UI-specific IPC/view-model schemas. Tests compile a
