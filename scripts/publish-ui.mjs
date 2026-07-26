@@ -84,7 +84,7 @@ const publish = Bun.spawnSync(
     cwd: root,
     env: process.env,
     stderr: "inherit",
-    stdout: isDryRun ? "inherit" : "pipe",
+    stdout: "pipe",
   },
 );
 if (publish.exitCode !== 0) {
@@ -92,4 +92,14 @@ if (publish.exitCode !== 0) {
     `UI publish failed with exit code ${publish.exitCode}; inspect the registry diagnostic and rerun just publish-release`,
   );
 }
-if (!isDryRun) console.log(`${packageName} published`);
+const publishOutput = publish.stdout.toString();
+if (isDryRun) {
+  if (!publishOutput.includes("dist/index.mjs") || publishOutput.includes("workspace:")) {
+    throw new Error(
+      "UI publish dry run did not contain a built, registry-safe manifest; inspect the package files and rerun just publish-release",
+    );
+  }
+  console.log(`${packageName} dry run: dist/index.mjs included; no workspace protocol specifiers`);
+} else {
+  console.log(`${packageName} published`);
+}

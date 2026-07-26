@@ -33,6 +33,7 @@ test("builds the public package before producing the publish manifest", () => {
     expect(publish.exitCode).toBe(0);
     expect(publish.stdout.toString()).toContain("dist/index.mjs");
     expect(publish.stdout.toString()).not.toContain("workspace:");
+    expect(publish.stdout.toString().trim().split("\n")).toHaveLength(1);
   } finally {
     rmSync(distribution, { force: true, recursive: true });
     if (hadDistribution) renameSync(savedDistribution, distribution);
