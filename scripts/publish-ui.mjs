@@ -2,6 +2,7 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { verifyUiPackage } from "./verify-ui-package.mjs";
 
 process.on("uncaughtException", (error) => {
   const message = error instanceof Error ? error.message : "UI publish failed unexpectedly";
@@ -88,6 +89,31 @@ if (build.exitCode !== 0) {
     `UI build failed with exit code ${build.exitCode}; correct the build failure and rerun just publish-release`,
   );
 }
+
+const pack = Bun.spawnSync(["npm", "pack", "--dry-run", "--json"], {
+  cwd: workspaceRoot,
+  env: process.env,
+});
+if (pack.exitCode !== 0) {
+  process.stderr.write(pack.stderr);
+  throw new Error(
+    `UI artifact inspection failed with exit code ${pack.exitCode}; inspect the npm pack diagnostic and rerun just publish-release`,
+  );
+}
+let packFiles;
+try {
+  const report = JSON.parse(pack.stdout.toString());
+  packFiles = report[0]?.files?.map(({ path }) => path);
+  if (!Array.isArray(packFiles) || packFiles.some((path) => typeof path !== "string")) {
+    throw new Error("npm pack returned no file list");
+  }
+} catch (error) {
+  const detail = error instanceof Error ? error.message : String(error);
+  throw new Error(
+    `UI artifact inspection returned an invalid npm pack report: ${detail}; rerun npm pack in packages/ui and inspect its output`,
+  );
+}
+verifyUiPackage(workspaceRoot, packFiles);
 
 const publish = Bun.spawnSync(
   ["bun", "publish", "--cwd", workspaceRoot, "--access", "public", ...arguments_],
