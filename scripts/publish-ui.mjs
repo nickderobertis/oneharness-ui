@@ -4,7 +4,10 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 process.on("uncaughtException", (error) => {
-  console.error(error instanceof Error ? error.message : "UI publish failed unexpectedly");
+  const message = error instanceof Error ? error.message : "UI publish failed unexpectedly";
+  console.error(
+    `${message}; inspect the diagnostic, correct the package, and rerun just publish-release`,
+  );
   process.exit(1);
 });
 

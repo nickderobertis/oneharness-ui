@@ -3,6 +3,8 @@ import { existsSync, mkdtempSync, readFileSync, renameSync, rmSync } from "node:
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "..");
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
 
 test("fails closed before publishing when the npm token is absent or malformed", () => {
   for (const token of ["", "token with spaces"]) {
@@ -19,7 +21,17 @@ test("fails closed before publishing when the npm token is absent or malformed",
 
 test("builds the public package before producing the publish manifest", () => {
   const workspaceRoot = resolve(root, "packages/ui");
-  const packageManifest = JSON.parse(readFileSync(resolve(workspaceRoot, "package.json"), "utf8"));
+  const packageManifest: unknown = JSON.parse(
+    readFileSync(resolve(workspaceRoot, "package.json"), "utf8"),
+  );
+  if (
+    !isRecord(packageManifest) ||
+    !isRecord(packageManifest.exports) ||
+    !isRecord(packageManifest.exports["."]) ||
+    typeof packageManifest.exports["."].import !== "string"
+  ) {
+    throw new Error("UI test requires a package manifest with a string import export");
+  }
   const expectedArtifact = packageManifest.exports["."].import.slice(2);
   const distribution = resolve(workspaceRoot, "dist");
   const temporaryRoot = mkdtempSync(resolve(workspaceRoot, ".publish-test-"));
