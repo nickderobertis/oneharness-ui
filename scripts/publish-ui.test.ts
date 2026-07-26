@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdtempSync, readFileSync, renameSync, rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "..");
@@ -34,11 +34,9 @@ test("builds the public package before producing the publish manifest", () => {
   }
   const expectedArtifact = packageManifest.exports["."].import.slice(2);
   const distribution = resolve(workspaceRoot, "dist");
-  const temporaryRoot = mkdtempSync(resolve(workspaceRoot, ".publish-test-"));
-  const savedDistribution = resolve(temporaryRoot, "dist");
-  const hadDistribution = existsSync(distribution);
+  const staleArtifact = resolve(distribution, "publish-test-stale.txt");
 
-  if (hadDistribution) renameSync(distribution, savedDistribution);
+  writeFileSync(staleArtifact, "must be removed by the package build");
   try {
     const publish = Bun.spawnSync(["bun", "scripts/publish-ui.mjs", "--dry-run"], {
       cwd: root,
@@ -48,9 +46,8 @@ test("builds the public package before producing the publish manifest", () => {
     expect(publish.stdout.toString()).toContain(expectedArtifact);
     expect(publish.stdout.toString()).not.toContain("workspace:");
     expect(publish.stdout.toString().trim().split("\n")).toHaveLength(1);
+    expect(existsSync(staleArtifact)).toBe(false);
   } finally {
-    rmSync(distribution, { force: true, recursive: true });
-    if (hadDistribution) renameSync(savedDistribution, distribution);
-    rmSync(temporaryRoot, { force: true, recursive: true });
+    rmSync(staleArtifact, { force: true });
   }
 }, 15_000);
