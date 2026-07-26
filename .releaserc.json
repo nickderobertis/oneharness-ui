@@ -21,7 +21,7 @@
       "@semantic-release/exec",
       {
         "prepareCmd": "RELEASE_VERSION='${nextRelease.version}' just set-version",
-        "publishCmd": "bun publish --cwd packages/ui --access public"
+        "publishCmd": "bun scripts/publish-ui.mjs"
       }
     ],
     "@semantic-release/github"

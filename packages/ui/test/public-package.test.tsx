@@ -48,16 +48,16 @@ describe("@oneharness/ui public package", () => {
         },
       );
       expect(packed.exitCode).toBe(0);
-      const filename = packed.stdout.toString().trim();
+      const tarballPath = packed.stdout.toString().trim();
       if (
-        !isAbsolute(filename) ||
-        dirname(filename) !== temporaryRoot ||
-        basename(filename).length > 255 ||
-        !basename(filename).endsWith(".tgz")
+        !isAbsolute(tarballPath) ||
+        dirname(tarballPath) !== temporaryRoot ||
+        basename(tarballPath).length > 255 ||
+        !basename(tarballPath).endsWith(".tgz")
       ) {
         throw new Error("bun pm pack returned an invalid package filename");
       }
-      const tarball = filename;
+      const tarball = tarballPath;
       const manifestResult = Bun.spawnSync(["tar", "-xOf", tarball, "package/package.json"]);
       expect(manifestResult.exitCode).toBe(0);
       const manifest: unknown = JSON.parse(manifestResult.stdout.toString());
