@@ -75,6 +75,12 @@ test-desktop-e2e:
 build:
     @./scripts/run-quiet.sh "build" "Fix the reported static-export or native build error, then rerun 'just build'." -- env RUSTFLAGS="-D warnings" bunx nx run-many -t build --all --outputStyle=static
 
+build-ui:
+    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "UI package build" "Fix the reported package build error, then rerun 'just build-ui'." -- bunx nx run ui:build --skip-nx-cache --outputStyle=static
+
+publish-ui-dry-run:
+    @bun scripts/publish-ui.mjs --dry-run
+
 bundle:
     @[[ "${BUNDLE_FORMATS:-}" =~ ^(deb|appimage|app|dmg|msi|nsis)(,(deb|appimage|app|dmg|msi|nsis))*$ ]] || { echo "native bundle: set BUNDLE_FORMATS to a comma-separated platform bundle list" >&2; exit 2; }
     @./scripts/run-quiet.sh "native bundle" "Install the platform's Tauri prerequisites, fix the reported packaging error, and rerun 'just bundle'." -- env RUSTFLAGS="-D warnings" bun scripts/build-native.mjs "$BUNDLE_FORMATS"
