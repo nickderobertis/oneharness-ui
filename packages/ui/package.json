@@ -25,7 +25,7 @@
     "provenance": true
   },
   "scripts": {
-    "build": "tsdown && bun run build:css",
+    "build": "tsdown --fail-on-warn && bun run build:css",
     "build:css": "bun ./scripts/build-css.ts",
     "test": "bun test --preload ../../apps/conversation-ui/test/setup.ts test",
     "typecheck": "tsc --noEmit"
