@@ -2,15 +2,45 @@ import { existsSync, readFileSync } from "node:fs";
 import { relative, resolve } from "node:path";
 
 function exportTargets(exports_) {
+  if (
+    !exports_ ||
+    typeof exports_ !== "object" ||
+    Array.isArray(exports_) ||
+    Object.getPrototypeOf(exports_) !== Object.prototype
+  ) {
+    throw new Error("UI package manifest must declare an exports object");
+  }
   const targets = [];
-  for (const value of Object.values(exports_ ?? {})) {
+  for (const value of Object.values(exports_)) {
     if (typeof value === "string") {
       targets.push(value);
       continue;
     }
-    if (value && typeof value === "object") {
-      targets.push(...Object.values(value).filter((target) => typeof target === "string"));
+    if (
+      !value ||
+      typeof value !== "object" ||
+      Array.isArray(value) ||
+      Object.getPrototypeOf(value) !== Object.prototype
+    ) {
+      throw new Error("UI package exports must resolve to strings or condition objects");
     }
+    for (const target of Object.values(value)) {
+      if (typeof target !== "string") {
+        throw new Error("UI package export conditions must resolve to strings");
+      }
+      targets.push(target);
+    }
+  }
+  if (
+    targets.length === 0 ||
+    targets.some(
+      (target) =>
+        !target.startsWith("./") ||
+        target.includes("\\") ||
+        target.split("/").some((segment) => segment === ".."),
+    )
+  ) {
+    throw new Error("UI package exports must be non-empty package-relative paths");
   }
   return [...new Set(targets)];
 }

@@ -61,8 +61,8 @@ if (manifests.length !== 1) {
 }
 
 const packageRoot = dirname(manifests[0]);
-const build = Bun.spawnSync(["bun", "run", "build"], {
-  cwd: packageRoot,
+const build = Bun.spawnSync(["just", "build-ui"], {
+  cwd: root,
   env: process.env,
   stderr: "inherit",
   stdout: "inherit",

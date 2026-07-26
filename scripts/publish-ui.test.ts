@@ -40,6 +40,18 @@ test("fails closed when a release build produces no declared export output", () 
   }
 });
 
+test("rejects malformed export configuration at the manifest boundary", () => {
+  const packageRoot = mkdtempSync(resolve(tmpdir(), "oneharness-ui-invalid-package-"));
+  try {
+    writeFileSync(resolve(packageRoot, "package.json"), JSON.stringify({ exports: ["dist"] }));
+    expect(() => verifyUiPackage(packageRoot, [])).toThrow(
+      "UI package manifest must declare an exports object",
+    );
+  } finally {
+    rmSync(packageRoot, { recursive: true, force: true });
+  }
+});
+
 test("accepts a packed artifact containing every declared export", () => {
   const packageRoot = mkdtempSync(resolve(tmpdir(), "oneharness-ui-built-package-"));
   try {
