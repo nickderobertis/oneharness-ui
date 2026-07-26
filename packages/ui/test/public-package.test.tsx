@@ -58,10 +58,6 @@ describe("@oneharness/ui public package", () => {
         throw new Error("bun pm pack returned an invalid package filename");
       }
       const tarball = tarballPath;
-      const manifestResult = Bun.spawnSync(["tar", "-xOf", tarball, "package/package.json"]);
-      expect(manifestResult.exitCode).toBe(0);
-      const manifest: unknown = JSON.parse(manifestResult.stdout.toString());
-      expect(JSON.stringify(manifest)).not.toContain("workspace:");
       const consumerRoot = resolve(temporaryRoot, "consumer");
       await mkdir(consumerRoot);
       await writeFile(
@@ -163,6 +159,10 @@ for (const text of ["Running", "Public session", "Transcript session", "Consumer
       );
       const install = Bun.spawnSync(["bun", "install", "--offline"], { cwd: consumerRoot });
       expect(install.exitCode).toBe(0);
+      const installedManifest: unknown = JSON.parse(
+        await readFile(resolve(consumerRoot, "node_modules/@oneharness/ui/package.json"), "utf8"),
+      );
+      expect(JSON.stringify(installedManifest)).not.toContain("workspace:");
       const verify = Bun.spawnSync(["bun", "run", "verify"], { cwd: consumerRoot });
       expect(verify.exitCode).toBe(0);
     } finally {
