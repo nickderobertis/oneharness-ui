@@ -30,6 +30,7 @@ const arguments_ = process.argv.slice(2);
 if (arguments_.some((argument) => argument !== "--dry-run")) {
   throw new Error("UI publish only accepts --dry-run; remove unsupported arguments and retry");
 }
+const isDryRun = arguments_.includes("--dry-run");
 
 const rootManifest = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8"));
 if (!Array.isArray(rootManifest.workspaces)) {
@@ -78,7 +79,7 @@ const publish = Bun.spawnSync(
     cwd: root,
     env: process.env,
     stderr: "inherit",
-    stdout: "inherit",
+    stdout: isDryRun ? "inherit" : "pipe",
   },
 );
 if (publish.exitCode !== 0) {
@@ -86,3 +87,4 @@ if (publish.exitCode !== 0) {
     `UI publish failed with exit code ${publish.exitCode}; inspect the registry diagnostic and rerun just publish-release`,
   );
 }
+if (!isDryRun) console.log(`${packageName} published`);
