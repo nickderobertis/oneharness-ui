@@ -66,11 +66,11 @@ if (manifestPaths.length !== 1) {
 }
 
 const workspaceRoot = dirname(manifestPaths[0]);
-const build = Bun.spawnSync(["bun", "run", "build"], {
-  cwd: workspaceRoot,
+const build = Bun.spawnSync(["just", "build-ui"], {
+  cwd: root,
   env: process.env,
   stderr: "inherit",
-  stdout: "inherit",
+  stdout: "pipe",
 });
 if (build.exitCode !== 0) {
   throw new Error(
