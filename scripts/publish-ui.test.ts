@@ -38,7 +38,7 @@ test("builds the public package before producing the publish manifest", () => {
 
   writeFileSync(staleArtifact, "must be removed by the package build");
   try {
-    const publish = Bun.spawnSync(["bun", "scripts/publish-ui.mjs", "--dry-run"], {
+    const publish = Bun.spawnSync(["just", "publish-ui-dry-run"], {
       cwd: root,
       env: { ...process.env, NPM_CONFIG_TOKEN: "dry-run-token" },
     });
