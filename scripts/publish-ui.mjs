@@ -59,8 +59,21 @@ if (manifests.length !== 1) {
   );
 }
 
+const workspaceRoot = dirname(manifests[0]);
+const build = Bun.spawnSync(["bun", "run", "build"], {
+  cwd: workspaceRoot,
+  env: process.env,
+  stderr: "inherit",
+  stdout: "inherit",
+});
+if (build.exitCode !== 0) {
+  throw new Error(
+    `UI build failed with exit code ${build.exitCode}; correct the build failure and rerun just publish-release`,
+  );
+}
+
 const publish = Bun.spawnSync(
-  ["bun", "publish", "--cwd", dirname(manifests[0]), "--access", "public", ...arguments_],
+  ["bun", "publish", "--cwd", workspaceRoot, "--access", "public", ...arguments_],
   {
     cwd: root,
     env: process.env,
