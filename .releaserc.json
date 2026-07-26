@@ -19,9 +19,11 @@
     ["@semantic-release/release-notes-generator", { "preset": "conventionalcommits" }],
     [
       "@semantic-release/exec",
-      { "prepareCmd": "RELEASE_VERSION='${nextRelease.version}' just set-version" }
+      {
+        "prepareCmd": "RELEASE_VERSION='${nextRelease.version}' just set-version",
+        "publishCmd": "bun scripts/publish-ui.mjs"
+      }
     ],
-    ["@semantic-release/npm", { "pkgRoot": "packages/ui" }],
     "@semantic-release/github"
   ]
 }

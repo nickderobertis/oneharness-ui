@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, isAbsolute, resolve } from "node:path";
+import { basename, dirname, isAbsolute, resolve } from "node:path";
 import { ReplyForm, StatusBadge, TooltipProvider } from "@oneharness/ui";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -41,33 +41,30 @@ describe("@oneharness/ui public package", () => {
     const temporaryRoot = await mkdtemp(resolve(tmpdir(), "oneharness-ui-consumer-"));
     try {
       const packageRoot = resolve(import.meta.dir, "..");
-      const packed = Bun.spawnSync(["npm", "pack", "--json", "--pack-destination", temporaryRoot], {
-        cwd: packageRoot,
-      });
+      const packed = Bun.spawnSync(
+        ["bun", "pm", "pack", "--quiet", "--destination", temporaryRoot],
+        {
+          cwd: packageRoot,
+        },
+      );
       expect(packed.exitCode).toBe(0);
-      const packOutput: unknown = JSON.parse(packed.stdout.toString());
+      const tarballPath = packed.stdout.toString().trim();
       if (
-        !Array.isArray(packOutput) ||
-        packOutput.length !== 1 ||
-        typeof packOutput[0] !== "object" ||
-        packOutput[0] === null ||
-        !("filename" in packOutput[0]) ||
-        typeof packOutput[0].filename !== "string" ||
-        packOutput[0].filename.length > 255 ||
-        isAbsolute(packOutput[0].filename) ||
-        basename(packOutput[0].filename) !== packOutput[0].filename ||
-        !packOutput[0].filename.endsWith(".tgz")
+        !isAbsolute(tarballPath) ||
+        dirname(tarballPath) !== temporaryRoot ||
+        basename(tarballPath).length > 255 ||
+        !basename(tarballPath).endsWith(".tgz")
       ) {
-        throw new Error("npm pack returned an invalid package filename");
+        throw new Error("bun pm pack returned an invalid package filename");
       }
-      const filename = packOutput[0].filename;
+      const tarball = tarballPath;
       const consumerRoot = resolve(temporaryRoot, "consumer");
       await mkdir(consumerRoot);
       await writeFile(
         resolve(consumerRoot, "package.json"),
         `${JSON.stringify({
           dependencies: {
-            "@oneharness/ui": `file:${resolve(temporaryRoot, filename)}`,
+            "@oneharness/ui": `file:${tarball}`,
           },
           private: true,
           scripts: {
@@ -162,6 +159,10 @@ for (const text of ["Running", "Public session", "Transcript session", "Consumer
       );
       const install = Bun.spawnSync(["bun", "install", "--offline"], { cwd: consumerRoot });
       expect(install.exitCode).toBe(0);
+      const installedManifest: unknown = JSON.parse(
+        await readFile(resolve(consumerRoot, "node_modules/@oneharness/ui/package.json"), "utf8"),
+      );
+      expect(JSON.stringify(installedManifest)).not.toContain("workspace:");
       const verify = Bun.spawnSync(["bun", "run", "verify"], { cwd: consumerRoot });
       expect(verify.exitCode).toBe(0);
     } finally {
