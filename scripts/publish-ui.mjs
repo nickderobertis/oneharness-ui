@@ -66,6 +66,14 @@ if (manifestPaths.length !== 1) {
 }
 
 const workspaceRoot = dirname(manifestPaths[0]);
+const packageManifest = JSON.parse(readFileSync(manifestPaths[0], "utf8"));
+const importPath = packageManifest.exports?.["."]?.import;
+if (typeof importPath !== "string" || !/^\.\/[A-Za-z0-9._/-]+$/.test(importPath)) {
+  throw new Error(
+    "UI package manifest must declare a safe import export; correct packages/ui/package.json and rerun just publish-release",
+  );
+}
+const expectedArtifact = importPath.slice(2);
 const build = Bun.spawnSync(["just", "build-ui"], {
   cwd: root,
   env: process.env,
@@ -94,12 +102,14 @@ if (publish.exitCode !== 0) {
 }
 const publishOutput = publish.stdout.toString();
 if (isDryRun) {
-  if (!publishOutput.includes("dist/index.mjs") || publishOutput.includes("workspace:")) {
+  if (!publishOutput.includes(expectedArtifact) || publishOutput.includes("workspace:")) {
     throw new Error(
       "UI publish dry run did not contain a built, registry-safe manifest; inspect the package files and rerun just publish-release",
     );
   }
-  console.log(`${packageName} dry run: dist/index.mjs included; no workspace protocol specifiers`);
+  console.log(
+    `${packageName} dry run: ${expectedArtifact} included; no workspace protocol specifiers`,
+  );
 } else {
   console.log(`${packageName} published`);
 }

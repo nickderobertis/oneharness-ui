@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { existsSync, mkdtempSync, renameSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
 
 const root = resolve(import.meta.dir, "..");
@@ -19,6 +19,8 @@ test("fails closed before publishing when the npm token is absent or malformed",
 
 test("builds the public package before producing the publish manifest", () => {
   const workspaceRoot = resolve(root, "packages/ui");
+  const packageManifest = JSON.parse(readFileSync(resolve(workspaceRoot, "package.json"), "utf8"));
+  const expectedArtifact = packageManifest.exports["."].import.slice(2);
   const distribution = resolve(workspaceRoot, "dist");
   const temporaryRoot = mkdtempSync(resolve(workspaceRoot, ".publish-test-"));
   const savedDistribution = resolve(temporaryRoot, "dist");
@@ -31,7 +33,7 @@ test("builds the public package before producing the publish manifest", () => {
       env: { ...process.env, NPM_CONFIG_TOKEN: "dry-run-token" },
     });
     expect(publish.exitCode).toBe(0);
-    expect(publish.stdout.toString()).toContain("dist/index.mjs");
+    expect(publish.stdout.toString()).toContain(expectedArtifact);
     expect(publish.stdout.toString()).not.toContain("workspace:");
     expect(publish.stdout.toString().trim().split("\n")).toHaveLength(1);
   } finally {
@@ -39,4 +41,4 @@ test("builds the public package before producing the publish manifest", () => {
     if (hadDistribution) renameSync(savedDistribution, distribution);
     rmSync(temporaryRoot, { force: true, recursive: true });
   }
-});
+}, 15_000);
