@@ -3,6 +3,11 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+process.on("uncaughtException", (error) => {
+  console.error(error instanceof Error ? error.message : "UI publish failed unexpectedly");
+  process.exit(1);
+});
+
 const packageName = "@oneharness/ui";
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const token = process.env.NPM_CONFIG_TOKEN;
@@ -39,7 +44,7 @@ if (!Array.isArray(rootManifest.workspaces)) {
   );
 }
 
-const manifests = [];
+const manifestPaths = [];
 for (const workspace of rootManifest.workspaces) {
   if (typeof workspace !== "string" || !/^[A-Za-z0-9*._/-]+$/.test(workspace)) {
     throw new Error(
@@ -50,17 +55,17 @@ for (const workspace of rootManifest.workspaces) {
   for await (const relativePath of glob.scan({ cwd: root, onlyFiles: true })) {
     const path = resolve(root, relativePath);
     const manifest = JSON.parse(readFileSync(path, "utf8"));
-    if (manifest.name === packageName) manifests.push(path);
+    if (manifest.name === packageName) manifestPaths.push(path);
   }
 }
 
-if (manifests.length !== 1) {
+if (manifestPaths.length !== 1) {
   throw new Error(
-    `expected exactly one ${packageName} workspace, found ${manifests.length}; restore the package manifest and rerun just publish-release`,
+    `expected exactly one ${packageName} workspace, found ${manifestPaths.length}; restore the package manifest and rerun just publish-release`,
   );
 }
 
-const workspaceRoot = dirname(manifests[0]);
+const workspaceRoot = dirname(manifestPaths[0]);
 const build = Bun.spawnSync(["bun", "run", "build"], {
   cwd: workspaceRoot,
   env: process.env,

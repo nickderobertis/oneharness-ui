@@ -12,6 +12,7 @@ test("fails closed before publishing when the npm token is absent or malformed",
     });
     expect(publish.exitCode).toBe(1);
     expect(publish.stderr.toString()).toContain("UI publish requires a non-empty npm token");
+    expect(publish.stderr.toString().trim().split("\n")).toHaveLength(1);
     expect(publish.stdout.toString()).not.toContain("@oneharness/ui");
   }
 });
