@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { relative, resolve } from "node:path";
+import { resolve } from "node:path";
 
 function exportTargets(exports_) {
   if (
@@ -66,5 +66,5 @@ export function verifyUiPackage(packageRoot, packFiles) {
     );
   }
 
-  return required.map((target) => relative(packageRoot, resolve(packageRoot, target)));
+  return required;
 }
