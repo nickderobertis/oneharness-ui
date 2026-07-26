@@ -1,7 +1,5 @@
-import type { ConversationSummary } from "@oneharness-ui/ipc-contract";
 import { Pencil, RefreshCw } from "lucide-react";
-import { Brandmark } from "@/components/brandmark";
-import { ThemeToggle } from "@/components/theme-toggle";
+import type { ReactNode } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,8 +29,11 @@ import {
 } from "../hooks/use-conversation-organization";
 import { useInfiniteScroll } from "../hooks/use-infinite-scroll";
 import { useLabelEditor } from "../hooks/use-label-editor";
+import type { ConversationSummary } from "../presentational-types";
 
 export function ConversationList({
+  actions,
+  brand,
   conversations,
   hasMore,
   loadMoreError,
@@ -47,6 +48,8 @@ export function ConversationList({
   selectedId,
   totalCount,
 }: {
+  actions?: ReactNode;
+  brand?: ReactNode;
   conversations: ConversationSummary[];
   hasMore: boolean;
   loadMoreError: Error | null;
@@ -83,13 +86,13 @@ export function ConversationList({
     <aside className="flex min-h-0 min-w-0 flex-col border-r bg-sidebar max-[680px]:h-[100dvh] max-[680px]:border-r-0">
       <header className="brand-header flex min-h-[86px] items-center justify-between border-b px-4.5 py-4">
         <div className="flex flex-col gap-0.5">
-          <Brandmark />
+          {brand ?? <strong className="text-[15px]">oneharness</strong>}
           <span className="pl-10.5 text-[10px] uppercase tracking-[.08em] text-subtle">
             Local sessions
           </span>
         </div>
         <div className="flex items-center">
-          <ThemeToggle />
+          {actions}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

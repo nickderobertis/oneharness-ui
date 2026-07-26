@@ -33,7 +33,7 @@ layout on a native Ubuntu 22.04 ARM runner. It sets
 FUSE, and asserts that the real window, local sidecar, empty SDK history, and
 refreshable conversation UI reach the native startup boundary. Release builds
 repeat that journey before uploading the ARM64 assets. The ARM bundle compiles
-the SDK-matched oneharness 0.3.23 CLI from its pinned upstream commit on the
+the SDK-matched oneharness 0.5.5 CLI from its pinned upstream commit on the
 same Ubuntu 22.04 runner, so initial history discovery crosses the compatible
 CLI boundary too.
 

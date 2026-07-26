@@ -1,9 +1,16 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { basename, dirname, isAbsolute, resolve } from "node:path";
-import { HistoryRecordSchema, OneHarness, RunOptionsSchema, type RunReport } from "@oneharness/sdk";
+import { basename, dirname, extname, isAbsolute, resolve } from "node:path";
+import {
+  HistoryLineSchema,
+  type HistoryRecord,
+  HistoryRecordSchema,
+  OneHarness,
+  RunOptionsSchema,
+  type RunReport,
+} from "@oneharness/sdk";
 import { BridgeService, MAX_CONVERSATION_PAGE_BYTES } from "../src/service.ts";
 import { readFixtureHistoryRecord } from "./history-fixture.ts";
 
@@ -31,11 +38,39 @@ const TEST_AUTHORIZATION = "oneharness-ui-integration-authorization";
 
 let historyDir = "";
 const originalMockEnvironment = new Map<string, string | undefined>();
-const mockKeys = ["MOCK_EXIT", "MOCK_STDERR", "MOCK_STDOUT", "ONEHARNESS_NO_CONFIG"];
+const mockKeys = [
+  "MOCK_EXIT",
+  "MOCK_STDERR",
+  "MOCK_STDOUT",
+  "ONEHARNESS_HISTORY_LABELS",
+  "ONEHARNESS_NO_CONFIG",
+];
+
+function historyLines(record: HistoryRecord): string {
+  const { events, ...run } = record;
+  const lines = (events ?? []).map((event) =>
+    HistoryLineSchema.parse({
+      event,
+      harness: record.harness,
+      run_id: record.history_id,
+      schema_version: "1.0",
+      type: "event",
+    }),
+  );
+  lines.push(HistoryLineSchema.parse({ ...run, type: "run" }));
+  return lines.map((line) => JSON.stringify(line)).join("\n");
+}
+
+function fixtureHistoryId(index: number): string {
+  return `019f94e5-f419-7a12-bfef-${index.toString(16).padStart(12, "0")}`;
+}
 
 beforeEach(async () => {
   historyDir = await mkdtemp(resolve(tmpdir(), "oneharness-ui-bridge-"));
-  for (const key of mockKeys) originalMockEnvironment.set(key, process.env[key]);
+  for (const key of mockKeys) {
+    originalMockEnvironment.set(key, process.env[key]);
+    if (key === "ONEHARNESS_HISTORY_LABELS") delete process.env[key];
+  }
 });
 
 afterEach(async () => {
@@ -50,7 +85,12 @@ afterEach(async () => {
 async function seed(
   name: string,
   stdout: string,
-  options: { exit?: number; prompt?: string; stderr?: string } = {},
+  options: {
+    exit?: number;
+    historyLabels?: Record<string, string>;
+    prompt?: string;
+    stderr?: string;
+  } = {},
 ): Promise<RunReport> {
   const report = await new OneHarness(cliOverride ? { executable: cliOverride } : {}).run({
     bins: { "claude-code": provider },
@@ -58,16 +98,18 @@ async function seed(
       MOCK_EXIT: String(options.exit ?? 0),
       MOCK_STDERR: options.stderr ?? "",
       MOCK_STDOUT: stdout,
+      ONEHARNESS_HISTORY_LABELS: "{}",
     },
     events: true,
     harnesses: ["claude-code"],
     history: true,
     historyDir,
+    ...(options.historyLabels ? { historyLabels: options.historyLabels } : {}),
     historyName: name,
     mode: "bypass",
     prompt: options.prompt ?? "Inspect the repository",
   });
-  expect(report.oneharness_version).toBe("0.3.23");
+  expect(report.oneharness_version).toBe("0.5.5");
   return report;
 }
 
@@ -92,15 +134,32 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       ),
     ) as { dependencies?: Record<string, string>; version?: string };
     expect(manifest).toMatchObject({
-      dependencies: { "oneharness-cli": "0.3.23" },
-      version: "0.3.23",
+      dependencies: { "oneharness-cli": "0.5.5" },
+      version: "0.5.5",
     });
     expect(
       RunOptionsSchema.safeParse({ prompt: "Valid prompt", repositoryOwnedOption: true }).success,
     ).toBe(false);
 
     const report = await seed("schema-boundary", '{"result":"Validated","session_id":"sdk-1"}');
-    const { record } = await readFixtureHistoryRecord(historyDir, report);
+    const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
+    const rawLine = JSON.parse((await readFile(historyFile, "utf8")).trim()) as Record<
+      string,
+      unknown
+    >;
+    expect(rawLine.schema_version).toBe("1.0");
+    expect(Object.hasOwn(rawLine, "labels")).toBe(false);
+    expect(Object.hasOwn(record, "labels")).toBe(false);
+    const unlabelled = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
+    expect(
+      unlabelled.ok && unlabelled.data.kind === "list"
+        ? Object.hasOwn(unlabelled.data.conversations[0] ?? {}, "historyLabels")
+        : true,
+    ).toBe(false);
+    const golden = JSON.parse(
+      await readFile(resolve(import.meta.dir, "fixtures/history-line-v1.json"), "utf8"),
+    );
+    expect(HistoryLineSchema.parse(golden)).toEqual(golden);
     expect(HistoryRecordSchema.safeParse({ ...record, status: "future-status" }).success).toBe(
       false,
     );
@@ -116,11 +175,13 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     const outside = resolve(historyDir, "..", `${basename(historyDir)}-outside.jsonl`);
     const multiple = resolve(historyDir, "multiple.jsonl");
     try {
-      await writeFile(outside, `${JSON.stringify(record)}\n`);
+      // These deliberately malformed filesystem preconditions exercise the
+      // public history-file trust boundary; no user workflow can create them.
+      await writeFile(outside, `${historyLines(record)}\n`);
       await expect(
         readFixtureHistoryRecord(historyDir, { ...report, history_file: outside }),
       ).rejects.toThrow("outside the isolated fixture directory");
-      await writeFile(multiple, `${JSON.stringify(record)}\n${JSON.stringify(record)}\n`);
+      await writeFile(multiple, `${historyLines(record)}\n${historyLines(record)}\n`);
       await expect(
         readFixtureHistoryRecord(historyDir, { ...report, history_file: multiple }),
       ).rejects.toThrow("must contain one record");
@@ -158,17 +219,23 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
         '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"pwd"}}]}}',
         '{"type":"result","result":"Repository inspected","session_id":"native-1","usage":{"input_tokens":0,"output_tokens":4}}',
       ].join("\n"),
+      { historyLabels: { role: "judge", worker: "7" } },
     );
     const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
     record.thinking = "Checked the project shape before answering.";
     record.future_payload = { preserved: true };
-    await writeFile(historyFile, `${JSON.stringify(record)}\n`);
+    await writeFile(historyFile, `${historyLines(record)}\n`);
 
     const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
     expect(listed.ok && listed.data.kind === "list" && listed.data.conversations).toHaveLength(1);
     expect(listed).toMatchObject({
       data: { nextCursor: null, totalCount: 1 },
       ok: true,
+    });
+    expect(listed).toMatchObject({
+      data: {
+        conversations: [{ historyLabels: { role: "judge", worker: "7" } }],
+      },
     });
     const sessionId =
       listed.ok && listed.data.kind === "list" ? listed.data.conversations[0]?.id : "";
@@ -177,11 +244,16 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       selected.ok && selected.data.kind === "get" && selected.data.conversation.turns[0],
     ).toMatchObject({
       assistant: "Repository inspected",
-      reasoning: "Checked the project shape before answering.",
+      reasoning: null,
       status: "completed",
-      unknown: { future_payload: { preserved: true } },
+      unknown: {},
       usage: { inputTokens: 0, outputTokens: 4 },
     });
+    expect(
+      selected.ok && selected.data.kind === "get"
+        ? selected.data.conversation.historyLabels
+        : undefined,
+    ).toEqual({ role: "judge", worker: "7" });
     expect(
       selected.ok && selected.data.kind === "get"
         ? selected.data.conversation.turns[0]?.tools[0]?.name
@@ -189,28 +261,23 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     ).toBe("Bash");
   });
 
-  test("continues a stopped session and returns the new history selection", async () => {
+  test("continues a labeled session and returns the new history selection", async () => {
     const report = await seed(
       "continue-me",
       '{"result":"First answer","session_id":"native-continue-1"}',
-    );
-    const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
-    await writeFile(
-      historyFile,
-      `${JSON.stringify({ ...record, exit_code: null, status: "timeout" })}\n`,
+      { historyLabels: { role: "worker" } },
     );
     process.env.MOCK_STDOUT = '{"result":"Continued answer","session_id":"native-continue-1"}';
     process.env.MOCK_EXIT = "0";
-    const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
-    const firstId =
-      listed.ok && listed.data.kind === "list" ? listed.data.conversations[0]?.id : "";
+    if (!report.history_file) throw new Error("continued fixture did not write history");
+    const firstId = basename(report.history_file, extname(report.history_file));
     const selected = await service().handle(
       { kind: "get", sessionId: firstId },
       TEST_AUTHORIZATION,
     );
     expect(
       selected.ok && selected.data.kind === "get" ? selected.data.conversation : undefined,
-    ).toMatchObject({ canContinue: true, state: "stopped" });
+    ).toMatchObject({ canContinue: true, state: "completed" });
     const continued = await service().handle(
       {
         kind: "continue",
@@ -227,6 +294,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       assistant: "Continued answer",
       user: "Now explain the smallest fix",
     });
+    expect(continued.data.conversation.historyLabels).toEqual({ role: "worker" });
   });
 
   test("rejects an ineligible conversation before provider execution", async () => {
@@ -308,19 +376,20 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
   });
 
   test("surfaces malformed history and useful executable/storage errors", async () => {
-    const malformedDirectory = resolve(historyDir, "project");
-    await mkdir(malformedDirectory);
+    const malformedReport = await seed(
+      "broken-session",
+      '{"result":"Initially valid","session_id":"native-broken"}',
+    );
+    if (!malformedReport.history_file) throw new Error("malformed fixture did not write history");
     await writeFile(
-      resolve(malformedDirectory, "broken-session.jsonl"),
+      malformedReport.history_file,
       '{"session":"broken-session","name":"Broken","timestamp":"2026-07-15T00:00:00Z"}\n',
     );
-    const malformedList = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
-    const malformedId =
-      malformedList.ok && malformedList.data.kind === "list"
-        ? malformedList.data.conversations[0]?.id
-        : undefined;
     const malformed = await service().handle(
-      { kind: "get", sessionId: malformedId ?? "" },
+      {
+        kind: "get",
+        sessionId: basename(malformedReport.history_file, extname(malformedReport.history_file)),
+      },
       TEST_AUTHORIZATION,
     );
     expect(malformed).toMatchObject({ ok: false, error: { code: "MALFORMED_HISTORY" } });
@@ -359,12 +428,13 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
         const session = `page-session-${String(index).padStart(2, "0")}`;
         const copy = HistoryRecordSchema.parse({
           ...record,
+          history_id: fixtureHistoryId(index + 1),
           name: `page-${String(index).padStart(2, "0")}`,
           session,
         });
         await writeFile(
           resolve(dirname(historyFile), `${session}.jsonl`),
-          `${JSON.stringify(copy)}\n`,
+          `${historyLines(copy)}\n`,
         );
       }),
     );
@@ -380,13 +450,14 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
 
     const inserted = HistoryRecordSchema.parse({
       ...record,
+      history_id: fixtureHistoryId(100),
       name: "inserted-after-first-page",
       session: "inserted-after-first-page",
       timestamp: "9999-12-31T23:59:59Z",
     });
     await writeFile(
       resolve(dirname(historyFile), "inserted-after-first-page.jsonl"),
-      `${JSON.stringify(inserted)}\n`,
+      `${historyLines(inserted)}\n`,
     );
 
     const second = await service().handle(
@@ -428,7 +499,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
         timestamp: `2026-07-17T00:00:0${index}Z`,
       }),
     );
-    await writeFile(historyFile, `${records.map((item) => JSON.stringify(item)).join("\n")}\n`);
+    await writeFile(historyFile, `${records.map(historyLines).join("\n")}\n`);
 
     const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
     const id =
@@ -464,7 +535,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     expect(Buffer.byteLength(JSON.stringify(oversizedRecord))).toBeGreaterThan(
       MAX_CONVERSATION_PAGE_BYTES,
     );
-    await writeFile(historyFile, `${JSON.stringify(oversizedRecord)}\n`);
+    await writeFile(historyFile, `${historyLines(oversizedRecord)}\n`);
 
     const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
     const id =

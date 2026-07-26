@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
-import { HistoryRecordSchema } from "@oneharness/sdk";
+import { HistoryLineSchema, HistoryRecordSchema, OneHarness } from "@oneharness/sdk";
 
 const repository = resolve(import.meta.dir, "../../../..");
 const executableSuffix = process.platform === "win32" ? ".exe" : "";
@@ -163,6 +163,12 @@ async function seed(
   providerPath: string,
   options: SeedOptions,
 ): Promise<string> {
+  const environment = deterministicDesktopEnvironment({
+    MOCK_EXIT: String(options.exit ?? 0),
+    MOCK_STDERR: options.stderr ?? "",
+    MOCK_STDOUT: options.stdout,
+  });
+  delete environment.ONEHARNESS_HISTORY_LABELS;
   const child = Bun.spawn(
     [
       fixtureOneHarnessCli,
@@ -185,11 +191,7 @@ async function seed(
     ],
     {
       cwd: repository,
-      env: deterministicDesktopEnvironment({
-        MOCK_EXIT: String(options.exit ?? 0),
-        MOCK_STDERR: options.stderr ?? "",
-        MOCK_STDOUT: options.stdout,
-      }),
+      env: environment,
       stderr: "pipe",
       stdout: "pipe",
     },
@@ -218,25 +220,56 @@ async function patchRecord(
   historyFile: string,
   changes: Readonly<Record<string, unknown>>,
 ): Promise<void> {
+  // The packaged CLI creates the canonical record first. Mutate only validated
+  // fixture fields that the deterministic provider cannot express; the test
+  // still drives the real UI → Tauri → sidecar → SDK → CLI/session boundary.
   const lines = (await readFile(historyFile, "utf8")).trim().split("\n");
-  const first = lines[0];
-  if (!first) throw new Error(`fixture history is empty: ${historyFile}`);
-  const record: unknown = JSON.parse(first);
-  if (!isJsonObject(record)) {
+  const parsed = lines.map((line) => HistoryLineSchema.parse(JSON.parse(line)));
+  const runIndex = parsed.findLastIndex((line) => line.type === "run");
+  const run = parsed[runIndex];
+  if (run?.type !== "run") {
     throw new Error(`fixture history record is not an object: ${historyFile}`);
   }
-  await writeFile(historyFile, `${JSON.stringify({ ...record, ...changes })}\n`);
+  parsed[runIndex] = HistoryLineSchema.parse({ ...run, ...changes });
+  await writeFile(historyFile, `${parsed.map((line) => JSON.stringify(line)).join("\n")}\n`);
 }
 
 async function readFirstHistoryRecord(historyFile: string) {
-  const firstLine = (await readFile(historyFile, "utf8")).trim().split("\n")[0];
-  if (!firstLine) throw new Error(`fixture history is empty: ${historyFile}`);
-  return HistoryRecordSchema.parse(JSON.parse(firstLine));
+  const records = await new OneHarness().history({
+    allProjects: true,
+    historyDir: resolve(historyFile, "../.."),
+    session: basename(historyFile, ".jsonl"),
+  });
+  const first = records[0];
+  if (!first) throw new Error(`fixture history is empty: ${historyFile}`);
+  return first;
+}
+
+function fixtureHistoryId(index: number): string {
+  return `019f94e5-f419-7a12-bfef-${index.toString(16).padStart(12, "0")}`;
+}
+
+function historyLines(record: ReturnType<typeof HistoryRecordSchema.parse>): string {
+  const { events, ...run } = record;
+  const lines = (events ?? []).map((event) =>
+    HistoryLineSchema.parse({
+      event,
+      harness: record.harness,
+      run_id: record.history_id,
+      schema_version: "1.0",
+      type: "event",
+    }),
+  );
+  lines.push(HistoryLineSchema.parse({ ...run, type: "run" }));
+  return lines.map((line) => JSON.stringify(line)).join("\n");
 }
 
 async function seedOversizedHistory(
   historyFile: string,
 ): Promise<{ bytes: number; sessionIds: string[] }> {
+  // Paid model execution cannot deterministically produce a history corpus
+  // above the legacy bridge limit. Derive every synthetic record from a real
+  // packaged-CLI record and validate it with the SDK schema before persistence.
   const template = await readFirstHistoryRecord(historyFile);
   const prompt = "Deterministic oversized native history prompt. ".repeat(2_100);
   const summaries: Array<Record<string, unknown>> = [];
@@ -249,6 +282,7 @@ async function seedOversizedHistory(
       const suffix = String(index).padStart(2, "0");
       const record = HistoryRecordSchema.parse({
         ...template,
+        history_id: fixtureHistoryId(index + 1),
         name: session,
         prompt,
         session,
@@ -267,7 +301,7 @@ async function seedOversizedHistory(
       });
       await writeFile(
         resolve(dirname(historyFile), `${session}.jsonl`),
-        `${JSON.stringify(record)}\n`,
+        `${historyLines(record)}\n`,
       );
     }),
   );
@@ -286,13 +320,14 @@ async function seedPaginatedTurns(historyFile: string): Promise<string[]> {
     HistoryRecordSchema.parse({
       ...template,
       events: index === 0 ? template.events : [],
+      history_id: fixtureHistoryId(index + 100),
       prompt: `Native paginated prompt ${String(index).padStart(2, "0")}`,
       text:
         index === 0 ? template.text : `Native paginated answer ${String(index).padStart(2, "0")}`,
       thinking: index === 0 ? template.thinking : undefined,
     }),
   );
-  await writeFile(historyFile, `${records.map((record) => JSON.stringify(record)).join("\n")}\n`);
+  await writeFile(historyFile, `${records.map(historyLines).join("\n")}\n`);
   return records.map((record, index) => `${record.session}-${index}`);
 }
 
@@ -368,7 +403,7 @@ export async function createDesktopFixture(
 ): Promise<DesktopFixture> {
   for (const [label, path] of [
     [
-      cliOverride ? "configured oneharness test CLI" : "@oneharness/sdk 0.3.23 packaged CLI",
+      cliOverride ? "configured oneharness test CLI" : "@oneharness/sdk 0.5.5 packaged CLI",
       fixtureOneHarnessCli,
     ],
     ["deterministic provider", providerPath],
@@ -419,7 +454,6 @@ export async function createDesktopFixture(
     await patchRecord(stopped, {
       exit_code: null,
       status: "timeout",
-      thinking: "I checked the native command boundary before answering.",
     });
     const turnIds = await seedPaginatedTurns(stopped);
 

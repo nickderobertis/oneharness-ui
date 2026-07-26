@@ -4,8 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 readonly ROOT
 readonly UPSTREAM_REPOSITORY="https://github.com/nickderobertis/oneharness.git"
-readonly UPSTREAM_REVISION="ff8ea9adfee84f17968a6ca37cc57b1b004b957c"
-readonly UPSTREAM_VERSION="0.3.23"
+readonly UPSTREAM_REVISION="761857ea60779f30f970cd30c794b0130b49460e"
+readonly UPSTREAM_VERSION="0.5.5"
 readonly OUTPUT_ROOT="$ROOT/target/oneharness-ui-upstream"
 
 fail() {

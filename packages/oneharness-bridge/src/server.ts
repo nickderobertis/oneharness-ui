@@ -154,6 +154,8 @@ export function startServer(
       if (accessControlOrigin === "null") {
         return Response.json({ error: "Forbidden origin" }, { headers, status: 403 });
       }
+      // Enforce the short-lived server-side capability before parsing or
+      // dispatching any conversation request.
       const presentedAuthorization = cookieAuthorization(request);
       if (!service.isAuthorized(presentedAuthorization)) {
         return Response.json({ error: "Unauthorized" }, { headers, status: 401 });
@@ -272,6 +274,8 @@ export async function startWebServer({
       if (request.method === "GET" && url.pathname === bridgeRoutes.health) {
         return Response.json({ status: "ok" }, { headers: jsonHeaders });
       }
+      // Static assets and bridge actions share this server-side Basic auth
+      // gate; no conversation data is read before it succeeds.
       if (!hasWebAccess(request, expectedAccessToken)) {
         return new Response("Authentication required", {
           headers: { ...SECURITY_HEADERS, "WWW-Authenticate": 'Basic realm="oneharness UI"' },

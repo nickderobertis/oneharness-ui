@@ -21,6 +21,7 @@ export const conversationLabelSchema = z.string().trim().min(1).max(conversation
 export const conversationLabelsSchema = z
   .array(conversationLabelSchema)
   .max(conversationLabelsMaxCount);
+export const historyLabelsSchema = z.record(z.string().min(1).max(128), z.string().max(1_024));
 
 export const conversationCursorSchema = z.object({
   sessionId: sessionIdSchema,
@@ -62,6 +63,7 @@ export const conversationSchema = z.object({
   canContinue: z.boolean(),
   harnesses: z.array(harnessId).max(64),
   id: sessionIdSchema,
+  historyLabels: historyLabelsSchema.optional(),
   name: z.string().min(1).max(512),
   project: z.string().max(4096),
   startedAt,
@@ -76,7 +78,14 @@ export const conversationPageSchema = conversationSchema.extend({
 });
 
 export const conversationSummarySchema = conversationSchema
-  .pick({ harnesses: true, id: true, name: true, project: true, startedAt: true })
+  .pick({
+    harnesses: true,
+    historyLabels: true,
+    id: true,
+    name: true,
+    project: true,
+    startedAt: true,
+  })
   .extend({
     labels: conversationLabelsSchema.optional(),
     turnCount: z.number().int().nonnegative(),

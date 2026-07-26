@@ -36,14 +36,11 @@ test("follows the OS theme and persists an explicit accessible theme choice", as
   await expectTheme(page, "dark", "system", "dark");
 });
 
-test("lists, selects, restores a deep link, and expands optional details", async ({ page }) => {
+test("lists, selects, restores a deep link, and expands tool details", async ({ page }) => {
   await page.goto("/");
   await expect(page.getByRole("navigation", { name: "Conversation history" })).toBeVisible();
   await page.getByRole("button", { name: /tool-session/i }).click();
   await expect(page.getByRole("heading", { name: "tool-session" })).toBeFocused();
-  await expect(page.getByText("I checked the command boundary first.")).toBeHidden();
-  await page.getByText("Reasoning", { exact: true }).click();
-  await expect(page.getByText("I checked the command boundary first.")).toBeVisible();
   await page.getByText("Bash", { exact: true }).click();
   await expect(page.getByText(/"command": "pwd"/)).toBeVisible();
   await expect(page.getByText("0", { exact: true })).toBeVisible();
@@ -82,8 +79,16 @@ test("continues the exact session and selects refreshed history", async ({ page 
   await page.getByRole("button", { name: /plain-session/i }).click();
   await page.getByRole("button", { name: "Send reply" }).hover();
   await expect(page.getByRole("tooltip", { name: "Send reply" })).toBeVisible();
+  const reply = page.getByRole("textbox", { name: "Continue this session" });
+  await reply.fill("x".repeat(32_001));
+  await page.getByRole("button", { name: "Send reply" }).click();
+  await expect(
+    page.getByRole("alert").filter({ hasText: "at most 32000 characters" }),
+  ).toBeVisible();
+  await expect(reply).toHaveValue("x".repeat(32_001));
+
   const before = page.url();
-  await page.getByRole("textbox", { name: "Continue this session" }).fill("Continue with a fix");
+  await reply.fill("Continue with a fix");
   await page.getByRole("button", { name: "Send reply" }).click();
   await expect(page.getByText("Continued from the exact desktop session")).toBeVisible({
     timeout: 15_000,
@@ -106,7 +111,9 @@ test("keeps conversation navigation usable in a phone-sized viewport", async ({ 
   await expect(page).toHaveURL(/\/$/);
 });
 
-test("organizes sessions by project and round-trips local labels", async ({ page }) => {
+test("validates label limits, organizes sessions, and round-trips local labels", async ({
+  page,
+}) => {
   await page.goto("/");
   const organize = page.getByRole("combobox", { name: "Organize by" });
   await page.getByRole("button", { name: "Refresh conversations" }).hover();

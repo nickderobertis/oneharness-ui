@@ -2,6 +2,8 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Component, type ErrorInfo, type ReactNode, useState } from "react";
+import { Brandmark } from "@/components/brandmark";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -51,6 +53,8 @@ function Workspace() {
     <div className="grid h-full min-h-0 grid-cols-[330px_minmax(0,1fr)] overflow-hidden max-[820px]:grid-cols-[260px_minmax(0,1fr)] max-[680px]:min-h-[100dvh] max-[680px]:grid-cols-1">
       <div className={selectedId ? "contents max-[680px]:hidden" : "contents"}>
         <ConversationList
+          actions={<ThemeToggle />}
+          brand={<Brandmark />}
           conversations={conversations}
           hasMore={list.hasNextPage}
           loadMoreError={list.isFetchNextPageError ? list.error : null}

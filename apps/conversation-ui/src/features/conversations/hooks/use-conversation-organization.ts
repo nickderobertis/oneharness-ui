@@ -1,5 +1,5 @@
-import type { ConversationSummary } from "@oneharness-ui/ipc-contract";
 import { useMemo, useState } from "react";
+import type { ConversationSummary } from "../presentational-types";
 
 export const conversationGroupingOptions = [
   { label: "Recent", value: "none" },

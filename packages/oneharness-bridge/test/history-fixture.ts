@@ -1,6 +1,6 @@
 import { readFile, realpath } from "node:fs/promises";
-import { isAbsolute, relative, sep } from "node:path";
-import { type HistoryRecord, HistoryRecordSchema, type RunReport } from "@oneharness/sdk";
+import { basename, extname, isAbsolute, relative, sep } from "node:path";
+import { HistoryLineSchema, type HistoryRecord, OneHarness, type RunReport } from "@oneharness/sdk";
 
 export async function readFixtureHistoryRecord(
   historyDir: string,
@@ -20,7 +20,19 @@ export async function readFixtureHistoryRecord(
   ) {
     throw new Error("SDK returned a history file outside the isolated fixture directory");
   }
-  const lines = (await readFile(historyFile, "utf8")).trim().split("\n");
-  if (lines.length !== 1 || !lines[0]) throw new Error("fixture history must contain one record");
-  return { historyFile, record: HistoryRecordSchema.parse(JSON.parse(lines[0])) };
+  const lines = (await readFile(historyFile, "utf8"))
+    .trim()
+    .split("\n")
+    .map((line) => HistoryLineSchema.parse(JSON.parse(line)));
+  if (lines.filter((line) => line.type === "run").length !== 1) {
+    throw new Error("fixture history must contain one record");
+  }
+  const records = await new OneHarness().history({
+    allProjects: true,
+    historyDir,
+    session: basename(historyFile, extname(historyFile)),
+  });
+  const record = records[0];
+  if (records.length !== 1 || !record) throw new Error("fixture history must contain one record");
+  return { historyFile, record };
 }

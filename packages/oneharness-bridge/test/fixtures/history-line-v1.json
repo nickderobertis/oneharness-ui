@@ -1,0 +1,33 @@
+{
+  "duration_ms": 12,
+  "events": null,
+  "exit_code": 0,
+  "failure_kind": null,
+  "finished_at": null,
+  "harness": "claude-code",
+  "history_id": "019f94e5-f419-7a12-bfef-b7c9818583a1",
+  "labels": {
+    "role": "judge",
+    "worker": "7"
+  },
+  "model": null,
+  "name": "contract-golden",
+  "permission_mode": "bypass",
+  "project": "/workspace/project",
+  "prompt": "Inspect the contract",
+  "schema_version": "1.0",
+  "session": "contract-golden-session",
+  "session_id": "native-session-1",
+  "status": "ok",
+  "text": "The contract is valid.",
+  "text_source": "stream-json:result",
+  "timestamp": "2026-07-24T16:00:00Z",
+  "type": "run",
+  "usage": {
+    "cache_read_tokens": null,
+    "cache_write_tokens": null,
+    "cost_usd": null,
+    "input_tokens": 4,
+    "output_tokens": 5
+  }
+}
