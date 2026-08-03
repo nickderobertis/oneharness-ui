@@ -113,6 +113,30 @@ describe("TurnCard tool invocations", () => {
     expect(timing.textContent).not.toContain("Started");
   });
 
+  test("keeps a second result for an already answered call visible", async () => {
+    const user = userEvent.setup();
+    render(
+      <TurnCard
+        turn={turnWith([
+          {
+            index: 0,
+            input: { path: "README.md" },
+            kind: "tool_call",
+            name: "Read",
+            toolCallId: "call-1",
+          },
+          { index: 1, kind: "tool_result", output: "first observation" },
+          { index: 2, kind: "tool_result", output: "late observation", toolCallId: "call-1" },
+        ])}
+      />,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Read tool details" }));
+    expect(screen.getByLabelText("Read tool output").textContent).toBe("first observation");
+    await user.click(screen.getByRole("button", { name: "tool_result tool details" }));
+    expect(screen.getByLabelText("tool_result tool output").textContent).toBe("late observation");
+  });
+
   test("reports an event that carries neither input nor output", async () => {
     const user = userEvent.setup();
     render(<TurnCard turn={turnWith([{ index: 0, kind: "tool_call", name: "Task" }])} />);

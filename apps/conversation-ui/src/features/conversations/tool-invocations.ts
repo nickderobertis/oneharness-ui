@@ -67,7 +67,7 @@ export function pairToolEvents(events: readonly ConversationToolEvent[]): ToolIn
   for (const event of events) {
     if (event.kind === toolResultKind) {
       const correlated = event.toolCallId ? openCalls.get(event.toolCallId) : unpairedCall(pairs);
-      if (correlated) {
+      if (correlated && !correlated.result) {
         correlated.result = event;
         if (correlated.call?.toolCallId) openCalls.delete(correlated.call.toolCallId);
         continue;
