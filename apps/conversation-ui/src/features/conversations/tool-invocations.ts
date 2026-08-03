@@ -3,7 +3,6 @@ import type { ConversationToolEvent } from "./presentational-types";
 const toolResultKind = "tool_result";
 
 export interface ToolInvocation {
-  call: ConversationToolEvent | null;
   durationMs: number | null;
   finishedAt: string | null;
   id: string;
@@ -11,7 +10,6 @@ export interface ToolInvocation {
   kind: string;
   name: string;
   output: string | null;
-  result: ConversationToolEvent | null;
   startedAt: string | null;
   status: string | null;
   timingSource: string | null;
@@ -39,7 +37,6 @@ function toInvocation({ call, result }: Pair): ToolInvocation {
   const anchor = call ?? result;
   const kind = anchor?.kind ?? toolResultKind;
   return {
-    call,
     durationMs: firstReported(call?.durationMs, result?.durationMs),
     finishedAt: firstReported(call?.finishedAt, result?.finishedAt),
     id: `tool-${anchor?.index ?? 0}`,
@@ -47,7 +44,6 @@ function toInvocation({ call, result }: Pair): ToolInvocation {
     kind,
     name: firstReported(call?.name, result?.name) ?? kind,
     output: firstReported(result?.output, call?.output),
-    result,
     startedAt: firstReported(call?.startedAt, result?.startedAt),
     status: firstReported(call?.status, result?.status),
     timingSource: firstReported(call?.timingSource, result?.timingSource),
