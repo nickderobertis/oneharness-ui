@@ -3,6 +3,7 @@ import type { Conversation, ConversationTurn } from "./presentational-types";
 import { pairToolEvents } from "./tool-invocations";
 
 export type ConversationTimelinePayload =
+  | { type: "milestone"; turn: ConversationTurn }
   | { type: "phase"; turn: ConversationTurn }
   | { type: "tool"; turn: ConversationTurn }
   | { type: "turn"; turn: ConversationTurn };
@@ -36,10 +37,10 @@ export function conversationTimelineItems(
       status: turn.status,
     });
 
-    const phases = [
+    const phases: ReadonlyArray<readonly [string, number | null | undefined]> = [
       ["model", turn.modelMs],
       ["tools", turn.toolMs],
-    ] as const;
+    ];
     let phaseStart = start;
     for (const [kind, value] of phases) {
       const phaseDuration = reported(value);
@@ -63,7 +64,7 @@ export function conversationTimelineItems(
         kind: "first token",
         label: "First token",
         parent: turn.id,
-        payload: { turn, type: "phase" },
+        payload: { turn, type: "milestone" },
         start: start + firstToken,
         status: turn.status,
       });

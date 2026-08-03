@@ -29,7 +29,7 @@ async function settle(page: Page, preserveFocus = false) {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.addStyleTag({
     content:
-      "*,*::before,*::after{animation:none!important;caret-color:transparent!important;transition:none!important}",
+      "*,*::before,*::after{animation:none!important;caret-color:transparent!important;transition:none!important}[data-timeline-axis]{visibility:hidden!important}",
   });
   await page.evaluate(async () => await document.fonts.ready);
   await page.evaluate(async (keepFocus) => {

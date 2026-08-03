@@ -1,5 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import type { ConversationToolEvent as IpcConversationToolEvent } from "@oneharness-ui/ipc-contract";
+import type {
+  ConversationToolEvent as IpcConversationToolEvent,
+  ConversationTurn as IpcConversationTurn,
+} from "@oneharness-ui/ipc-contract";
 import {
   conversationLabelMaxLength,
   conversationLabelsMaxCount,
@@ -7,7 +10,10 @@ import {
   toolEventSchema,
 } from "@oneharness-ui/ipc-contract";
 import { conversationLabelLimits } from "@/features/conversations";
-import type { ConversationToolEvent } from "../src/features/conversations/presentational-types";
+import type {
+  ConversationToolEvent,
+  ConversationTurn,
+} from "../src/features/conversations/presentational-types";
 
 type ExactType<Left, Right> =
   (<Value>() => Value extends Left ? 1 : 2) extends <Value>() => Value extends Right ? 1 : 2
@@ -56,5 +62,20 @@ describe("presentational contract drift gates", () => {
     });
     expect(Object.hasOwn(unmeasured, "durationMs")).toBe(false);
     expect(Object.hasOwn(unmeasured, "status")).toBe(false);
+  });
+
+  test("keeps the presentational turn aligned with every validated timing field", () => {
+    type TimingFields =
+      | "durationMs"
+      | "finishedAt"
+      | "modelMs"
+      | "startedAt"
+      | "timeToFirstTokenMs"
+      | "toolMs";
+    const turnTimingTypesMatchExactly: ExactType<
+      Pick<ConversationTurn, TimingFields>,
+      Pick<IpcConversationTurn, TimingFields>
+    > = true;
+    expect(turnTimingTypesMatchExactly).toBe(true);
   });
 });
