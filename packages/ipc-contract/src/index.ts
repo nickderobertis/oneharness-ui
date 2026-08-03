@@ -11,6 +11,12 @@ export const bridgeRoutes = {
 // parsing it. The desktop drift test keeps the Rust receiver aligned.
 export const maxBridgeStreamFrameBytes = 512 * 1024;
 
+export const tauriBridgeCommands = {
+  invoke: "invoke_bridge",
+  startWatch: "start_bridge_watch",
+  stopWatch: "stop_bridge_watch",
+} as const;
+
 export const sessionIdSchema = z
   .string()
   .trim()

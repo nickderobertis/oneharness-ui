@@ -884,11 +884,9 @@ mod tests {
         let channel = tauri::ipc::Channel::new(move |body| {
             if let tauri::ipc::InvokeResponseBody::Json(text) = body
                 && let Ok(frame) = serde_json::from_str(&text)
+                && let Ok(mut values) = collected.lock()
             {
-                collected
-                    .lock()
-                    .expect("frame collector was poisoned")
-                    .push(frame);
+                values.push(frame);
             }
             Ok(())
         });
@@ -905,14 +903,17 @@ mod tests {
         for _ in 0..200 {
             if !frames
                 .lock()
-                .expect("frame collector was poisoned")
+                .map_err(|_| std::io::Error::other("frame collector was poisoned"))?
                 .is_empty()
             {
                 break;
             }
             std::thread::sleep(std::time::Duration::from_millis(50));
         }
-        let delivered = frames.lock().expect("frame collector was poisoned").clone();
+        let delivered = frames
+            .lock()
+            .map_err(|_| std::io::Error::other("frame collector was poisoned"))?
+            .clone();
         assert_eq!(delivered.len(), 1, "{delivered:?}");
         assert_eq!(delivered[0]["kind"], "error", "{delivered:?}");
 

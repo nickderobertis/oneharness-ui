@@ -11,7 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
-import { maxBridgeStreamFrameBytes } from "@oneharness-ui/ipc-contract";
+import { maxBridgeStreamFrameBytes, tauriBridgeCommands } from "@oneharness-ui/ipc-contract";
 import {
   createDesktopCapabilities,
   validateDesktopAppBinary,
@@ -25,6 +25,15 @@ describe("native desktop capabilities", () => {
     const nativeLimit = runtime.match(/const MAX_FRAME_BYTES: usize = (\d+) \* (\d+);/u);
     expect(nativeLimit).not.toBeNull();
     expect(Number(nativeLimit?.[1]) * Number(nativeLimit?.[2])).toBe(maxBridgeStreamFrameBytes);
+  });
+
+  test("keeps native watch command names aligned with the IPC contract", () => {
+    const runtime = readFileSync(new URL("../../src/runtime.rs", import.meta.url), "utf8");
+    const handler = runtime.match(/tauri::generate_handler!\[([^\]]+)\]/u)?.[1] ?? "";
+    for (const command of Object.values(tauriBridgeCommands)) {
+      expect(runtime).toContain(`fn ${command}<`);
+      expect(handler).toContain(command);
+    }
   });
 
   test("gives EdgeDriver and Tauri one isolated WebView2 profile on Windows", () => {

@@ -8,6 +8,7 @@ import {
   bridgeRoutes,
   bridgeStreamFrameSchema,
   maxBridgeStreamFrameBytes,
+  tauriBridgeCommands,
 } from "@oneharness-ui/ipc-contract";
 import { z } from "zod";
 
@@ -52,7 +53,7 @@ function httpConfiguration(): z.infer<typeof httpConfigurationSchema> {
 
 async function invokeTauri(request: BridgeRequest): Promise<unknown> {
   const { invoke } = await import("@tauri-apps/api/core");
-  return await invoke("invoke_bridge", { request });
+  return await invoke(tauriBridgeCommands.invoke, { request });
 }
 
 async function invokeHttp(request: BridgeRequest): Promise<unknown> {
@@ -92,7 +93,7 @@ async function watchTauri(
   const { Channel, invoke } = await import("@tauri-apps/api/core");
   const channel = new Channel<unknown>();
   channel.onmessage = (frame) => onFrame(bridgeStreamFrameSchema.parse(frame));
-  const id = await invoke<number>("start_bridge_watch", { channel, request });
+  const id = await invoke<number>(tauriBridgeCommands.startWatch, { channel, request });
   await new Promise<void>((resolve) => {
     if (signal.aborted) {
       resolve();
@@ -100,7 +101,7 @@ async function watchTauri(
     }
     signal.addEventListener("abort", () => resolve(), { once: true });
   });
-  await invoke("stop_bridge_watch", { id });
+  await invoke(tauriBridgeCommands.stopWatch, { id });
 }
 
 async function watchHttp(

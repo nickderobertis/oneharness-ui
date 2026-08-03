@@ -9,6 +9,7 @@ import {
   HistoryRecordSchema,
   HistoryRecordsSchema,
   type HistorySessionSummary,
+  HistoryStreamEnvelopeSchema,
   OneHarness,
   RunOptionsSchema,
   RunReportSchema,
@@ -494,7 +495,7 @@ export class BridgeService {
         while (!signal?.aborted) {
           const next = await envelopes.next();
           if (next.done) break;
-          const envelope = next.value;
+          const envelope = HistoryStreamEnvelopeSchema.parse(next.value);
           if (envelope.type === "event") {
             const frame = this.#toolEventFrame(request.sessionId, envelope.line, turnIndexes);
             if (frame) yield frame;
