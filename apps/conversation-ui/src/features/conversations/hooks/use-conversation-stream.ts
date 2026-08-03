@@ -75,7 +75,7 @@ export function useConversationStream(sessionId: string | null, enabled: boolean
       // Do not make the reader wait for the first polling interval after a
       // dropped stream. Refresh once immediately, then let the interval keep
       // it current while live updates remain unavailable.
-      void client.invalidateQueries({ exact: true, queryKey: key });
+      void client.refetchQueries({ exact: true, queryKey: key, type: "active" });
     };
     const apply = (frame: BridgeStreamFrame) => {
       if (frame.kind === "opened") {
