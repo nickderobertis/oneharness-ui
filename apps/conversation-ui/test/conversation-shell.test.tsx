@@ -766,6 +766,7 @@ describe("ConversationShell", () => {
     render(<ConversationShell />);
 
     expect(await screen.findByRole("status", { name: "Live updates on" })).toBeTruthy();
+    expect(await screen.findByText("Polled answer 1")).toBeTruthy();
     live?.push({
       error: { code: "ONEHARNESS_ERROR", message: "The live history stream stopped" },
       kind: "error",
