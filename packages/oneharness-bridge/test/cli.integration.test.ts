@@ -104,15 +104,16 @@ test("rejects unsafe web host and port configuration", async () => {
   }
 });
 
-test("defaults web mode to the documented loopback address", async () => {
+test("defaults web mode to the documented loopback host", async () => {
   const fixture = await mkdtemp(resolve(tmpdir(), "oneharness-ui-web-default-"));
+  const probe = Bun.serve({ port: 0, fetch: () => new Response() });
+  const port = probe.port;
+  await probe.stop(true);
   await mkdir(resolve(fixture, "apps/conversation-ui/out"), { recursive: true });
   await writeFile(resolve(fixture, "apps/conversation-ui/out/index.html"), "web default");
-  const availability = Bun.serve({ port: WEB_DEFAULT_PORT, fetch: () => new Response() });
-  await availability.stop(true);
   const environment = { ...process.env };
   delete environment.ONEHARNESS_UI_HOST;
-  delete environment.ONEHARNESS_UI_PORT;
+  environment.ONEHARNESS_UI_PORT = String(port);
   const child = Bun.spawn([process.execPath, cli, "web"], {
     cwd: fixture,
     env: environment,
@@ -123,7 +124,7 @@ test("defaults web mode to the documented loopback address", async () => {
     const reader = child.stdout.getReader();
     const first = await reader.read();
     reader.releaseLock();
-    expect(new TextDecoder().decode(first.value)).toContain(`http://127.0.0.1:${WEB_DEFAULT_PORT}`);
+    expect(new TextDecoder().decode(first.value)).toContain(`http://127.0.0.1:${port}`);
   } finally {
     child.kill();
     await child.exited;
