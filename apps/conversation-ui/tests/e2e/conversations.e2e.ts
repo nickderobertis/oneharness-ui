@@ -44,7 +44,7 @@ test("lists, selects, restores a deep link, and expands tool details", async ({ 
   await expect(page.getByText('{"command":"pwd"}', { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Bash tool details" }).click();
   await expect(page.getByLabel("Bash tool input")).toContainText('"command": "pwd"');
-  await expect(page.getByLabel("Bash tool input").locator(".hljs-attr")).toHaveText('"command"');
+  await expect(page.getByLabel("Bash tool input").getByText('"command"')).toHaveClass("hljs-attr");
   await expect(page.getByLabel("Bash tool output")).toHaveText("/workspace/product");
   await expect(page.getByText("0", { exact: true })).toBeVisible();
 

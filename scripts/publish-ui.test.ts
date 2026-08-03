@@ -112,6 +112,7 @@ test("builds the public package before producing the publish manifest", () => {
   const distribution = resolve(workspaceRoot, "dist");
   const staleArtifact = resolve(distribution, "publish-test-stale.txt");
 
+  mkdirSync(distribution, { recursive: true });
   writeFileSync(staleArtifact, "must be removed by the package build");
   try {
     const publish = Bun.spawnSync(["just", "publish-ui-dry-run"], {

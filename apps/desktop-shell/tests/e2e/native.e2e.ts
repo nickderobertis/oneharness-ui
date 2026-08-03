@@ -187,11 +187,14 @@ describe("packaged native desktop journey", () => {
     });
 
     await runDesktopStage(desktopE2eStageLog, "journey tool disclosure", async () => {
-      const toolDetail = await $("aria/Bash tool input and output");
-      await expect(toolDetail).not.toBeDisplayed();
+      const toolInput = await $("aria/Bash tool input");
+      const toolOutput = await $("aria/Bash tool output");
+      await expect(toolInput).not.toBeDisplayed();
       await $("aria/Bash tool details").click();
-      await expect(toolDetail).toBeDisplayed();
-      expect(await toolDetail.getText()).toContain('"command": "pwd"');
+      await expect(toolInput).toBeDisplayed();
+      await expect(toolOutput).toBeDisplayed();
+      expect(await toolInput.getText()).toContain('"command": "pwd"');
+      expect(await toolOutput.getText()).toContain("/workspace/product");
     });
 
     await runDesktopStage(desktopE2eStageLog, "journey stopped session continuation", async () => {

@@ -298,8 +298,8 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     });
     expect(Object.hasOwn(untimedTools?.[0] ?? {}, "timingSource")).toBe(false);
 
-    // A measured run records interval bounds on the call event; the history contract accepts them
-    // only alongside the run's own started/model/tool split, so the whole record is restated.
+    // llmlint: ignore[tests_mirror_real_usage] A persisted timed history is the public input
+    // boundary under test; the pinned deterministic provider cannot emit SDK timing metadata.
     const [call, ...rest] = record.events ?? [];
     if (!call) throw new Error("fixture history did not record a tool call");
     const timedRecord = HistoryRecordSchema.parse({
