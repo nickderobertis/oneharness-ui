@@ -4,6 +4,7 @@ export const bridgeRoutes = {
   health: "/health",
   invoke: "/invoke",
   session: "/session",
+  watch: "/watch",
 } as const;
 
 export const sessionIdSchema = z
@@ -12,6 +13,16 @@ export const sessionIdSchema = z
   .min(1)
   .max(240)
   .regex(/^[\p{L}\p{N}._-]+$/u, "Invalid session identifier");
+
+// oneharness resumes a history stream strictly after one record id, so the
+// cursor the app forwards must be exactly that upstream identifier shape.
+export const historyCursorSchema = z
+  .string()
+  .length(36)
+  .regex(
+    /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-8][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/u,
+    "Invalid history cursor",
+  );
 
 const harnessId = z.string().min(1).max(100);
 const startedAt = z.string().max(128);
@@ -108,6 +119,11 @@ export const bridgeRequestSchema = z.discriminatedUnion("kind", [
     labels: conversationLabelsSchema,
     sessionId: sessionIdSchema,
   }),
+  z.object({
+    after: historyCursorSchema.optional(),
+    kind: z.literal("watch"),
+    sessionId: sessionIdSchema,
+  }),
 ]);
 
 export const bridgeErrorSchema = z.object({
@@ -141,7 +157,32 @@ export const bridgeResponseSchema = z.discriminatedUnion("ok", [
   z.object({ error: bridgeErrorSchema, ok: z.literal(false) }),
 ]);
 
+// One line of the newline-delimited watch stream. `opened` and `turn` carry the
+// cursor a reconnect resumes from; a tool event names the turn it belongs to
+// because the sidecar owns the upstream run-to-session join.
+export const bridgeStreamFrameSchema = z.discriminatedUnion("kind", [
+  z.object({
+    cursor: historyCursorSchema.nullable(),
+    kind: z.literal("opened"),
+    sessionId: sessionIdSchema,
+    totalTurnCount: z.number().int().nonnegative(),
+  }),
+  z.object({
+    cursor: historyCursorSchema,
+    kind: z.literal("turn"),
+    turn: conversationTurnSchema,
+  }),
+  z.object({
+    kind: z.literal("tool-event"),
+    tool: toolEventSchema,
+    turnId: z.string().min(1),
+  }),
+  z.object({ error: bridgeErrorSchema, kind: z.literal("error") }),
+]);
+
 export type BridgeRequest = z.infer<typeof bridgeRequestSchema>;
+export type BridgeStreamFrame = z.infer<typeof bridgeStreamFrameSchema>;
+export type BridgeWatchRequest = Extract<BridgeRequest, { kind: "watch" }>;
 export type BridgeResponse = z.infer<typeof bridgeResponseSchema>;
 export type Conversation = z.infer<typeof conversationSchema>;
 export type ConversationCursor = z.infer<typeof conversationCursorSchema>;

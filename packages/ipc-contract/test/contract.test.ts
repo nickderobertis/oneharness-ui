@@ -1,5 +1,13 @@
 import { describe, expect, test } from "bun:test";
-import { bridgeRequestSchema, bridgeResponseSchema, usageSchema } from "../src/index.ts";
+import {
+  bridgeRequestSchema,
+  bridgeResponseSchema,
+  bridgeRoutes,
+  bridgeStreamFrameSchema,
+  usageSchema,
+} from "../src/index.ts";
+
+const CURSOR = "019f94e5-f419-7a12-bfef-000000000001";
 
 describe("IPC validation", () => {
   test("round-trips labels while omitting empty backward-compatible summaries", () => {
@@ -59,6 +67,78 @@ describe("IPC validation", () => {
         sessionId: "valid",
       }),
     ).toThrow();
+  });
+
+  test("accepts a watch request only with a well-formed resume cursor", () => {
+    expect(bridgeRequestSchema.parse({ kind: "watch", sessionId: "session-1" })).toEqual({
+      kind: "watch",
+      sessionId: "session-1",
+    });
+    expect(
+      bridgeRequestSchema.parse({ after: CURSOR, kind: "watch", sessionId: "session-1" }),
+    ).toEqual({ after: CURSOR, kind: "watch", sessionId: "session-1" });
+    expect(() =>
+      bridgeRequestSchema.parse({ after: "not-a-cursor", kind: "watch", sessionId: "session-1" }),
+    ).toThrow();
+    expect(() =>
+      bridgeRequestSchema.parse({ after: CURSOR, kind: "watch", sessionId: "../secret" }),
+    ).toThrow();
+    expect(bridgeRoutes.watch).toBe("/watch");
+  });
+
+  test("validates every watch stream frame and rejects unnamed tool events", () => {
+    expect(
+      bridgeStreamFrameSchema.parse({
+        cursor: null,
+        kind: "opened",
+        sessionId: "session-1",
+        totalTurnCount: 0,
+      }),
+    ).toMatchObject({ cursor: null, totalTurnCount: 0 });
+    expect(
+      bridgeStreamFrameSchema.parse({
+        cursor: CURSOR,
+        kind: "turn",
+        turn: {
+          assistant: "Streamed answer",
+          failureKind: null,
+          harness: "claude-code",
+          id: "session-1-1",
+          model: null,
+          reasoning: null,
+          status: "completed",
+          timestamp: "2026-07-15T10:00:00Z",
+          tools: [],
+          unknown: {},
+          usage: {},
+          user: "Keep going",
+        },
+      }),
+    ).toMatchObject({ cursor: CURSOR, turn: { id: "session-1-1" } });
+    expect(
+      bridgeStreamFrameSchema.parse({
+        kind: "tool-event",
+        tool: { index: 0, input: { command: "pwd" }, kind: "tool_call", name: "Bash" },
+        turnId: "session-1-1",
+      }),
+    ).toMatchObject({ turnId: "session-1-1" });
+    expect(
+      bridgeStreamFrameSchema.parse({
+        error: { code: "ONEHARNESS_ERROR", message: "The live stream stopped" },
+        kind: "error",
+      }),
+    ).toMatchObject({ error: { code: "ONEHARNESS_ERROR" } });
+    expect(() =>
+      bridgeStreamFrameSchema.parse({
+        kind: "tool-event",
+        tool: { index: 0, kind: "tool_call" },
+        turnId: "",
+      }),
+    ).toThrow();
+    expect(() =>
+      bridgeStreamFrameSchema.parse({ cursor: "not-a-cursor", kind: "turn", turn: {} }),
+    ).toThrow();
+    expect(() => bridgeStreamFrameSchema.parse({ kind: "future-frame" })).toThrow();
   });
 
   test("keeps unknown upstream structured values as data", () => {

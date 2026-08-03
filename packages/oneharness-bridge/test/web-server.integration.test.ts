@@ -104,6 +104,73 @@ describe("web UI over the real HTTP, SDK, CLI, provider, and history boundary", 
     });
   });
 
+  test("streams a watched conversation as newline-delimited frames", async () => {
+    const historyDir = resolve(fixtureRoot, "history");
+    await mkdir(historyDir);
+    const report = await new OneHarness(cliOverride ? { executable: cliOverride } : {}).run({
+      bins: { "claude-code": provider },
+      env: {
+        MOCK_EXIT: "0",
+        MOCK_STDERR: "",
+        MOCK_STDOUT: '{"result":"Watched from the browser","session_id":"web-watch-native"}',
+      },
+      events: true,
+      harnesses: ["claude-code"],
+      history: true,
+      historyDir,
+      historyName: "web-watch-session",
+      mode: "bypass",
+      prompt: "Follow this session live",
+    });
+    if (!report.history_file) throw new Error("watch fixture did not write history");
+    const filename = report.history_file.split(/[\\/]/).at(-1) ?? "";
+    const sessionId = filename.slice(0, filename.lastIndexOf("."));
+    process.env.ONEHARNESS_UI_HISTORY_DIR = historyDir;
+    if (cliOverride) process.env.ONEHARNESS_BIN = cliOverride;
+    server = await startWebServer({
+      accessToken,
+      port: 0,
+      staticDirectory: resolve(fixtureRoot, "ui"),
+    });
+
+    const unauthenticated = await fetch(`${endpoint()}/watch`, {
+      body: JSON.stringify({ kind: "watch", sessionId }),
+      headers: { Origin: endpoint() },
+      method: "POST",
+    });
+    expect(unauthenticated.status).toBe(401);
+    const crossOrigin = await fetch(`${endpoint()}/watch`, {
+      body: JSON.stringify({ kind: "watch", sessionId }),
+      headers: { Authorization: accessHeader, Origin: "https://attacker.example" },
+      method: "POST",
+    });
+    expect(crossOrigin.status).toBe(403);
+    const wrongMethod = await fetch(`${endpoint()}/watch`, {
+      headers: { Authorization: accessHeader },
+    });
+    expect(wrongMethod.status).toBe(405);
+
+    const stream = await fetch(`${endpoint()}/watch`, {
+      body: JSON.stringify({ kind: "watch", sessionId }),
+      headers: {
+        Authorization: accessHeader,
+        "Content-Type": "application/json",
+        Origin: endpoint(),
+      },
+      method: "POST",
+    });
+    expect(stream.status).toBe(200);
+    expect(stream.headers.get("content-type")).toBe("application/x-ndjson");
+    expect(stream.headers.get("content-security-policy")).toContain("connect-src 'self'");
+    const reader = stream.body?.getReader();
+    if (!reader) throw new Error("watch response carried no body");
+    const first = await reader.read();
+    expect(JSON.parse(new TextDecoder().decode(first.value).split("\n", 1)[0] ?? "")).toMatchObject(
+      { kind: "opened", sessionId, totalTurnCount: 1 },
+    );
+    await reader.cancel();
+  }, 60_000);
+
   test("rejects cross-origin and invalid contract input", async () => {
     server = await startWebServer({
       accessToken,
