@@ -12,11 +12,17 @@ export interface ConversationUsage {
 }
 
 export interface ConversationToolEvent {
+  durationMs?: number | null | undefined;
+  finishedAt?: string | null | undefined;
   index: number;
   input?: unknown | undefined;
   kind: string;
   name?: string | null | undefined;
   output?: string | null | undefined;
+  startedAt?: string | null | undefined;
+  status?: string | null | undefined;
+  timingSource?: string | null | undefined;
+  toolCallId?: string | null | undefined;
 }
 
 export interface ConversationTurn {

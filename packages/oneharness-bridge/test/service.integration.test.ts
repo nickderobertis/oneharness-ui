@@ -261,6 +261,79 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     ).toBe("Bash");
   });
 
+  test("carries tool timing, status, and call identity from the history record", async () => {
+    const report = await seed(
+      "tool-timing",
+      [
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"pwd"}}]}}',
+        '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"/repo"}]}}',
+        '{"type":"result","result":"Repository inspected","session_id":"native-timing"}',
+      ].join("\n"),
+    );
+    const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
+    const sessionId = basename(historyFile, extname(historyFile));
+
+    const untimed = await service().handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
+    const untimedTools =
+      untimed.ok && untimed.data.kind === "get"
+        ? untimed.data.conversation.turns[0]?.tools
+        : undefined;
+    // The deterministic provider reports no tool boundary, so every timing field stays null
+    // rather than being zero-filled, and the call identity still pairs call with result.
+    expect(untimedTools?.[0]).toMatchObject({
+      durationMs: null,
+      finishedAt: null,
+      index: 0,
+      kind: "tool_call",
+      name: "Bash",
+      startedAt: null,
+      status: null,
+      toolCallId: "t1",
+    });
+    expect(untimedTools?.[1]).toMatchObject({
+      index: 1,
+      kind: "tool_result",
+      output: "/repo",
+      toolCallId: "t1",
+    });
+    expect(Object.hasOwn(untimedTools?.[0] ?? {}, "timingSource")).toBe(false);
+
+    // A measured run records interval bounds on the call event; the history contract accepts them
+    // only alongside the run's own started/model/tool split, so the whole record is restated.
+    const [call, ...rest] = record.events ?? [];
+    if (!call) throw new Error("fixture history did not record a tool call");
+    const timedRecord = HistoryRecordSchema.parse({
+      ...record,
+      duration_ms: 1_300,
+      events: [
+        {
+          ...call,
+          duration_ms: 1_240,
+          finished_at: "2026-07-15T10:00:01Z",
+          started_at: "2026-07-15T10:00:00Z",
+          status: "completed",
+        },
+        ...rest,
+      ],
+      finished_at: "2026-07-15T10:00:02Z",
+      model_ms: 60,
+      started_at: "2026-07-15T09:59:59Z",
+      tool_ms: 1_240,
+    });
+    await writeFile(historyFile, `${historyLines(timedRecord)}\n`);
+    const timed = await service().handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
+    const timedTools =
+      timed.ok && timed.data.kind === "get" ? timed.data.conversation.turns[0]?.tools : undefined;
+    expect(timedTools?.[0]).toMatchObject({
+      durationMs: 1_240,
+      finishedAt: "2026-07-15T10:00:01Z",
+      startedAt: "2026-07-15T10:00:00Z",
+      status: "completed",
+      toolCallId: "t1",
+    });
+    expect(timedTools?.[1]?.durationMs).toBeNull();
+  });
+
   test("continues a labeled session and returns the new history selection", async () => {
     const report = await seed(
       "continue-me",

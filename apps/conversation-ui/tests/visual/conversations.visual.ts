@@ -111,6 +111,17 @@ for (const viewport of viewports) {
         await capture(page, "conversation-formatted-json", viewport.name, theme);
       });
 
+      test("tool invocation detail", async ({ page }) => {
+        await page.goto("/");
+        await page.getByRole("button", { name: /tool-session/i }).click();
+        await expect(page.getByText('{"command":"pwd"}', { exact: true })).toBeVisible();
+        await capture(page, "conversation-tool-collapsed", viewport.name, theme);
+
+        await page.getByRole("button", { name: "Bash tool details" }).click();
+        await expect(page.getByLabel("Bash tool output")).toBeVisible();
+        await capture(page, "conversation-tool-expanded", viewport.name, theme);
+      });
+
       test("continued session", async ({ page }) => {
         await page.goto("/");
         await page

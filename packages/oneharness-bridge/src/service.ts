@@ -20,6 +20,7 @@ import {
   type ConversationCursor,
   type ConversationPage,
   type ConversationSummary,
+  type ConversationToolEvent,
   type ConversationTurn,
 } from "@oneharness-ui/ipc-contract";
 import { z } from "zod";
@@ -138,6 +139,42 @@ function optionalNumber(value: number | null | undefined): number | null | undef
   return value;
 }
 
+type HistoryActionEvent = NonNullable<HistoryRecord["events"]>[number];
+
+// History events keep an open shape, so each reported timing value is checked before it crosses
+// the contract: an unreported measurement stays absent and a null one stays null.
+function reportedNumber(value: unknown): number | null | undefined {
+  if (value === null) return null;
+  return typeof value === "number" ? value : undefined;
+}
+
+function reportedText(value: unknown): string | null | undefined {
+  if (value === null) return null;
+  return typeof value === "string" ? value : undefined;
+}
+
+function toToolEvent(event: HistoryActionEvent): ConversationToolEvent {
+  const durationMs = reportedNumber(event.duration_ms);
+  const finishedAt = reportedText(event.finished_at);
+  const startedAt = reportedText(event.started_at);
+  const status = reportedText(event.status);
+  const timingSource = reportedText(event.timing_source);
+  const toolCallId = reportedText(event.tool_call_id);
+  return {
+    ...(durationMs !== undefined ? { durationMs } : {}),
+    ...(finishedAt !== undefined ? { finishedAt } : {}),
+    index: event.index,
+    ...(event.input !== undefined ? { input: event.input } : {}),
+    kind: event.kind,
+    ...(event.name !== undefined ? { name: event.name } : {}),
+    ...(event.output !== undefined ? { output: event.output } : {}),
+    ...(startedAt !== undefined ? { startedAt } : {}),
+    ...(status !== undefined ? { status } : {}),
+    ...(timingSource !== undefined ? { timingSource } : {}),
+    ...(toolCallId !== undefined ? { toolCallId } : {}),
+  };
+}
+
 function reasoningFrom(record: HistoryRecord): string | null {
   const source = record as HistoryRecord & Record<string, unknown>;
   for (const key of ["reasoning", "thinking"] as const) {
@@ -161,13 +198,7 @@ function toTurn(record: HistoryRecord, index: number): ConversationTurn {
     reasoning: reasoningFrom(record),
     status: stateFor(record.status),
     timestamp: record.timestamp,
-    tools: (record.events ?? []).map((event) => ({
-      index: event.index,
-      ...(event.input !== undefined ? { input: event.input } : {}),
-      kind: event.kind,
-      ...(event.name !== undefined ? { name: event.name } : {}),
-      ...(event.output !== undefined ? { output: event.output } : {}),
-    })),
+    tools: (record.events ?? []).map(toToolEvent),
     unknown,
     usage: {
       ...(record.usage.cache_read_tokens !== undefined
