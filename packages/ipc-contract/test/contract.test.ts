@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   bridgeRequestSchema,
   bridgeResponseSchema,
+  conversationTurnSchema,
   toolEventSchema,
   usageSchema,
 } from "../src/index.ts";
@@ -101,6 +102,35 @@ describe("IPC validation", () => {
     expect(
       toolEventSchema.parse({ index: 5, kind: "tool_call", status: "deferred" }),
     ).toMatchObject({ status: "deferred" });
+  });
+
+  test("carries optional turn and phase timing without inventing absent measurements", () => {
+    const measured = conversationTurnSchema.parse({
+      assistant: "done",
+      durationMs: 2_000,
+      failureKind: null,
+      finishedAt: "2026-07-15T10:00:02Z",
+      harness: "codex",
+      id: "turn-1",
+      model: "gpt",
+      modelMs: 1_500,
+      reasoning: null,
+      startedAt: "2026-07-15T10:00:00Z",
+      status: "completed",
+      timeToFirstTokenMs: 200,
+      timestamp: "2026-07-15T10:00:02Z",
+      toolMs: 500,
+      tools: [],
+      unknown: {},
+      usage: {},
+      user: "work",
+    });
+    expect(measured).toMatchObject({ durationMs: 2_000, modelMs: 1_500, toolMs: 500 });
+    const { durationMs: _duration, modelMs: _model, toolMs: _tool, ...unmeasured } = measured;
+    const parsed = conversationTurnSchema.parse(unmeasured);
+    expect(Object.hasOwn(parsed, "durationMs")).toBe(false);
+    expect(Object.hasOwn(parsed, "modelMs")).toBe(false);
+    expect(conversationTurnSchema.safeParse({ ...measured, durationMs: -1 }).success).toBe(false);
   });
 
   test("keeps unknown upstream structured values as data", () => {

@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
-import { ReplyForm, StatusBadge, TooltipProvider } from "@oneharness/ui";
+import { ReplyForm, StatusBadge, Timeline, TooltipProvider } from "@oneharness/ui";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -13,6 +13,18 @@ describe("@oneharness/ui public package", () => {
     render(
       <TooltipProvider>
         <StatusBadge state="running" />
+        <Timeline
+          items={[
+            {
+              duration: 20,
+              id: "public-span",
+              kind: "work",
+              label: "Public span",
+              payload: {},
+              start: 0,
+            },
+          ]}
+        />
         <ReplyForm
           error={null}
           onSubmit={async (message) => {
@@ -24,6 +36,7 @@ describe("@oneharness/ui public package", () => {
     );
 
     expect(screen.getByText("Running")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Public span, span" })).toBeTruthy();
     await user.type(screen.getByLabelText("Continue this session"), "Continue from here");
     await user.click(screen.getByRole("button", { name: "Send reply" }));
     expect(submitted).toBe("Continue from here");
@@ -80,6 +93,7 @@ import {
   ConversationList,
   ConversationView,
   StatusBadge,
+  Timeline,
   TooltipProvider,
   TurnCard,
 } from "@oneharness/ui";
@@ -135,6 +149,9 @@ const html = renderToStaticMarkup(
       "div",
       null,
       createElement(StatusBadge, { state: "running" }),
+      createElement(Timeline, {
+        items: [{ duration: 20, id: "consumer-span", kind: "work", label: "Consumer span", payload: {}, start: 0 }],
+      }),
       createElement(ConversationList, {
         conversations: [summary],
         hasMore: false,
@@ -168,6 +185,7 @@ const html = renderToStaticMarkup(
 );
 for (const text of [
   "Running",
+  "Consumer span",
   "Public session",
   "Transcript session",
   "Consumer question",

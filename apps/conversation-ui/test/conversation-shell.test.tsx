@@ -273,6 +273,9 @@ describe("ConversationShell", () => {
     });
     await user.click(item);
     expect(await screen.findByRole("heading", { name: "inspect-login" })).toBeTruthy();
+    expect(screen.getByRole("region", { name: "Conversation timeline" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "claude-code turn, point event" })).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Bash, span" })).toBeTruthy();
     expect(screen.getByText("The redirect drops the return path.")).toBeTruthy();
     expect(screen.getByRole("note", { name: "Failure: rate_limit" })).toBeTruthy();
     expect(screen.getByText("0")).toBeTruthy();

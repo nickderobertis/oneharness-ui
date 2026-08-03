@@ -244,6 +244,8 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       selected.ok && selected.data.kind === "get" && selected.data.conversation.turns[0],
     ).toMatchObject({
       assistant: "Repository inspected",
+      durationMs: record.duration_ms,
+      finishedAt: record.finished_at,
       reasoning: null,
       status: "completed",
       unknown: {},

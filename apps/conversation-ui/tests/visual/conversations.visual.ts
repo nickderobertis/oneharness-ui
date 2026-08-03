@@ -114,6 +114,7 @@ for (const viewport of viewports) {
       test("tool invocation detail", async ({ page }) => {
         await page.goto("/");
         await page.getByRole("button", { name: /tool-session/i }).click();
+        await expect(page.getByRole("region", { name: "Conversation timeline" })).toBeVisible();
         await expect(page.getByText('{"command":"pwd"}', { exact: true })).toBeVisible();
         // Selecting the oldest session scrolls the history list by however far the click needed,
         // so pin it to a stable extreme before capturing.
