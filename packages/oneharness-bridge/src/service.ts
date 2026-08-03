@@ -193,26 +193,6 @@ function reasoningFrom(record: HistoryRecord): string | null {
   return null;
 }
 
-/// The shared shape every history event variant exposes, so one mapper covers
-/// both a closing record's events and a streamed event line.
-type NormalizedHistoryEvent = {
-  index: number;
-  input?: unknown;
-  kind: string;
-  name?: string | null | undefined;
-  output?: string | null | undefined;
-};
-
-function toToolEvent(event: NormalizedHistoryEvent): ConversationTurn["tools"][number] {
-  return {
-    index: event.index,
-    ...(event.input !== undefined ? { input: event.input } : {}),
-    kind: event.kind,
-    ...(event.name !== undefined ? { name: event.name } : {}),
-    ...(event.output !== undefined ? { output: event.output } : {}),
-  };
-}
-
 function toTurn(record: HistoryRecord, index: number): ConversationTurn {
   const unknown = Object.fromEntries(
     Object.entries(record).filter(([key]) => !knownRecordKeys.has(key)),
@@ -226,7 +206,7 @@ function toTurn(record: HistoryRecord, index: number): ConversationTurn {
     reasoning: reasoningFrom(record),
     status: stateFor(record.status),
     timestamp: record.timestamp,
-    tools: (record.events ?? []).map(toToolEvent),
+    tools: (record.events ?? []).map(toHistoryActionToolEvent),
     unknown,
     usage: {
       ...(record.usage.cache_read_tokens !== undefined

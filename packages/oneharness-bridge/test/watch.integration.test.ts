@@ -202,7 +202,18 @@ describe("BridgeService watch across the SDK history stream boundary", () => {
     // the run that is still open waits for the record that names its session.
     expect(frames[1]).toEqual({
       kind: "tool-event",
-      tool: { index: 1, input: { command: "pwd" }, kind: "tool_call", name: "Bash", output: null },
+      tool: {
+        durationMs: null,
+        finishedAt: null,
+        index: 1,
+        input: { command: "pwd" },
+        kind: "tool_call",
+        name: "Bash",
+        output: null,
+        startedAt: null,
+        status: null,
+        toolCallId: "t-late",
+      },
       turnId: "live-session-0",
     });
     expect(frames[2]).toMatchObject({
@@ -218,7 +229,18 @@ describe("BridgeService watch across the SDK history stream boundary", () => {
     });
     expect(frames[3]).toEqual({
       kind: "tool-event",
-      tool: { index: 1, input: null, kind: "tool_result", name: null, output: "3 matches" },
+      tool: {
+        durationMs: null,
+        finishedAt: null,
+        index: 1,
+        input: null,
+        kind: "tool_result",
+        name: null,
+        output: "3 matches",
+        startedAt: null,
+        status: null,
+        toolCallId: "t-open",
+      },
       turnId: "live-session-1",
     });
     // A different session's record and its buffered events never reach this

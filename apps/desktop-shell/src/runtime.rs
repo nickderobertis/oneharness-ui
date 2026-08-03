@@ -593,8 +593,11 @@ mod tests {
     }
 
     #[test]
-    fn constructs_the_scoped_runtime() {
+    fn constructs_the_scoped_runtime() -> Result<(), Box<dyn std::error::Error>> {
         let _builder = super::builder();
+        let mut context = packaged_context();
+        super::configure_context(&mut context)?;
+        Ok(())
     }
 
     #[test]
