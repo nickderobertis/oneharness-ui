@@ -7,10 +7,9 @@ import {
   bridgeResponseSchema,
   bridgeRoutes,
   bridgeStreamFrameSchema,
+  maxBridgeStreamFrameBytes,
 } from "@oneharness-ui/ipc-contract";
 import { z } from "zod";
-
-const MAX_STREAM_LINE_CHARACTERS = 512 * 1024;
 
 declare global {
   interface Window {
@@ -140,7 +139,7 @@ async function watchHttp(
         buffered = buffered.slice(newline + 1);
         newline = buffered.indexOf("\n");
       }
-      if (buffered.length > MAX_STREAM_LINE_CHARACTERS) {
+      if (new TextEncoder().encode(buffered).byteLength > maxBridgeStreamFrameBytes) {
         throw new Error("Local bridge sent an oversized live frame");
       }
     }

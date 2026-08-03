@@ -4,12 +4,14 @@ import {
   copyFileSync,
   mkdirSync,
   mkdtempSync,
+  readFileSync,
   realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
+import { maxBridgeStreamFrameBytes } from "@oneharness-ui/ipc-contract";
 import {
   createDesktopCapabilities,
   validateDesktopAppBinary,
@@ -18,6 +20,13 @@ import {
 } from "./capabilities.ts";
 
 describe("native desktop capabilities", () => {
+  test("keeps the native stream frame ceiling aligned with the IPC contract", () => {
+    const runtime = readFileSync(new URL("../../src/runtime.rs", import.meta.url), "utf8");
+    const nativeLimit = runtime.match(/const MAX_FRAME_BYTES: usize = (\d+) \* (\d+);/u);
+    expect(nativeLimit).not.toBeNull();
+    expect(Number(nativeLimit?.[1]) * Number(nativeLimit?.[2])).toBe(maxBridgeStreamFrameBytes);
+  });
+
   test("gives EdgeDriver and Tauri one isolated WebView2 profile on Windows", () => {
     expect(
       createDesktopCapabilities(

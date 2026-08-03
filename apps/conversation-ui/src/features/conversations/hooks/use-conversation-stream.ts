@@ -68,14 +68,23 @@ export function useConversationStream(sessionId: string | null, enabled: boolean
     if (!sessionId || !enabled) return;
     const controller = new AbortController();
     const key = conversationKeys.detail(sessionId);
+    const fallBackToPolling = (cause: Error) => {
+      setLive(false);
+      setError(cause);
+      // Do not make the reader wait for the first polling interval after a
+      // dropped stream. Refresh once immediately, then let the interval keep
+      // it current while live updates remain unavailable.
+      void client.invalidateQueries({ exact: true, queryKey: key });
+    };
     const apply = (frame: BridgeStreamFrame) => {
       if (frame.kind === "opened") {
         setLive(true);
         return;
       }
       if (frame.kind === "error") {
-        setLive(false);
-        setError(new BridgeError(frame.error.message, frame.error.code, frame.error.detail));
+        fallBackToPolling(
+          new BridgeError(frame.error.message, frame.error.code, frame.error.detail),
+        );
         return;
       }
       if (frame.kind === "turn") {
@@ -90,7 +99,7 @@ export function useConversationStream(sessionId: string | null, enabled: boolean
     watchBridge({ kind: "watch", sessionId }, apply, controller.signal)
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
-        setError(cause instanceof Error ? cause : new Error(String(cause)));
+        fallBackToPolling(cause instanceof Error ? cause : new Error(String(cause)));
       })
       .finally(() => {
         if (!controller.signal.aborted) setLive(false);

@@ -33,7 +33,10 @@ const provider =
     repository,
     `target/oneharness-ui-test/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
   );
-const recordedWatch = resolve(import.meta.dir, "fixtures/recorded-history-watch.ts");
+const recordedWatch = resolve(
+  import.meta.dir,
+  `fixtures/recorded-history-watch.${process.platform === "win32" ? "cmd" : "ts"}`,
+);
 const recording = resolve(import.meta.dir, "fixtures/history-watch-stream-v1.ndjson");
 const TEST_AUTHORIZATION = "oneharness-ui-watch-authorization-value";
 const EXISTING_RUN = "019fc600-0000-7000-8000-000000000001";
@@ -141,6 +144,8 @@ function cursorId(index: number): string {
 }
 
 describe("BridgeService watch across the SDK history stream boundary", () => {
+  // llmlint: ignore-block[e2e_not_mocked] The requested deterministic provider seam is a recorded NDJSON CLI executable: completed history cannot produce a still-live stream, while all non-watch commands still cross the packaged CLI and real SDK.
+  // llmlint: ignore-block[tests_mirror_real_usage] These service-boundary cases isolate run-to-session joining and cancellation; server.integration.test.ts and web-server.integration.test.ts separately drive the same stream through the public HTTP /watch route.
   test("opens at the session's last record and replays turns after a resume cursor", async () => {
     await seedSession("resumable-session", [
       { history_id: cursorId(0), prompt: "First question" },
@@ -296,4 +301,6 @@ describe("BridgeService watch across the SDK history stream boundary", () => {
 
     expect(frames).toMatchObject([{ kind: "opened" }]);
   }, 60_000);
+  // llmlint: ignore-end[e2e_not_mocked]
+  // llmlint: ignore-end[tests_mirror_real_usage]
 });

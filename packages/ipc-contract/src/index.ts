@@ -7,6 +7,10 @@ export const bridgeRoutes = {
   watch: "/watch",
 } as const;
 
+// Both local transports reject a single frame above this ceiling before
+// parsing it. The desktop drift test keeps the Rust receiver aligned.
+export const maxBridgeStreamFrameBytes = 512 * 1024;
+
 export const sessionIdSchema = z
   .string()
   .trim()

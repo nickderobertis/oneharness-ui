@@ -6,6 +6,9 @@
   "scripts": {
     "test:e2e": "wdio run wdio.conf.ts"
   },
+  "dependencies": {
+    "@oneharness-ui/ipc-contract": "workspace:*"
+  },
   "devDependencies": {
     "@oneharness/sdk": "0.5.5",
     "@types/bun": "^1.3.14",

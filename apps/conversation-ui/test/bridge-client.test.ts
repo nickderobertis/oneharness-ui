@@ -159,7 +159,9 @@ describe("validated bridge client", () => {
         new AbortController().signal,
       ),
     ).rejects.toThrow();
-    body = [`{"kind":"opened","cursor":null,"sessionId":"${"x".repeat(600_000)}"`];
+    // This stays below the old UTF-16 character ceiling but exceeds the
+    // transport's shared UTF-8 byte ceiling.
+    body = [`{"kind":"opened","cursor":null,"sessionId":"${"😀".repeat(140_000)}"`];
     await expect(
       watchBridge(
         { kind: "watch", sessionId: "session-1" },
