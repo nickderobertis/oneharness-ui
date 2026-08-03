@@ -1,8 +1,40 @@
 import { afterEach, describe, expect, mock, test } from "bun:test";
-import { dataOrThrow, invokeBridge } from "../src/features/conversations/api/bridge-client";
+import type { BridgeStreamFrame } from "@oneharness-ui/ipc-contract";
+import {
+  dataOrThrow,
+  invokeBridge,
+  watchBridge,
+} from "../src/features/conversations/api/bridge-client";
+
+const OPENED_FRAME = { cursor: null, kind: "opened", sessionId: "session-1", totalTurnCount: 0 };
+
+function ndjsonResponse(lines: readonly string[]): Response {
+  const encoder = new TextEncoder();
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      start(controller) {
+        for (const line of lines) controller.enqueue(encoder.encode(line));
+        controller.close();
+      },
+    }),
+    { headers: { "Content-Type": "application/x-ndjson" }, status: 200 },
+  );
+}
 
 const originalBridgeUrl = process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_URL;
 const originalFetch = globalThis.fetch;
+
+class TestChannel<T> {
+  onmessage: (message: T) => void = () => {};
+}
+
+let tauriInvoke: (command: string, args: Record<string, unknown>) => Promise<unknown> = async () =>
+  undefined;
+mock.module("@tauri-apps/api/core", () => ({
+  Channel: TestChannel,
+  invoke: async (command: string, args: Record<string, unknown>) =>
+    await tauriInvoke(command, args),
+}));
 
 afterEach(() => {
   delete window.__TAURI_INTERNALS__;
@@ -11,6 +43,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
+// llmlint: ignore-block[suppressions_justified] These boundary tests intentionally install structurally minimal fetch and Tauri Channel doubles; each assertion narrows only the dynamic host API value needed to drive the public client transport.
 describe("validated bridge client", () => {
   test("rejects non-success HTTP and bridge error responses", async () => {
     process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_URL = "http://127.0.0.1:4317";
@@ -71,16 +104,14 @@ describe("validated bridge client", () => {
   test("uses only the fixed Tauri bridge command", async () => {
     let failure: Error | undefined;
     const invocations: Array<{ args: unknown; command: string }> = [];
-    mock.module("@tauri-apps/api/core", () => ({
-      invoke: async (command: string, args: unknown) => {
-        invocations.push({ args, command });
-        if (failure) throw failure;
-        return {
-          data: { conversations: [], kind: "list", nextCursor: null, totalCount: 0 },
-          ok: true,
-        };
-      },
-    }));
+    tauriInvoke = async (command, args) => {
+      invocations.push({ args, command });
+      if (failure) throw failure;
+      return {
+        data: { conversations: [], kind: "list", nextCursor: null, totalCount: 0 },
+        ok: true,
+      };
+    };
     window.__TAURI_INTERNALS__ = {};
     const response = await invokeBridge({ kind: "list" });
     expect(response).toEqual({
@@ -93,4 +124,137 @@ describe("validated bridge client", () => {
     failure = new Error("bridge unavailable");
     await expect(invokeBridge({ kind: "list" })).rejects.toThrow("bridge unavailable");
   });
+
+  test("streams and revalidates watch frames over HTTP", async () => {
+    process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_URL = "http://127.0.0.1:4317";
+    const requests: string[] = [];
+    let body: readonly string[] = [
+      `${JSON.stringify(OPENED_FRAME)}\n`,
+      `${JSON.stringify({
+        kind: "tool-event",
+        tool: { index: 0, kind: "tool_call", name: "Bash" },
+        turnId: "session-1-0",
+      })}\n`,
+    ];
+    globalThis.fetch = (async (input: string | URL | Request) => {
+      requests.push(String(input));
+      if (String(input).endsWith("/session")) return new Response(null, { status: 204 });
+      return ndjsonResponse(body);
+    }) as typeof fetch;
+
+    const frames: BridgeStreamFrame[] = [];
+    await watchBridge(
+      { kind: "watch", sessionId: "session-1" },
+      (frame) => frames.push(frame),
+      new AbortController().signal,
+    );
+    expect(requests).toEqual(["http://127.0.0.1:4317/session", "http://127.0.0.1:4317/watch"]);
+    expect(frames.map(({ kind }) => kind)).toEqual(["opened", "tool-event"]);
+
+    // Anything the sidecar could not have produced stops the stream.
+    body = ['{"kind":"future-frame"}\n'];
+    await expect(
+      watchBridge(
+        { kind: "watch", sessionId: "session-1" },
+        () => {},
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow();
+    // This stays below the old UTF-16 character ceiling but exceeds the
+    // transport's shared UTF-8 byte ceiling.
+    body = [`{"kind":"opened","cursor":null,"sessionId":"${"😀".repeat(140_000)}"}\n`];
+    await expect(
+      watchBridge(
+        { kind: "watch", sessionId: "session-1" },
+        () => {},
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("oversized live frame");
+  }, 30_000);
+
+  test("refuses a non-watch request and an unavailable stream", async () => {
+    process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_URL = "http://127.0.0.1:4317";
+    await expect(
+      watchBridge({ kind: "list" }, () => {}, new AbortController().signal),
+    ).rejects.toThrow("Only a watch request");
+
+    globalThis.fetch = (async (input: string | URL | Request) =>
+      String(input).endsWith("/session")
+        ? new Response(null, { status: 204 })
+        : new Response(null, { status: 503 })) as typeof fetch;
+    await expect(
+      watchBridge(
+        { kind: "watch", sessionId: "session-1" },
+        () => {},
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("HTTP 503");
+
+    globalThis.fetch = (async () => new Response(null, { status: 503 })) as typeof fetch;
+    await expect(
+      watchBridge(
+        { kind: "watch", sessionId: "session-1" },
+        () => {},
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("session returned HTTP 503");
+  });
+
+  test("surfaces a stream the local bridge drops mid-conversation", async () => {
+    delete process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_URL;
+    const encoder = new TextEncoder();
+    globalThis.fetch = (async () =>
+      new Response(
+        new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoder.encode(`${JSON.stringify(OPENED_FRAME)}\n`));
+            controller.error(new Error("the local bridge closed the live stream"));
+          },
+        }),
+        { headers: { "Content-Type": "application/x-ndjson" }, status: 200 },
+      )) as typeof fetch;
+
+    await expect(
+      watchBridge(
+        { kind: "watch", sessionId: "session-1" },
+        () => {},
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow("closed the live stream");
+  });
+
+  test("opens and closes the Tauri watch through its own channel", async () => {
+    const invocations: Array<{ args: Record<string, unknown>; command: string }> = [];
+    tauriInvoke = async (command, args) => {
+      invocations.push({ args, command });
+      if (command !== "start_bridge_watch") return undefined;
+      (args.channel as TestChannel<unknown>).onmessage(OPENED_FRAME);
+      return 4;
+    };
+    window.__TAURI_INTERNALS__ = {};
+    const controller = new AbortController();
+    const frames: BridgeStreamFrame[] = [];
+    const watching = watchBridge(
+      { kind: "watch", sessionId: "session-1" },
+      (frame) => frames.push(frame),
+      controller.signal,
+    );
+    await Promise.resolve();
+    controller.abort();
+    await watching;
+
+    expect(frames).toEqual([OPENED_FRAME as BridgeStreamFrame]);
+    expect(invocations.map(({ command }) => command)).toEqual([
+      "start_bridge_watch",
+      "stop_bridge_watch",
+    ]);
+    expect(invocations[0]?.args.request).toEqual({ kind: "watch", sessionId: "session-1" });
+    expect(invocations[1]?.args).toEqual({ id: 4 });
+
+    tauriInvoke = async () => "unvalidated-watch-id";
+    await expect(
+      watchBridge({ kind: "watch", sessionId: "session-1" }, () => {}, AbortSignal.abort()),
+    ).rejects.toThrow();
+  });
 });
+// llmlint: ignore-end[suppressions_justified]

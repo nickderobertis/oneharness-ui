@@ -63,7 +63,7 @@ export function useConversationList() {
   };
 }
 
-export function useConversation(sessionId: string | null) {
+export function useConversation(sessionId: string | null, refetchInterval: number | false = false) {
   return useInfiniteQuery<
     ConversationPage,
     Error,
@@ -72,6 +72,7 @@ export function useConversation(sessionId: string | null) {
     number
   >({
     enabled: Boolean(sessionId),
+    refetchInterval,
     getNextPageParam: (page) => page.nextTurnOffset ?? undefined,
     initialPageParam: 0,
     queryFn: async ({ pageParam }) => {

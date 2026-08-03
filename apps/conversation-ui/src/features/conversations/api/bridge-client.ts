@@ -1,9 +1,14 @@
 import {
   type BridgeRequest,
   type BridgeResponse,
+  type BridgeStreamFrame,
+  type BridgeWatchRequest,
   bridgeRequestSchema,
   bridgeResponseSchema,
   bridgeRoutes,
+  bridgeStreamFrameSchema,
+  maxBridgeStreamFrameBytes,
+  tauriBridgeCommands,
 } from "@oneharness-ui/ipc-contract";
 import { z } from "zod";
 
@@ -39,6 +44,7 @@ const httpConfigurationSchema = z.object({
       return url.origin;
     }),
 });
+const watchIdSchema = z.number().int().positive().max(0xffff_ffff);
 
 function httpConfiguration(): z.infer<typeof httpConfigurationSchema> {
   return httpConfigurationSchema.parse({
@@ -48,7 +54,7 @@ function httpConfiguration(): z.infer<typeof httpConfigurationSchema> {
 
 async function invokeTauri(request: BridgeRequest): Promise<unknown> {
   const { invoke } = await import("@tauri-apps/api/core");
-  return await invoke("invoke_bridge", { request });
+  return await invoke(tauriBridgeCommands.invoke, { request });
 }
 
 async function invokeHttp(request: BridgeRequest): Promise<unknown> {
@@ -78,6 +84,90 @@ export async function invokeBridge(input: unknown): Promise<BridgeResponse> {
       ? await invokeTauri(request)
       : await invokeHttp(request);
   return bridgeResponseSchema.parse(value);
+}
+
+async function watchTauri(
+  request: BridgeWatchRequest,
+  onFrame: (frame: BridgeStreamFrame) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const { Channel, invoke } = await import("@tauri-apps/api/core");
+  const channel = new Channel<unknown>();
+  channel.onmessage = (frame) => onFrame(bridgeStreamFrameSchema.parse(frame));
+  const id = watchIdSchema.parse(
+    await invoke<unknown>(tauriBridgeCommands.startWatch, { channel, request }),
+  );
+  await new Promise<void>((resolve) => {
+    if (signal.aborted) {
+      resolve();
+      return;
+    }
+    signal.addEventListener("abort", () => resolve(), { once: true });
+  });
+  await invoke(tauriBridgeCommands.stopWatch, { id });
+}
+
+async function watchHttp(
+  request: BridgeWatchRequest,
+  onFrame: (frame: BridgeStreamFrame) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const configuration = httpConfiguration();
+  if (configuration.url !== "") {
+    const session = await fetch(`${configuration.url}${bridgeRoutes.session}`, {
+      credentials: "include",
+      signal,
+    });
+    if (!session.ok) throw new Error(`Local bridge session returned HTTP ${session.status}`);
+  }
+  const response = await fetch(`${configuration.url}${bridgeRoutes.watch}`, {
+    body: JSON.stringify(request),
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    method: "POST",
+    signal,
+  });
+  if (!response.ok) throw new Error(`Local bridge returned HTTP ${response.status}`);
+  if (!response.body) throw new Error("Local bridge returned no live stream");
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffered = "";
+  try {
+    while (!signal.aborted) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      buffered += decoder.decode(chunk.value, { stream: true });
+      let newline = buffered.indexOf("\n");
+      while (newline >= 0) {
+        const line = buffered.slice(0, newline);
+        if (new TextEncoder().encode(line).byteLength > maxBridgeStreamFrameBytes) {
+          throw new Error("Local bridge sent an oversized live frame");
+        }
+        onFrame(bridgeStreamFrameSchema.parse(JSON.parse(line)));
+        buffered = buffered.slice(newline + 1);
+        newline = buffered.indexOf("\n");
+      }
+      if (new TextEncoder().encode(buffered).byteLength > maxBridgeStreamFrameBytes) {
+        throw new Error("Local bridge sent an oversized live frame");
+      }
+    }
+  } finally {
+    await reader.cancel().catch(() => {});
+  }
+}
+
+/// Follow one conversation until `signal` aborts. Every frame is revalidated
+/// against the contract here, whichever transport delivered it.
+export async function watchBridge(
+  input: unknown,
+  onFrame: (frame: BridgeStreamFrame) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const request = bridgeRequestSchema.parse(input);
+  if (request.kind !== "watch") throw new Error("Only a watch request can open a live stream");
+  return typeof window !== "undefined" && window.__TAURI_INTERNALS__
+    ? await watchTauri(request, onFrame, signal)
+    : await watchHttp(request, onFrame, signal);
 }
 
 export class BridgeError extends Error {
