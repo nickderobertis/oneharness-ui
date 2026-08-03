@@ -59,12 +59,20 @@ export const usageSchema = z.object({
   outputTokens: z.number().nonnegative().nullable().optional(),
 });
 
+// Timing, status, and correlation stay optional and nullable: an upstream harness that never
+// measured a boundary reports nothing, and the contract must not invent a zero for it.
 export const toolEventSchema = z.object({
+  durationMs: z.number().nonnegative().nullable().optional(),
+  finishedAt: z.string().max(128).nullable().optional(),
   index: z.number().int().nonnegative(),
   input: z.unknown().optional(),
   kind: z.string().min(1),
   name: z.string().nullable().optional(),
   output: z.string().nullable().optional(),
+  startedAt: z.string().max(128).nullable().optional(),
+  status: z.string().max(64).nullable().optional(),
+  timingSource: z.string().max(64).nullable().optional(),
+  toolCallId: z.string().max(256).nullable().optional(),
 });
 
 export const conversationTurnSchema = z.object({
@@ -200,4 +208,5 @@ export type Conversation = z.infer<typeof conversationSchema>;
 export type ConversationCursor = z.infer<typeof conversationCursorSchema>;
 export type ConversationPage = z.infer<typeof conversationPageSchema>;
 export type ConversationSummary = z.infer<typeof conversationSummarySchema>;
+export type ConversationToolEvent = z.infer<typeof toolEventSchema>;
 export type ConversationTurn = z.infer<typeof conversationTurnSchema>;

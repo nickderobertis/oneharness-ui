@@ -43,8 +43,11 @@ test("lists, selects, restores a deep link, and expands tool details", async ({ 
   await expect(page.getByRole("heading", { name: "tool-session" })).toBeFocused();
   // The selected conversation follows oneharness's live history stream.
   await expect(page.getByRole("status", { name: "Live updates on" })).toBeVisible();
-  await page.getByText("Bash", { exact: true }).click();
-  await expect(page.getByText(/"command": "pwd"/)).toBeVisible();
+  await expect(page.getByText('{"command":"pwd"}', { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Bash tool details" }).click();
+  await expect(page.getByLabel("Bash tool input")).toContainText('"command": "pwd"');
+  await expect(page.getByLabel("Bash tool input").getByText('"command"')).toHaveClass("hljs-attr");
+  await expect(page.getByLabel("Bash tool output")).toHaveText("/workspace/product");
   await expect(page.getByText("0", { exact: true })).toBeVisible();
 
   const deepLink = page.url();

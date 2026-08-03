@@ -1,5 +1,6 @@
 import Markdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
+import { JsonCode, parseJsonText } from "./json-code";
 
 const allowedMarkdownElements = [
   "a",
@@ -30,22 +31,10 @@ const allowedMarkdownElements = [
   "ul",
 ] as const;
 
-function parseJson(source: string): unknown | undefined {
-  try {
-    return JSON.parse(source);
-  } catch {
-    return undefined;
-  }
-}
-
 export function MessageResponse({ children, label }: { children: string; label: string }) {
-  const json = parseJson(children);
+  const json = parseJsonText(children);
   if (json !== undefined) {
-    return (
-      <pre aria-label={`${label} formatted JSON`} className="message-json whitespace-pre">
-        <code>{JSON.stringify(json, null, 2)}</code>
-      </pre>
-    );
+    return <JsonCode className="whitespace-pre" label={`${label} formatted JSON`} value={json} />;
   }
   return (
     <div className="message-markdown">

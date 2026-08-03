@@ -91,7 +91,26 @@ const conversation: Conversation = {
       reasoning: null,
       status: "completed",
       timestamp: "2026-07-15T10:00:00Z",
-      tools: [{ index: 0, input: { command: "rg redirect" }, kind: "tool_call", name: "Bash" }],
+      tools: [
+        {
+          durationMs: 1_240,
+          finishedAt: "2026-07-15T10:00:01Z",
+          index: 0,
+          input: { command: "rg redirect" },
+          kind: "tool_call",
+          name: "Bash",
+          startedAt: "2026-07-15T10:00:00Z",
+          status: "completed",
+          timingSource: "provider_measured",
+          toolCallId: "call-1",
+        },
+        {
+          index: 1,
+          kind: "tool_result",
+          output: "src/auth/redirect.ts:12",
+          toolCallId: "call-1",
+        },
+      ],
       unknown: {},
       usage: { inputTokens: 0, outputTokens: null },
       user: "Inspect the login issue",
@@ -288,8 +307,16 @@ describe("ConversationShell", () => {
     expect(screen.getByText("0")).toBeTruthy();
     expect(screen.getByText("Not reported")).toBeTruthy();
 
+    expect(screen.getByText('{"command":"rg redirect"}')).toBeTruthy();
+    expect(screen.getByText("1.2 s")).toBeTruthy();
+    expect(screen.getByText("completed")).toBeTruthy();
+
     await user.click(screen.getByLabelText("Bash tool details"));
-    expect(screen.getByText(/rg redirect/)).toBeTruthy();
+    const toolInput = screen.getByLabelText("Bash tool input");
+    expect(toolInput.textContent).toContain('"command": "rg redirect"');
+    expect(toolInput.querySelector(".hljs-attr")?.textContent).toBe('"command"');
+    expect(screen.getByLabelText("Bash tool output").textContent).toBe("src/auth/redirect.ts:12");
+    expect(screen.getByLabelText("Bash tool timing").textContent).toContain("provider_measured");
     await user.click(screen.getByText("Reasoning"));
     expect(screen.getByText("Checked the redirect boundary before answering.")).toBeTruthy();
     await user.click(screen.getByText("Additional upstream data"));
@@ -705,7 +732,7 @@ describe("ConversationShell", () => {
     const grep = await screen.findByLabelText("Grep tool details");
     expect(screen.getAllByLabelText("Grep tool details")).toHaveLength(1);
     await userEvent.setup().click(grep);
-    expect(screen.getByText(/return_to/)).toBeTruthy();
+    expect(screen.getByLabelText("Grep tool input").textContent).toContain('"return_to"');
     expect(screen.getAllByRole("article").map((item) => item.getAttribute("aria-label"))).toEqual([
       "Turn session-1-0 from claude-code",
       "Turn session-1-1 from claude-code",

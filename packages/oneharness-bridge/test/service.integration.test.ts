@@ -261,6 +261,44 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     ).toBe("Bash");
   });
 
+  test("preserves call identity while keeping unavailable timing absent", async () => {
+    const report = await seed(
+      "tool-timing",
+      [
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"pwd"}}]}}',
+        '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"/repo"}]}}',
+        '{"type":"result","result":"Repository inspected","session_id":"native-timing"}',
+      ].join("\n"),
+    );
+    const { historyFile } = await readFixtureHistoryRecord(historyDir, report);
+    const sessionId = basename(historyFile, extname(historyFile));
+
+    const untimed = await service().handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
+    const untimedTools =
+      untimed.ok && untimed.data.kind === "get"
+        ? untimed.data.conversation.turns[0]?.tools
+        : undefined;
+    // The deterministic provider reports no tool boundary, so every timing field stays null
+    // rather than being zero-filled, and the call identity still pairs call with result.
+    expect(untimedTools?.[0]).toMatchObject({
+      durationMs: null,
+      finishedAt: null,
+      index: 0,
+      kind: "tool_call",
+      name: "Bash",
+      startedAt: null,
+      status: null,
+      toolCallId: "t1",
+    });
+    expect(untimedTools?.[1]).toMatchObject({
+      index: 1,
+      kind: "tool_result",
+      output: "/repo",
+      toolCallId: "t1",
+    });
+    expect(Object.hasOwn(untimedTools?.[0] ?? {}, "timingSource")).toBe(false);
+  });
+
   test("continues a labeled session and returns the new history selection", async () => {
     const report = await seed(
       "continue-me",
