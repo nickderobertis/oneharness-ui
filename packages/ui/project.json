@@ -11,7 +11,8 @@
       "outputs": ["{projectRoot}/dist"]
     },
     "test": {
-      "command": "bun run --cwd packages/ui build && bun test --preload ./apps/conversation-ui/test/setup.ts --coverage --coverage-dir coverage/ui packages/ui/test",
+      "command": "bun test --preload ./apps/conversation-ui/test/setup.ts --coverage --coverage-dir coverage/ui packages/ui/test",
+      "dependsOn": ["build"],
       "outputs": ["{workspaceRoot}/coverage/ui"]
     },
     "lint": {
