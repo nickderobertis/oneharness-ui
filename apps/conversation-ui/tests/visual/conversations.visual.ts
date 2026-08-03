@@ -115,6 +115,12 @@ for (const viewport of viewports) {
         await page.goto("/");
         await page.getByRole("button", { name: /tool-session/i }).click();
         await expect(page.getByText('{"command":"pwd"}', { exact: true })).toBeVisible();
+        // Selecting the oldest session scrolls the history list by however far the click needed,
+        // so pin it to a stable extreme before capturing.
+        const history = page.getByRole("navigation", { name: "Conversation history" });
+        if (await history.isVisible()) {
+          await history.evaluate((node) => node.scrollTo(0, node.scrollHeight));
+        }
         await capture(page, "conversation-tool-collapsed", viewport.name, theme);
 
         await page.getByRole("button", { name: "Bash tool details" }).click();
