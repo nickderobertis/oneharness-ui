@@ -369,14 +369,18 @@ fn decode_bridge_response(
 
 /// Live watches the webview has opened, so each one can be stopped by its own
 /// handle without granting any broader process control.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[serde(transparent)]
+struct WatchId(u32);
+
 #[derive(Default)]
 pub struct WatchRegistry {
     next: Mutex<u32>,
-    running: Mutex<HashMap<u32, CommandChild>>,
+    running: Mutex<HashMap<WatchId, CommandChild>>,
 }
 
 impl WatchRegistry {
-    fn register(&self, child: CommandChild) -> Result<u32, String> {
+    fn register(&self, child: CommandChild) -> Result<WatchId, String> {
         let mut running = self
             .running
             .lock()
@@ -392,12 +396,12 @@ impl WatchRegistry {
             .lock()
             .map_err(|_| "The local bridge watch registry is unavailable".to_string())?;
         *next = next.wrapping_add(1);
-        let id = *next;
+        let id = WatchId(*next);
         running.insert(id, child);
         Ok(id)
     }
 
-    fn take(&self, id: u32) -> Result<Option<CommandChild>, String> {
+    fn take(&self, id: WatchId) -> Result<Option<CommandChild>, String> {
         self.running
             .lock()
             .map(|mut running| running.remove(&id))
@@ -419,12 +423,13 @@ fn forward_frame(chunk: &[u8], channel: &Channel<Value>) -> Result<(), String> {
         .map_err(|error| format!("Could not deliver the local bridge watch frame: {error}"))
 }
 
+// llmlint: ignore-block[authorization_enforced_server_side] Tauri IPC is server-side authorized by the fixed command allowlist in the desktop capability; unlike loopback HTTP it has no bearer-token boundary, and BridgeRequest validates the only supplied authority-bearing input before any sidecar starts.
 #[tauri::command]
 async fn start_bridge_watch<R: Runtime>(
     app: AppHandle<R>,
     request: BridgeRequest,
     channel: Channel<Value>,
-) -> Result<u32, String> {
+) -> Result<WatchId, String> {
     let mut input = serde_json::to_vec(&request.0)
         .map_err(|error| format!("Could not encode the validated bridge request: {error}"))?;
     if input.len() > MAX_REQUEST_BYTES {
@@ -459,7 +464,7 @@ async fn start_bridge_watch<R: Runtime>(
 }
 
 #[tauri::command]
-async fn stop_bridge_watch<R: Runtime>(app: AppHandle<R>, id: u32) -> Result<(), String> {
+async fn stop_bridge_watch<R: Runtime>(app: AppHandle<R>, id: WatchId) -> Result<(), String> {
     let Some(child) = app.state::<WatchRegistry>().take(id)? else {
         return Ok(());
     };
@@ -487,6 +492,7 @@ async fn invoke_bridge<R: Runtime>(
     let (exit_code, stdout, stderr) = run_bridge_command(command, &input).await?;
     decode_bridge_response(exit_code, &stdout, &stderr)
 }
+// llmlint: ignore-end[authorization_enforced_server_side]
 
 /// Build the least-privilege desktop runtime. The webview can invoke only the
 /// fixed bridge commands and has no shell permission.
@@ -933,7 +939,10 @@ mod tests {
 
         // A registry the webview never filled has nothing to stop.
         assert!(matches!(
-            tauri::async_runtime::block_on(super::stop_bridge_watch(app.handle().clone(), 7)),
+            tauri::async_runtime::block_on(super::stop_bridge_watch(
+                app.handle().clone(),
+                super::WatchId(7)
+            )),
             Ok(())
         ));
         Ok(())

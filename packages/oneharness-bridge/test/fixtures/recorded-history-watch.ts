@@ -8,6 +8,7 @@ import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { isAbsolute } from "node:path";
+import { HistoryStreamEnvelopeSchema } from "@oneharness/sdk";
 
 const MAX_RECORDING_BYTES = 1024 * 1024;
 
@@ -41,19 +42,21 @@ function replay(argv: readonly string[]): number {
   if (Buffer.byteLength(recording) > MAX_RECORDING_BYTES) {
     throw new Error("the recorded history watch stream exceeds the fixture limit");
   }
-  const lines = recording
+  const envelopes = recording
     .split("\n")
     .map((line) => line.trim())
-    .filter((line) => line.length > 0);
+    .filter((line) => line.length > 0)
+    .map((line) => HistoryStreamEnvelopeSchema.parse(JSON.parse(line)));
   const cursor = resumeCursor(argv);
   // oneharness resumes strictly after the named record, so the replay drops
   // every line up to and including it.
-  const resumed = lines.findIndex(
-    (line) =>
-      (JSON.parse(line) as { record?: { history_id?: string } }).record?.history_id === cursor,
+  const resumed = envelopes.findIndex(
+    (envelope) => envelope.type === "record" && envelope.record.history_id === cursor,
   );
-  for (const line of cursor !== undefined && resumed >= 0 ? lines.slice(resumed + 1) : lines) {
-    process.stdout.write(`${line}\n`);
+  for (const envelope of cursor !== undefined && resumed >= 0
+    ? envelopes.slice(resumed + 1)
+    : envelopes) {
+    process.stdout.write(`${JSON.stringify(envelope)}\n`);
   }
   const stderr = process.env.ONEHARNESS_UI_TEST_WATCH_STDERR ?? "";
   if (stderr) process.stderr.write(stderr);

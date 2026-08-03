@@ -43,6 +43,7 @@ afterEach(() => {
   globalThis.fetch = originalFetch;
 });
 
+// llmlint: ignore-block[suppressions_justified] These boundary tests intentionally install structurally minimal fetch and Tauri Channel doubles; each assertion narrows only the dynamic host API value needed to drive the public client transport.
 describe("validated bridge client", () => {
   test("rejects non-success HTTP and bridge error responses", async () => {
     process.env.NEXT_PUBLIC_ONEHARNESS_BRIDGE_URL = "http://127.0.0.1:4317";
@@ -161,7 +162,7 @@ describe("validated bridge client", () => {
     ).rejects.toThrow();
     // This stays below the old UTF-16 character ceiling but exceeds the
     // transport's shared UTF-8 byte ceiling.
-    body = [`{"kind":"opened","cursor":null,"sessionId":"${"😀".repeat(140_000)}"`];
+    body = [`{"kind":"opened","cursor":null,"sessionId":"${"😀".repeat(140_000)}"}\n`];
     await expect(
       watchBridge(
         { kind: "watch", sessionId: "session-1" },
@@ -251,3 +252,4 @@ describe("validated bridge client", () => {
     expect(invocations[1]?.args).toEqual({ id: 4 });
   });
 });
+// llmlint: ignore-end[suppressions_justified]

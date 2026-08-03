@@ -10,6 +10,8 @@ import { startWebServer } from "../src/server.ts";
 const repository = resolve(import.meta.dir, "../../..");
 const cliOverride = process.env.ONEHARNESS_UI_TEST_CLI_BIN;
 const providerOverride = process.env.ONEHARNESS_UI_TEST_PROVIDER_BIN;
+// `as const` preserves the two allowed environment names while the common
+// validation loop pairs each one with its independently typed override.
 for (const [name, value] of [
   ["ONEHARNESS_UI_TEST_CLI_BIN", cliOverride],
   ["ONEHARNESS_UI_TEST_PROVIDER_BIN", providerOverride],

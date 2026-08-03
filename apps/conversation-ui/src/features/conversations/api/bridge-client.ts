@@ -135,7 +135,11 @@ async function watchHttp(
       buffered += decoder.decode(chunk.value, { stream: true });
       let newline = buffered.indexOf("\n");
       while (newline >= 0) {
-        onFrame(bridgeStreamFrameSchema.parse(JSON.parse(buffered.slice(0, newline))));
+        const line = buffered.slice(0, newline);
+        if (new TextEncoder().encode(line).byteLength > maxBridgeStreamFrameBytes) {
+          throw new Error("Local bridge sent an oversized live frame");
+        }
+        onFrame(bridgeStreamFrameSchema.parse(JSON.parse(line)));
         buffered = buffered.slice(newline + 1);
         newline = buffered.indexOf("\n");
       }
