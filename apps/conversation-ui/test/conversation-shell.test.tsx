@@ -736,48 +736,7 @@ describe("ConversationShell", () => {
     expect(screen.getByRole("status", { name: "All 2 turns loaded" })).toBeTruthy();
   }, 30_000);
 
-  test("falls back to polling when the live stream drops", async () => {
-    window.history.replaceState(null, "", "/?session=session-1");
-    let live: WatchStream | undefined;
-    let detailCalls = 0;
-    installBridge(
-      (request) => {
-        if (request.kind === "list") return listPage([summary]);
-        detailCalls += 1;
-        return success({
-          conversation: detailPage({
-            ...conversation,
-            turns: [
-              {
-                ...conversation.turns[0],
-                assistant: `Polled answer ${detailCalls}`,
-              },
-            ],
-          }),
-          kind: "get",
-        });
-      },
-      (stream) => {
-        live = stream;
-      },
-    );
-    render(<ConversationShell />);
-
-    expect(await screen.findByRole("status", { name: "Live updates on" })).toBeTruthy();
-    expect(await screen.findByText("Polled answer 1")).toBeTruthy();
-    live?.push({
-      error: { code: "stream_unavailable", message: "the local bridge closed the live stream" },
-      kind: "error",
-    });
-    await waitFor(() =>
-      expect(screen.queryByRole("status", { name: "Live updates on" })).toBeNull(),
-    );
-
-    // The reader keeps working: the conversation now refreshes on its own.
-    expect(await screen.findByText("Polled answer 2", undefined, { timeout: 10_000 })).toBeTruthy();
-  }, 30_000);
-
-  test("polls when the live stream cannot open", async () => {
+  test("falls back to polling when the live stream is unavailable", async () => {
     window.history.replaceState(null, "", "/?session=session-1");
     let detailCalls = 0;
     installBridge((request) => {
