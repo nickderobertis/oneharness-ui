@@ -1,6 +1,9 @@
+use std::collections::HashMap;
+use std::sync::Mutex;
+
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use tauri::{AppHandle, Runtime};
+use tauri::{AppHandle, Manager, Runtime, async_runtime::Receiver, ipc::Channel};
 use tauri_plugin_shell::{
     ShellExt,
     process::{Command, CommandChild, CommandEvent},
@@ -8,6 +11,8 @@ use tauri_plugin_shell::{
 
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
 const MAX_RESPONSE_BYTES: usize = 4 * 1024 * 1024;
+const MAX_FRAME_BYTES: usize = 512 * 1024;
+const MAX_OPEN_WATCHES: usize = 8;
 const BRIDGE_SIDECAR: &str = "oneharness-ui-bridge";
 #[cfg(any(windows, test))]
 const FIXTURE_ROOT_PREFIX: &str = "oneharness-ui-desktop-e2e-";
@@ -296,18 +301,27 @@ fn stop_after_error(child: CommandChild, primary: String) -> String {
     sanitized_cleanup_result(primary, child.kill())
 }
 
-async fn run_bridge_command(
+/// Start the bridge and hand it its one request line. Both the unary and the
+/// streaming command open the sidecar exactly this way.
+fn spawn_bridge(
     command: Command,
     input: &[u8],
-) -> Result<(Option<i32>, Vec<u8>, Vec<u8>), String> {
-    let (mut events, mut child) = command
-        .set_raw_out(true)
+) -> Result<(Receiver<CommandEvent>, CommandChild), String> {
+    let (events, mut child) = command
         .spawn()
         .map_err(|error| format!("Could not start the bundled local bridge: {error}"))?;
     if let Err(error) = child.write(input) {
         let primary = format!("Could not send the request to the local bridge: {error}");
         return Err(stop_after_error(child, primary));
     }
+    Ok((events, child))
+}
+
+async fn run_bridge_command(
+    command: Command,
+    input: &[u8],
+) -> Result<(Option<i32>, Vec<u8>, Vec<u8>), String> {
+    let (mut events, child) = spawn_bridge(command.set_raw_out(true), input)?;
 
     let mut child = Some(child);
     let mut stdout = Vec::new();
@@ -353,6 +367,107 @@ fn decode_bridge_response(
         .map_err(|error| format!("Local bridge returned malformed JSON: {error}"))
 }
 
+/// Live watches the webview has opened, so each one can be stopped by its own
+/// handle without granting any broader process control.
+#[derive(Default)]
+pub struct WatchRegistry {
+    next: Mutex<u32>,
+    running: Mutex<HashMap<u32, CommandChild>>,
+}
+
+impl WatchRegistry {
+    fn register(&self, child: CommandChild) -> Result<u32, String> {
+        let mut running = self
+            .running
+            .lock()
+            .map_err(|_| "The local bridge watch registry is unavailable".to_string())?;
+        if running.len() >= MAX_OPEN_WATCHES {
+            return Err(stop_after_error(
+                child,
+                "Too many local bridge watches are already open".to_string(),
+            ));
+        }
+        let mut next = self
+            .next
+            .lock()
+            .map_err(|_| "The local bridge watch registry is unavailable".to_string())?;
+        *next = next.wrapping_add(1);
+        let id = *next;
+        running.insert(id, child);
+        Ok(id)
+    }
+
+    fn take(&self, id: u32) -> Result<Option<CommandChild>, String> {
+        self.running
+            .lock()
+            .map(|mut running| running.remove(&id))
+            .map_err(|_| "The local bridge watch registry is unavailable".to_string())
+    }
+}
+
+/// Forward each newline-delimited frame the sidecar writes. Rust never inspects
+/// the frame beyond its JSON shape; the webview revalidates it against the
+/// contract before use.
+fn forward_frame(chunk: &[u8], channel: &Channel<Value>) -> Result<(), String> {
+    if chunk.len() > MAX_FRAME_BYTES {
+        return Err("Local bridge watch frame exceeded 512 KiB".to_string());
+    }
+    let frame: Value = serde_json::from_slice(chunk)
+        .map_err(|error| format!("Local bridge watch returned malformed JSON: {error}"))?;
+    channel
+        .send(frame)
+        .map_err(|error| format!("Could not deliver the local bridge watch frame: {error}"))
+}
+
+#[tauri::command]
+async fn start_bridge_watch<R: Runtime>(
+    app: AppHandle<R>,
+    request: BridgeRequest,
+    channel: Channel<Value>,
+) -> Result<u32, String> {
+    let mut input = serde_json::to_vec(&request.0)
+        .map_err(|error| format!("Could not encode the validated bridge request: {error}"))?;
+    if input.len() > MAX_REQUEST_BYTES {
+        return Err("Local bridge request exceeded 64 KiB".to_string());
+    }
+    input.push(b'\n');
+
+    let command = app
+        .shell()
+        .sidecar(BRIDGE_SIDECAR)
+        .map_err(|error| format!("Could not resolve the bundled local bridge: {error}"))?;
+    let (mut events, child) = spawn_bridge(command, &input)?;
+    let id = app.state::<WatchRegistry>().register(child)?;
+
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        while let Some(event) = events.recv().await {
+            let outcome = match event {
+                CommandEvent::Stdout(chunk) => forward_frame(&chunk, &channel),
+                CommandEvent::Terminated(_) => break,
+                _ => Ok(()),
+            };
+            if outcome.is_err() {
+                break;
+            }
+        }
+        if let Ok(Some(child)) = handle.state::<WatchRegistry>().take(id) {
+            let _ = child.kill();
+        }
+    });
+    Ok(id)
+}
+
+#[tauri::command]
+async fn stop_bridge_watch<R: Runtime>(app: AppHandle<R>, id: u32) -> Result<(), String> {
+    let Some(child) = app.state::<WatchRegistry>().take(id)? else {
+        return Ok(());
+    };
+    child
+        .kill()
+        .map_err(|_| "The local bridge watch could not be stopped".to_string())
+}
+
 #[tauri::command]
 async fn invoke_bridge<R: Runtime>(
     app: AppHandle<R>,
@@ -373,12 +488,17 @@ async fn invoke_bridge<R: Runtime>(
     decode_bridge_response(exit_code, &stdout, &stderr)
 }
 
-/// Build the least-privilege desktop runtime. The webview can invoke one fixed
-/// Rust command and has no shell permission.
+/// Build the least-privilege desktop runtime. The webview can invoke only the
+/// fixed bridge commands and has no shell permission.
 pub fn builder() -> tauri::Builder<tauri::Wry> {
     tauri::Builder::default()
         .plugin(tauri_plugin_shell::init())
-        .invoke_handler(tauri::generate_handler![invoke_bridge])
+        .manage(WatchRegistry::default())
+        .invoke_handler(tauri::generate_handler![
+            invoke_bridge,
+            start_bridge_watch,
+            stop_bridge_watch
+        ])
 }
 
 #[cfg(test)]
@@ -386,6 +506,7 @@ mod tests {
     use std::path::{Path, PathBuf};
 
     use serde_json::json;
+    use tauri::Manager;
     use tauri::{
         WebviewWindowBuilder,
         ipc::{CallbackFn, InvokeBody},
@@ -741,6 +862,126 @@ mod tests {
         assert_eq!(response["ok"], false);
         assert_eq!(response["error"]["code"], "INVALID_REQUEST");
         Ok(())
+    }
+
+    #[test]
+    fn streams_watch_frames_from_the_real_bridge_until_it_is_stopped()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let sidecar = packaged_bridge_path()?;
+        require_packaged_bridge(&sidecar)?;
+        let app = tauri::test::mock_builder()
+            .plugin(tauri_plugin_shell::init())
+            .manage(super::WatchRegistry::default())
+            .build(mock_context(noop_assets()))?;
+        let frames = std::sync::Arc::new(std::sync::Mutex::new(Vec::<serde_json::Value>::new()));
+        let collected = std::sync::Arc::clone(&frames);
+        let channel = tauri::ipc::Channel::new(move |body| {
+            if let tauri::ipc::InvokeResponseBody::Json(text) = body
+                && let Ok(frame) = serde_json::from_str(&text)
+            {
+                collected
+                    .lock()
+                    .expect("frame collector was poisoned")
+                    .push(frame);
+            }
+            Ok(())
+        });
+
+        // A session no reader can resolve still proves the whole transport: the
+        // sidecar streams one contract frame per line into the channel.
+        let id = tauri::async_runtime::block_on(super::start_bridge_watch(
+            app.handle().clone(),
+            super::BridgeRequest(
+                json!({ "kind": "watch", "sessionId": "oneharness-ui-watch-that-does-not-exist" }),
+            ),
+            channel,
+        ))?;
+        for _ in 0..200 {
+            if !frames
+                .lock()
+                .expect("frame collector was poisoned")
+                .is_empty()
+            {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(50));
+        }
+        let delivered = frames.lock().expect("frame collector was poisoned").clone();
+        assert_eq!(delivered.len(), 1, "{delivered:?}");
+        assert_eq!(delivered[0]["kind"], "error", "{delivered:?}");
+
+        // Stopping is idempotent, so a view that unmounts twice never errors.
+        tauri::async_runtime::block_on(super::stop_bridge_watch(app.handle().clone(), id))?;
+        tauri::async_runtime::block_on(super::stop_bridge_watch(app.handle().clone(), id))?;
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_oversized_watch_requests_and_bounds_open_watches()
+    -> Result<(), Box<dyn std::error::Error>> {
+        let app = tauri::test::mock_builder()
+            .plugin(tauri_plugin_shell::init())
+            .manage(super::WatchRegistry::default())
+            .build(mock_context(noop_assets()))?;
+        let error = tauri::async_runtime::block_on(super::start_bridge_watch(
+            app.handle().clone(),
+            super::BridgeRequest(json!({ "message": "x".repeat(super::MAX_REQUEST_BYTES) })),
+            tauri::ipc::Channel::new(|_| Ok(())),
+        ))
+        .expect_err("oversized watch request was accepted");
+        assert!(error.contains("64 KiB"));
+
+        // A registry the webview never filled has nothing to stop.
+        assert!(matches!(
+            tauri::async_runtime::block_on(super::stop_bridge_watch(app.handle().clone(), 7)),
+            Ok(())
+        ));
+        Ok(())
+    }
+
+    #[test]
+    fn bounds_open_watches_and_stops_each_one_by_handle() -> Result<(), Box<dyn std::error::Error>>
+    {
+        let app = tauri::test::mock_builder()
+            .plugin(tauri_plugin_shell::init())
+            .manage(super::WatchRegistry::default())
+            .build(mock_context(noop_assets()))?;
+        let registry = app.state::<super::WatchRegistry>();
+        let long_running = || app.shell().command("sh").args(["-c", "sleep 30"]).spawn();
+
+        let mut opened = Vec::new();
+        for _ in 0..super::MAX_OPEN_WATCHES {
+            let (_events, child) = long_running()?;
+            opened.push(registry.register(child)?);
+        }
+        let (_events, extra) = long_running()?;
+        let refused = registry
+            .register(extra)
+            .expect_err("an unbounded number of watches was accepted");
+        assert!(
+            refused.contains("Too many local bridge watches"),
+            "{refused}"
+        );
+
+        for id in opened {
+            tauri::async_runtime::block_on(super::stop_bridge_watch(app.handle().clone(), id))?;
+        }
+        let (_events, reopened) = long_running()?;
+        assert!(registry.register(reopened).is_ok());
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_watch_frames_that_are_oversized_or_malformed() {
+        let channel = tauri::ipc::Channel::<serde_json::Value>::new(|_| Ok(()));
+        let oversized = vec![b'x'; super::MAX_FRAME_BYTES + 1];
+        assert!(
+            matches!(super::forward_frame(&oversized, &channel), Err(message) if message.contains("512 KiB")),
+        );
+        assert!(
+            matches!(super::forward_frame(b"not-json", &channel), Err(message) if message.contains("malformed JSON")),
+        );
+        assert!(super::forward_frame(br#"{"kind":"opened"}"#, &channel).is_ok());
     }
 
     #[test]

@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 import { randomBytes, randomUUID } from "node:crypto";
 import { resolve } from "node:path";
-import { bridgeResponseSchema } from "@oneharness-ui/ipc-contract";
+import { bridgeRequestSchema, bridgeResponseSchema } from "@oneharness-ui/ipc-contract";
 import { readEnvironment } from "./environment.ts";
 import { startServer, startWebServer, WEB_DEFAULT_PORT, webHostnameSchema } from "./server.ts";
 import { BridgeService } from "./service.ts";
@@ -68,6 +68,14 @@ async function main(): Promise<void> {
     value = JSON.parse(input);
   } catch {
     value = undefined;
+  }
+  // A watch keeps the process alive, writing one contract frame per line until
+  // the host stops it; every other request answers with a single line.
+  if (bridgeRequestSchema.safeParse(value).data?.kind === "watch") {
+    for await (const frame of service.watch(value, authorization)) {
+      process.stdout.write(`${JSON.stringify(frame)}\n`);
+    }
+    return;
   }
   process.stdout.write(
     `${JSON.stringify(bridgeResponseSchema.parse(await service.handle(value, authorization)))}\n`,
