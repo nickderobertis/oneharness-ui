@@ -120,9 +120,38 @@ const conversation: Conversation = {
 
 type Handler = (request: Record<string, unknown>) => unknown | Promise<unknown>;
 
-function installBridge(handler: Handler) {
+/// A live watch the test drives frame by frame, exactly as the sidecar's
+/// newline-delimited stream would.
+type WatchStream = {
+  push: (frame: unknown) => void;
+};
+
+const OPENED_FRAME = { cursor: null, kind: "opened", sessionId: "session-1", totalTurnCount: 1 };
+
+function installBridge(handler: Handler, onWatch?: (stream: WatchStream) => void) {
+  // The host fetch API accepts several input/body representations; this test
+  // double narrows the known JSON POST used by ConversationShell after routing
+  // its separately shaped session and watch requests.
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
     if (String(input).endsWith("/session")) return new Response(null, { status: 204 });
+    if (String(input).endsWith("/watch")) {
+      const encoder = new TextEncoder();
+      let sink: ReadableStreamDefaultController<Uint8Array> | undefined;
+      const body = new ReadableStream<Uint8Array>({
+        start(controller) {
+          sink = controller;
+        },
+      });
+      const stream: WatchStream = {
+        push: (frame) => sink?.enqueue(encoder.encode(`${JSON.stringify(frame)}\n`)),
+      };
+      stream.push(OPENED_FRAME);
+      onWatch?.(stream);
+      return new Response(body, {
+        headers: { "Content-Type": "application/x-ndjson" },
+        status: 200,
+      });
+    }
     const request = JSON.parse(String(init?.body)) as Record<string, unknown>;
     return Response.json(await handler(request));
   }) as typeof fetch;
@@ -653,6 +682,122 @@ describe("ConversationShell", () => {
     expect(await screen.findByRole("note")).toBeTruthy();
     expect(screen.queryByRole("textbox", { name: "Continue this session" })).toBeNull();
   });
+
+  test("gains streamed turns and tool events without a refresh", async () => {
+    window.history.replaceState(null, "", "/?session=session-1");
+    let live: WatchStream | undefined;
+    installBridge(
+      (request) =>
+        request.kind === "list"
+          ? listPage([summary])
+          : success({ conversation: detailPage(conversation), kind: "get" }),
+      (stream) => {
+        live = stream;
+      },
+    );
+    render(<ConversationShell />);
+
+    expect(await screen.findByText("The redirect drops the return path.")).toBeTruthy();
+    expect(await screen.findByRole("status", { name: "Live updates on" })).toBeTruthy();
+    expect(screen.getAllByRole("article")).toHaveLength(1);
+
+    live?.push({
+      cursor: "019fc600-0000-7000-8000-000000000002",
+      kind: "turn",
+      turn: {
+        assistant: "The retry now preserves the path.",
+        failureKind: null,
+        harness: "claude-code",
+        id: "session-1-1",
+        model: null,
+        reasoning: null,
+        status: "completed",
+        timestamp: "2026-07-15T10:05:00Z",
+        tools: [],
+        unknown: {},
+        usage: {},
+        user: "Fix it",
+      },
+    });
+    expect(await screen.findByText("The retry now preserves the path.")).toBeTruthy();
+    expect(await screen.findByRole("status", { name: "All 2 turns loaded" })).toBeTruthy();
+
+    // The in-progress turn keeps growing as its tool activity arrives.
+    const toolEvent = {
+      kind: "tool-event",
+      tool: { index: 0, input: { pattern: "return_to" }, kind: "tool_call", name: "Grep" },
+      turnId: "session-1-1",
+    };
+    live?.push(toolEvent);
+    // A frame the reader has already applied — after a reconnect replay, say —
+    // must not double the tool.
+    live?.push(toolEvent);
+    const grep = await screen.findByLabelText("Grep tool details");
+    expect(screen.getAllByLabelText("Grep tool details")).toHaveLength(1);
+    await userEvent.setup().click(grep);
+    expect(screen.getByLabelText("Grep tool input").textContent).toContain('"return_to"');
+    expect(screen.getAllByRole("article").map((item) => item.getAttribute("aria-label"))).toEqual([
+      "Turn session-1-0 from claude-code",
+      "Turn session-1-1 from claude-code",
+    ]);
+
+    // The closing record supersedes the turn already on screen instead of
+    // duplicating it.
+    live?.push({
+      cursor: "019fc600-0000-7000-8000-000000000002",
+      kind: "turn",
+      turn: {
+        assistant: "The retry now preserves the path, verified.",
+        failureKind: null,
+        harness: "claude-code",
+        id: "session-1-1",
+        model: null,
+        reasoning: null,
+        status: "completed",
+        timestamp: "2026-07-15T10:05:00Z",
+        tools: [{ index: 0, input: { pattern: "return_to" }, kind: "tool_call", name: "Grep" }],
+        unknown: {},
+        usage: {},
+        user: "Fix it",
+      },
+    });
+    expect(await screen.findByText("The retry now preserves the path, verified.")).toBeTruthy();
+    expect(screen.getAllByRole("article")).toHaveLength(2);
+    expect(screen.getByRole("status", { name: "All 2 turns loaded" })).toBeTruthy();
+  }, 30_000);
+
+  test("falls back to polling when the live stream is unavailable", async () => {
+    window.history.replaceState(null, "", "/?session=session-1");
+    let detailCalls = 0;
+    installBridge((request) => {
+      if (request.kind === "list") return listPage([summary]);
+      detailCalls += 1;
+      return success({
+        conversation: detailPage({
+          ...conversation,
+          turns: [
+            {
+              ...conversation.turns[0],
+              assistant: `Unavailable-stream answer ${detailCalls}`,
+            },
+          ],
+        }),
+        kind: "get",
+      });
+    });
+    const invokeFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).endsWith("/watch")) throw new Error("the live stream is unavailable");
+      return await invokeFetch(input, init);
+    }) as typeof fetch;
+
+    render(<ConversationShell />);
+
+    expect(
+      await screen.findByText("Unavailable-stream answer 2", undefined, { timeout: 10_000 }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("status", { name: "Live updates on" })).toBeNull();
+  }, 30_000);
 
   test("surfaces malformed bridge responses at the UI boundary", async () => {
     installBridge(() => ({ ok: true, data: { kind: "list", conversations: "bad" } }));

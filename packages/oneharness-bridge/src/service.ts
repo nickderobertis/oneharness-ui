@@ -3,11 +3,13 @@ import { timingSafeEqual } from "node:crypto";
 import { createRequire } from "node:module";
 import { basename, extname } from "node:path";
 import {
+  type ActionEvent,
   HistoryListSchema,
   type HistoryRecord,
   HistoryRecordSchema,
   HistoryRecordsSchema,
   type HistorySessionSummary,
+  HistoryStreamEnvelopeSchema,
   OneHarness,
   RunOptionsSchema,
   RunReportSchema,
@@ -15,8 +17,10 @@ import {
 import {
   type BridgeRequest,
   type BridgeResponse,
+  type BridgeStreamFrame,
   bridgeRequestSchema,
   bridgeResponseSchema,
+  bridgeStreamFrameSchema,
   type ConversationCursor,
   type ConversationPage,
   type ConversationSummary,
@@ -32,6 +36,10 @@ const CONVERSATION_LIST_PAGE_SIZE = 25;
 const CONVERSATION_TURN_PAGE_SIZE = 20;
 export const MAX_CONVERSATION_PAGE_BYTES = 512 * 1024;
 const MAX_ERROR_DETAIL_CHARACTERS = 16_384;
+// A watched conversation only ever needs the runs oneharness has not closed
+// yet, so the unresolved-event buffer stays small and self-trimming.
+export const MAX_PENDING_WATCH_RUNS = 32;
+export const MAX_PENDING_WATCH_EVENTS = 256;
 export const authorizationSchema = z.string().min(32).max(256);
 const environmentValueSchema = z.string().max(32_768);
 const CLI_ENVIRONMENT_KEYS = [
@@ -153,7 +161,7 @@ function reportedText(value: unknown): string | null | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
-function toToolEvent(event: HistoryActionEvent): ConversationToolEvent {
+function toHistoryActionToolEvent(event: HistoryActionEvent): ConversationToolEvent {
   const durationMs = reportedNumber(event.duration_ms);
   const finishedAt = reportedText(event.finished_at);
   const startedAt = reportedText(event.started_at);
@@ -206,7 +214,7 @@ function toTurn(record: HistoryRecord, index: number): ConversationTurn {
       ? { timeToFirstTokenMs: record.time_to_first_token_ms }
       : {}),
     ...(record.tool_ms !== undefined ? { toolMs: record.tool_ms } : {}),
-    tools: (record.events ?? []).map(toToolEvent),
+    tools: (record.events ?? []).map(toHistoryActionToolEvent),
     unknown,
     usage: {
       ...(record.usage.cache_read_tokens !== undefined
@@ -349,6 +357,25 @@ function publicError(error: unknown): BridgeResponse {
   };
 }
 
+function errorFrame(error: Extract<BridgeResponse, { ok: false }>["error"]): BridgeStreamFrame {
+  return bridgeStreamFrameSchema.parse({ error, kind: "error" });
+}
+
+function bufferPendingEvent(
+  pending: Map<string, ActionEvent[]>,
+  runId: string,
+  event: ActionEvent,
+): void {
+  const buffered = pending.get(runId) ?? [];
+  if (buffered.length >= MAX_PENDING_WATCH_EVENTS) buffered.shift();
+  buffered.push(event);
+  pending.set(runId, buffered);
+  for (const oldest of pending.keys()) {
+    if (pending.size <= MAX_PENDING_WATCH_RUNS) break;
+    pending.delete(oldest);
+  }
+}
+
 export class BridgeService {
   readonly #client: OneHarness;
   readonly #expectedAuthorization: Buffer;
@@ -442,6 +469,111 @@ export class BridgeService {
     return toConversationPage(await this.#history(nextId));
   }
 
+  /// Follow one conversation as oneharness records it. History event lines
+  /// correlate by `run_id` only, so unresolved events wait in a bounded buffer
+  /// until the closing record names the session they belong to; events for a
+  /// run already known to be part of this conversation stream straight through.
+  async *watch(
+    input: unknown,
+    presentedAuthorization: unknown,
+    signal?: AbortSignal,
+  ): AsyncGenerator<BridgeStreamFrame> {
+    if (!this.isAuthorized(presentedAuthorization)) {
+      yield errorFrame({ code: "UNAUTHORIZED", message: "Local bridge authorization failed." });
+      return;
+    }
+    const parsedRequest = bridgeRequestSchema.safeParse(input);
+    if (!parsedRequest.success || parsedRequest.data.kind !== "watch") {
+      yield errorFrame({
+        code: "INVALID_REQUEST",
+        message: "The local bridge watch request is invalid.",
+      });
+      return;
+    }
+    const request = parsedRequest.data;
+    const turnIndexes = new Map<string, number>();
+    const pendingEvents = new Map<string, ActionEvent[]>();
+    let turnCount = 0;
+    let cursor = request.after;
+    try {
+      const existing = await this.#history(request.sessionId);
+      for (const [index, record] of existing.entries()) {
+        turnIndexes.set(record.history_id, index);
+      }
+      turnCount = existing.length;
+      cursor ??= existing.at(-1)?.history_id;
+      yield bridgeStreamFrameSchema.parse({
+        cursor: cursor ?? null,
+        kind: "opened",
+        sessionId: request.sessionId,
+        totalTurnCount: turnCount,
+      });
+      const envelopes = this.#client.historyWatch({
+        allProjects: true,
+        ...(cursor ? { after: cursor } : {}),
+        events: true,
+        ...(this.environment.historyDir ? { historyDir: this.environment.historyDir } : {}),
+      });
+      // Iterate by hand so closing this stream never waits on the upstream
+      // watcher's own teardown; a caller that stops reading must return at once.
+      try {
+        while (!signal?.aborted) {
+          const next = await envelopes.next();
+          if (next.done) break;
+          const envelope = HistoryStreamEnvelopeSchema.parse(next.value);
+          if (envelope.type === "event") {
+            const frame = this.#toolEventFrame(request.sessionId, envelope.line, turnIndexes);
+            if (frame) yield frame;
+            else bufferPendingEvent(pendingEvents, envelope.line.run_id, envelope.line.event);
+            continue;
+          }
+          const record = envelope.record;
+          const joined = pendingEvents.get(record.history_id) ?? [];
+          pendingEvents.delete(record.history_id);
+          if (record.session !== request.sessionId) continue;
+          const index = turnIndexes.get(record.history_id) ?? turnCount;
+          if (!turnIndexes.has(record.history_id)) {
+            turnIndexes.set(record.history_id, index);
+            turnCount += 1;
+          }
+          yield bridgeStreamFrameSchema.parse({
+            cursor: record.history_id,
+            kind: "turn",
+            turn: toTurn(
+              HistoryRecordSchema.parse({
+                ...record,
+                events: [...(record.events ?? []), ...joined],
+              }),
+              index,
+            ),
+          });
+        }
+      } finally {
+        // The upstream watcher owns its own teardown; a failure there is not
+        // the reader's to await or report.
+        void envelopes.return(undefined).catch(() => {});
+      }
+    } catch (error) {
+      if (signal?.aborted) return;
+      const response = publicError(error);
+      if (!response.ok) yield errorFrame(response.error);
+    }
+  }
+
+  #toolEventFrame(
+    sessionId: string,
+    line: { event: ActionEvent; run_id: string },
+    turnIndexes: ReadonlyMap<string, number>,
+  ): BridgeStreamFrame | undefined {
+    const index = turnIndexes.get(line.run_id);
+    if (index === undefined) return undefined;
+    return bridgeStreamFrameSchema.parse({
+      kind: "tool-event",
+      tool: toHistoryActionToolEvent(line.event),
+      turnId: `${sessionId}-${index}`,
+    });
+  }
+
   async handle(input: unknown, presentedAuthorization: unknown): Promise<BridgeResponse> {
     if (!this.isAuthorized(presentedAuthorization)) {
       return bridgeResponseSchema.parse({
@@ -453,7 +585,8 @@ export class BridgeService {
       });
     }
     const parsedRequest = bridgeRequestSchema.safeParse(input);
-    if (!parsedRequest.success) {
+    // A watch is only answerable over the newline-delimited stream transport.
+    if (!parsedRequest.success || parsedRequest.data.kind === "watch") {
       return bridgeResponseSchema.parse({
         error: {
           code: "INVALID_REQUEST",

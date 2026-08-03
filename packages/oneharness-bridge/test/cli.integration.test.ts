@@ -104,13 +104,13 @@ test("rejects unsafe web host and port configuration", async () => {
   }
 });
 
-test("defaults web mode to the documented loopback address", async () => {
+test("defaults web mode to the documented loopback host", async () => {
   const fixture = await mkdtemp(resolve(tmpdir(), "oneharness-ui-web-default-"));
+  const probe = Bun.serve({ port: 0, fetch: () => new Response() });
+  const port = probe.port;
+  await probe.stop(true);
   await mkdir(resolve(fixture, "apps/conversation-ui/out"), { recursive: true });
   await writeFile(resolve(fixture, "apps/conversation-ui/out/index.html"), "web default");
-  const availability = Bun.serve({ port: 0, fetch: () => new Response() });
-  const port = availability.port;
-  await availability.stop(true);
   const environment = { ...process.env };
   delete environment.ONEHARNESS_UI_HOST;
   environment.ONEHARNESS_UI_PORT = String(port);

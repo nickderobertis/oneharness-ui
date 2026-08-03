@@ -50,6 +50,8 @@ test("lists, selects, restores a deep link, and expands tool details", async ({ 
   await page.keyboard.press("Tab");
   await expect(timelineItem).toBeFocused();
   await expect(timeline.getByRole("tooltip")).toBeVisible();
+  // The selected conversation follows oneharness's live history stream.
+  await expect(page.getByRole("status", { name: "Live updates on" })).toBeVisible();
   await expect(page.getByText('{"command":"pwd"}', { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Bash tool details" }).click();
   await expect(page.getByLabel("Bash tool input")).toContainText('"command": "pwd"');

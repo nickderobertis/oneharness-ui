@@ -1,7 +1,11 @@
 import { randomBytes, timingSafeEqual } from "node:crypto";
 import { realpath, stat } from "node:fs/promises";
 import { extname, isAbsolute, relative, resolve, sep } from "node:path";
-import { bridgeResponseSchema, bridgeRoutes } from "@oneharness-ui/ipc-contract";
+import {
+  bridgeResponseSchema,
+  bridgeRoutes,
+  bridgeStreamFrameSchema,
+} from "@oneharness-ui/ipc-contract";
 import { z } from "zod";
 import { readEnvironment } from "./environment.ts";
 import { authorizationSchema, BridgeService } from "./service.ts";
@@ -47,6 +51,44 @@ const CONTENT_TYPES: Readonly<Record<string, string>> = {
 };
 
 class RequestTooLargeError extends Error {}
+
+/// Stream one conversation as newline-delimited contract frames. The response
+/// body ends as soon as the reader cancels, so a closed tab or a navigated-away
+/// view stops the sidecar's upstream watcher too.
+function watchResponse(
+  service: BridgeService,
+  input: unknown,
+  presentedAuthorization: string,
+  headers: Readonly<Record<string, string>>,
+  signal: AbortSignal,
+): Response {
+  const frames = service.watch(input, presentedAuthorization, signal);
+  const encoder = new TextEncoder();
+  return new Response(
+    new ReadableStream<Uint8Array>({
+      async cancel() {
+        await frames.return(undefined);
+      },
+      async pull(controller) {
+        const next = await frames.next();
+        if (next.done) {
+          controller.close();
+          return;
+        }
+        controller.enqueue(
+          encoder.encode(`${JSON.stringify(bridgeStreamFrameSchema.parse(next.value))}\n`),
+        );
+      },
+    }),
+    {
+      headers: {
+        ...headers,
+        "Cache-Control": "no-store",
+        "Content-Type": "application/x-ndjson",
+      },
+    },
+  );
+}
 
 async function readBoundedJson(request: Request): Promise<unknown> {
   const declaredLength = request.headers.get("content-length");
@@ -148,7 +190,8 @@ export function startServer(
           status: 204,
         });
       }
-      if (request.method !== "POST" || path !== "/invoke") {
+      const watching = request.method === "POST" && path === bridgeRoutes.watch;
+      if (request.method !== "POST" || (path !== bridgeRoutes.invoke && !watching)) {
         return Response.json({ error: "Not found" }, { headers, status: 404 });
       }
       if (accessControlOrigin === "null") {
@@ -168,6 +211,9 @@ export function startServer(
           return Response.json({ error: "Request too large" }, { headers, status: 413 });
         }
         return Response.json({ error: "Malformed JSON" }, { headers, status: 400 });
+      }
+      if (watching) {
+        return watchResponse(service, input, presentedAuthorization, headers, request.signal);
       }
       const response = bridgeResponseSchema.parse(
         await service.handle(input, presentedAuthorization),
@@ -282,7 +328,7 @@ export async function startWebServer({
           status: 401,
         });
       }
-      if (url.pathname === bridgeRoutes.invoke) {
+      if (url.pathname === bridgeRoutes.invoke || url.pathname === bridgeRoutes.watch) {
         if (request.method !== "POST") {
           return Response.json(
             { error: "Method not allowed" },
@@ -302,6 +348,9 @@ export async function startWebServer({
           const status = error instanceof RequestTooLargeError ? 413 : 400;
           const message = status === 413 ? "Request too large" : "Malformed JSON";
           return Response.json({ error: message }, { headers: jsonHeaders, status });
+        }
+        if (url.pathname === bridgeRoutes.watch) {
+          return watchResponse(service, input, authorization, SECURITY_HEADERS, request.signal);
         }
         const response = bridgeResponseSchema.parse(await service.handle(input, authorization));
         return Response.json(response, { headers: jsonHeaders });
