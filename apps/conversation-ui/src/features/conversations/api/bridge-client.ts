@@ -44,6 +44,7 @@ const httpConfigurationSchema = z.object({
       return url.origin;
     }),
 });
+const watchIdSchema = z.number().int().positive().max(0xffff_ffff);
 
 function httpConfiguration(): z.infer<typeof httpConfigurationSchema> {
   return httpConfigurationSchema.parse({
@@ -93,7 +94,9 @@ async function watchTauri(
   const { Channel, invoke } = await import("@tauri-apps/api/core");
   const channel = new Channel<unknown>();
   channel.onmessage = (frame) => onFrame(bridgeStreamFrameSchema.parse(frame));
-  const id = await invoke<number>(tauriBridgeCommands.startWatch, { channel, request });
+  const id = watchIdSchema.parse(
+    await invoke<unknown>(tauriBridgeCommands.startWatch, { channel, request }),
+  );
   await new Promise<void>((resolve) => {
     if (signal.aborted) {
       resolve();

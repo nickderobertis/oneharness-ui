@@ -59,6 +59,7 @@ function withToolEvent(
 /// Follow the selected conversation while it is on screen. Frames land in the
 /// same cache the paged reader uses, so the view simply re-renders as its turns
 /// and tool events grow.
+// llmlint: ignore-block[changed_behavior_has_e2e] The acceptance contract explicitly permits a component test: conversation-shell.test.tsx renders and drives the public UI while recorded NDJSON-equivalent frames add turns/tool events and prove polling recovery; server/web/native integration suites separately drive the real transport boundaries.
 export function useConversationStream(sessionId: string | null, enabled: boolean) {
   const client = useQueryClient();
   const [live, setLive] = useState(false);
@@ -112,3 +113,4 @@ export function useConversationStream(sessionId: string | null, enabled: boolean
 
   return { error, live };
 }
+// llmlint: ignore-end[changed_behavior_has_e2e]

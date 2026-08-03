@@ -250,6 +250,11 @@ describe("validated bridge client", () => {
     ]);
     expect(invocations[0]?.args.request).toEqual({ kind: "watch", sessionId: "session-1" });
     expect(invocations[1]?.args).toEqual({ id: 4 });
+
+    tauriInvoke = async () => "unvalidated-watch-id";
+    await expect(
+      watchBridge({ kind: "watch", sessionId: "session-1" }, () => {}, AbortSignal.abort()),
+    ).rejects.toThrow();
   });
 });
 // llmlint: ignore-end[suppressions_justified]
