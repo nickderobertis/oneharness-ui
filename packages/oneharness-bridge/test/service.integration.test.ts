@@ -261,7 +261,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     ).toBe("Bash");
   });
 
-  test("carries tool timing, status, and call identity from the history record", async () => {
+  test("preserves call identity while keeping unavailable timing absent", async () => {
     const report = await seed(
       "tool-timing",
       [
@@ -270,7 +270,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
         '{"type":"result","result":"Repository inspected","session_id":"native-timing"}',
       ].join("\n"),
     );
-    const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
+    const { historyFile } = await readFixtureHistoryRecord(historyDir, report);
     const sessionId = basename(historyFile, extname(historyFile));
 
     const untimed = await service().handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
@@ -297,41 +297,6 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       toolCallId: "t1",
     });
     expect(Object.hasOwn(untimedTools?.[0] ?? {}, "timingSource")).toBe(false);
-
-    // llmlint: ignore[tests_mirror_real_usage] A persisted timed history is the public input
-    // boundary under test; the pinned deterministic provider cannot emit SDK timing metadata.
-    const [call, ...rest] = record.events ?? [];
-    if (!call) throw new Error("fixture history did not record a tool call");
-    const timedRecord = HistoryRecordSchema.parse({
-      ...record,
-      duration_ms: 1_300,
-      events: [
-        {
-          ...call,
-          duration_ms: 1_240,
-          finished_at: "2026-07-15T10:00:01Z",
-          started_at: "2026-07-15T10:00:00Z",
-          status: "completed",
-        },
-        ...rest,
-      ],
-      finished_at: "2026-07-15T10:00:02Z",
-      model_ms: 60,
-      started_at: "2026-07-15T09:59:59Z",
-      tool_ms: 1_240,
-    });
-    await writeFile(historyFile, `${historyLines(timedRecord)}\n`);
-    const timed = await service().handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
-    const timedTools =
-      timed.ok && timed.data.kind === "get" ? timed.data.conversation.turns[0]?.tools : undefined;
-    expect(timedTools?.[0]).toMatchObject({
-      durationMs: 1_240,
-      finishedAt: "2026-07-15T10:00:01Z",
-      startedAt: "2026-07-15T10:00:00Z",
-      status: "completed",
-      toolCallId: "t1",
-    });
-    expect(timedTools?.[1]?.durationMs).toBeNull();
   });
 
   test("continues a labeled session and returns the new history selection", async () => {

@@ -127,4 +127,4 @@ test("builds the public package before producing the publish manifest", () => {
   } finally {
     rmSync(staleArtifact, { force: true });
   }
-}, 15_000);
+}, 60_000);

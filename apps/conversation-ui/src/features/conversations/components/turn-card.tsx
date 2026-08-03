@@ -69,12 +69,12 @@ function ToolStatus({ status }: { status: string | null }) {
 }
 
 function ToolTiming({ invocation }: { invocation: ToolInvocation }) {
-  const entries = [
+  const entries: ReadonlyArray<readonly [string, string | null]> = [
     ["Call ID", invocation.toolCallId],
     ["Started", invocation.startedAt],
     ["Finished", invocation.finishedAt],
     ["Timing", invocation.timingSource],
-  ] as const;
+  ];
   const present = entries.filter(([, value]) => value !== null);
   if (present.length === 0) return null;
   return (
@@ -161,13 +161,14 @@ function ToolInvocationBlock({ invocation }: { invocation: ToolInvocation }) {
 }
 
 function Usage({ usage }: { usage: Turn["usage"] }) {
-  const entries = [
-    ["Input", "inputTokens", usage.inputTokens],
-    ["Output", "outputTokens", usage.outputTokens],
-    ["Cache read", "cacheReadTokens", usage.cacheReadTokens],
-    ["Cache write", "cacheWriteTokens", usage.cacheWriteTokens],
-    ["Cost", "costUsd", usage.costUsd],
-  ] as const;
+  const entries: ReadonlyArray<readonly [string, keyof Turn["usage"], number | null | undefined]> =
+    [
+      ["Input", "inputTokens", usage.inputTokens],
+      ["Output", "outputTokens", usage.outputTokens],
+      ["Cache read", "cacheReadTokens", usage.cacheReadTokens],
+      ["Cache write", "cacheWriteTokens", usage.cacheWriteTokens],
+      ["Cost", "costUsd", usage.costUsd],
+    ];
   const present = entries.filter(([, key]) => Object.hasOwn(usage, key));
   if (present.length === 0) return null;
   return (

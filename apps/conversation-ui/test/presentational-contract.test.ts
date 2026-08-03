@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import type { ConversationToolEvent as IpcConversationToolEvent } from "@oneharness-ui/ipc-contract";
 import {
   conversationLabelMaxLength,
   conversationLabelsMaxCount,
@@ -7,6 +8,11 @@ import {
 } from "@oneharness-ui/ipc-contract";
 import { conversationLabelLimits } from "@/features/conversations";
 import type { ConversationToolEvent } from "../src/features/conversations/presentational-types";
+
+type ExactType<Left, Right> =
+  (<Value>() => Value extends Left ? 1 : 2) extends <Value>() => Value extends Right ? 1 : 2
+    ? true
+    : false;
 
 describe("presentational contract drift gates", () => {
   test("keeps label editor limits aligned with the validated bridge contract", () => {
@@ -24,6 +30,9 @@ describe("presentational contract drift gates", () => {
   });
 
   test("hands every validated tool timing field to the presentational tool event", () => {
+    const toolEventTypesMatchExactly: ExactType<ConversationToolEvent, IpcConversationToolEvent> =
+      true;
+    expect(toolEventTypesMatchExactly).toBe(true);
     const validated = toolEventSchema.parse({
       durationMs: 240,
       finishedAt: "2026-07-15T10:00:01Z",

@@ -88,7 +88,9 @@ describe("TurnCard tool invocations", () => {
     expect(screen.getByText('{"path":"README.md"}')).toBeTruthy();
     expect(screen.getByText('{"path":"AGENTS.md"}')).toBeTruthy();
 
-    await user.click(triggers[0] as HTMLElement);
+    const firstTrigger = triggers[0];
+    if (!firstTrigger) throw new Error("expected the first Read tool trigger");
+    await user.click(firstTrigger);
     expect(screen.getByLabelText("Read tool output").textContent).toBe("# oneharness-ui");
   });
 
