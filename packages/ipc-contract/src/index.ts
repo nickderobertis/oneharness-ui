@@ -11,6 +11,8 @@ export const bridgeRoutes = {
 // parsing it. The desktop drift test keeps the Rust receiver aligned.
 export const maxBridgeStreamFrameBytes = 512 * 1024;
 
+// Literal values let transport callers use the map without widening command
+// names to arbitrary strings.
 export const tauriBridgeCommands = {
   invoke: "invoke_bridge",
   startWatch: "start_bridge_watch",

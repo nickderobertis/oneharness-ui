@@ -20,6 +20,7 @@ import {
 } from "./capabilities.ts";
 
 describe("native desktop capabilities", () => {
+  // llmlint: ignore-block[e2e_not_mocked, tests_mirror_real_usage] These are logic-free cross-language drift gates, not substitutes for native behavior; runtime.rs's streams_watch_frames_from_the_real_bridge_until_it_is_stopped test drives the packaged sidecar through the real Tauri channel.
   test("keeps the native stream frame ceiling aligned with the IPC contract", () => {
     const runtime = readFileSync(new URL("../../src/runtime.rs", import.meta.url), "utf8");
     const nativeLimit = runtime.match(/const MAX_FRAME_BYTES: usize = (\d+) \* (\d+);/u);
@@ -35,6 +36,7 @@ describe("native desktop capabilities", () => {
       expect(handler).toContain(command);
     }
   });
+  // llmlint: ignore-end[e2e_not_mocked, tests_mirror_real_usage]
 
   test("gives EdgeDriver and Tauri one isolated WebView2 profile on Windows", () => {
     expect(

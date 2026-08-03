@@ -9,8 +9,11 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { isAbsolute } from "node:path";
 import { HistoryStreamEnvelopeSchema } from "@oneharness/sdk";
+import { historyCursorSchema } from "@oneharness-ui/ipc-contract";
+import { z } from "zod";
 
 const MAX_RECORDING_BYTES = 1024 * 1024;
+const stderrSchema = z.string().max(16_384);
 
 function recordingPath(): string {
   const path = process.env.ONEHARNESS_UI_TEST_WATCH_RECORDING ?? "";
@@ -34,7 +37,7 @@ function resumeCursor(argv: readonly string[]): string | undefined {
   if (flag < 0) return undefined;
   const cursor = argv[flag + 1];
   if (cursor === undefined) throw new Error("--after was passed without a cursor");
-  return cursor;
+  return historyCursorSchema.parse(cursor);
 }
 
 function replay(argv: readonly string[]): number {
@@ -58,7 +61,7 @@ function replay(argv: readonly string[]): number {
     : envelopes) {
     process.stdout.write(`${JSON.stringify(envelope)}\n`);
   }
-  const stderr = process.env.ONEHARNESS_UI_TEST_WATCH_STDERR ?? "";
+  const stderr = stderrSchema.parse(process.env.ONEHARNESS_UI_TEST_WATCH_STDERR ?? "");
   if (stderr) process.stderr.write(stderr);
   return replayExitCode();
 }
