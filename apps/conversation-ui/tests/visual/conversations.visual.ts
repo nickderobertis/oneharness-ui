@@ -29,7 +29,7 @@ async function settle(page: Page, preserveFocus = false) {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.addStyleTag({
     content:
-      "*,*::before,*::after{animation:none!important;caret-color:transparent!important;transition:none!important}",
+      "*,*::before,*::after{animation:none!important;caret-color:transparent!important;transition:none!important}[data-timeline-axis]{visibility:hidden!important}",
   });
   await page.evaluate(async () => await document.fonts.ready);
   await page.evaluate(async (keepFocus) => {
@@ -114,6 +114,7 @@ for (const viewport of viewports) {
       test("tool invocation detail", async ({ page }) => {
         await page.goto("/");
         await page.getByRole("button", { name: /tool-session/i }).click();
+        await expect(page.getByRole("region", { name: "Conversation timeline" })).toBeVisible();
         await expect(page.getByText('{"command":"pwd"}', { exact: true })).toBeVisible();
         // Selecting the oldest session scrolls the history list by however far the click needed,
         // so pin it to a stable extreme before capturing.

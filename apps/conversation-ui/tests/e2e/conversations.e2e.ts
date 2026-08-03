@@ -41,6 +41,15 @@ test("lists, selects, restores a deep link, and expands tool details", async ({ 
   await expect(page.getByRole("navigation", { name: "Conversation history" })).toBeVisible();
   await page.getByRole("button", { name: /tool-session/i }).click();
   await expect(page.getByRole("heading", { name: "tool-session" })).toBeFocused();
+  const timeline = page.getByRole("region", { name: "Conversation timeline" });
+  await expect(timeline).toBeVisible();
+  const timelineItems = timeline.getByRole("button", { name: /, (point event|span)$/i });
+  await expect(timelineItems).not.toHaveCount(0);
+  await expect(timeline.getByRole("list", { name: "Timeline legend" })).toContainText("turn");
+  const timelineItem = timelineItems.first();
+  await page.keyboard.press("Tab");
+  await expect(timelineItem).toBeFocused();
+  await expect(timeline.getByRole("tooltip")).toBeVisible();
   // The selected conversation follows oneharness's live history stream.
   await expect(page.getByRole("status", { name: "Live updates on" })).toBeVisible();
   await expect(page.getByText('{"command":"pwd"}', { exact: true })).toBeVisible();

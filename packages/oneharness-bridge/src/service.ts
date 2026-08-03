@@ -199,13 +199,21 @@ function toTurn(record: HistoryRecord, index: number): ConversationTurn {
   );
   return {
     assistant: record.text ?? null,
+    ...(record.duration_ms !== undefined ? { durationMs: record.duration_ms } : {}),
     failureKind: record.failure_kind ?? null,
+    ...(record.finished_at !== undefined ? { finishedAt: record.finished_at } : {}),
     harness: record.harness,
     id: `${record.session}-${index}`,
     model: record.model ?? null,
+    ...(record.model_ms !== undefined ? { modelMs: record.model_ms } : {}),
     reasoning: reasoningFrom(record),
     status: stateFor(record.status),
+    ...(record.started_at !== undefined ? { startedAt: record.started_at } : {}),
     timestamp: record.timestamp,
+    ...(record.time_to_first_token_ms !== undefined
+      ? { timeToFirstTokenMs: record.time_to_first_token_ms }
+      : {}),
+    ...(record.tool_ms !== undefined ? { toolMs: record.tool_ms } : {}),
     tools: (record.events ?? []).map(toHistoryActionToolEvent),
     unknown,
     usage: {

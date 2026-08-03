@@ -2,8 +2,10 @@
 
 import { ArrowLeft } from "lucide-react";
 import { useEffect, useRef } from "react";
+import { Timeline } from "@/components/timeline";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { conversationTimelineItems } from "../conversation-timeline";
 import { useInfiniteScroll } from "../hooks/use-infinite-scroll";
 import type { Conversation } from "../presentational-types";
 import { ReplyForm } from "./reply-form";
@@ -70,6 +72,7 @@ export function ConversationView({
     loading: loadingMoreTurns,
     onLoadMore: onLoadMoreTurns,
   });
+  const timelineItems = conversationTimelineItems(conversation);
   return (
     <main className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden max-[680px]:h-[100dvh]">
       <header className="relative z-2 flex min-h-[86px] items-center justify-between gap-3 border-b bg-background/90 px-[clamp(16px,5vw,70px)] py-3.5 backdrop-blur max-[680px]:sticky max-[680px]:top-0">
@@ -106,6 +109,13 @@ export function ConversationView({
         className="min-h-0 overflow-y-auto px-[clamp(16px,7vw,94px)] pb-14 pt-9"
         ref={infiniteScroll.rootRef}
       >
+        <div className="mx-auto mb-8 max-w-[850px]">
+          <Timeline
+            getFailureExcerpt={(item) => item.payload.turn.failureKind}
+            items={timelineItems}
+            label="Conversation timeline"
+          />
+        </div>
         <p
           aria-label={`${conversation.turns.length} of ${totalTurnCount} turns loaded`}
           className="mx-auto mb-5 max-w-[850px] text-right text-[10px] text-subtle"

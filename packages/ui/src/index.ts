@@ -1,3 +1,4 @@
+export * from "../../../apps/conversation-ui/src/components/timeline";
 export * from "../../../apps/conversation-ui/src/components/ui/accordion";
 export * from "../../../apps/conversation-ui/src/components/ui/alert";
 export * from "../../../apps/conversation-ui/src/components/ui/avatar";

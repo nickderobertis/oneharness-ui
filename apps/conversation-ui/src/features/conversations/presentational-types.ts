@@ -27,13 +27,19 @@ export interface ConversationToolEvent {
 
 export interface ConversationTurn {
   assistant: string | null;
+  durationMs?: number | null | undefined;
   failureKind: string | null;
+  finishedAt?: string | null | undefined;
   harness: string;
   id: string;
   model: string | null;
+  modelMs?: number | null | undefined;
   reasoning: string | null;
   status: string;
+  startedAt?: string | null | undefined;
   timestamp: string;
+  timeToFirstTokenMs?: number | null | undefined;
+  toolMs?: number | null | undefined;
   tools: ConversationToolEvent[];
   unknown: Record<string, unknown>;
   usage: ConversationUsage;
