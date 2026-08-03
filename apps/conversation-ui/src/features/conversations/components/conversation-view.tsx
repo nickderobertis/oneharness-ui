@@ -24,10 +24,24 @@ function ConversationTitle({ name }: { name: string }) {
   );
 }
 
+function LiveIndicator() {
+  return (
+    <p
+      aria-label="Live updates on"
+      className="m-0 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[.13em] text-primary"
+      role="status"
+    >
+      <span aria-hidden="true" className="size-1.5 animate-pulse rounded-full bg-primary" />
+      Live
+    </p>
+  );
+}
+
 export function ConversationView({
   conversation,
   continueError,
   hasMoreTurns,
+  live = false,
   loadMoreTurnsError,
   loadingMoreTurns,
   onContinue,
@@ -39,6 +53,7 @@ export function ConversationView({
   conversation: Conversation;
   continueError: Error | null;
   hasMoreTurns: boolean;
+  live?: boolean;
   loadMoreTurnsError: Error | null;
   loadingMoreTurns: boolean;
   onContinue: (message: string) => Promise<void>;
@@ -80,7 +95,10 @@ export function ConversationView({
             {conversation.project}
           </p>
         </div>
-        <StatusBadge state={state} />
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <StatusBadge state={state} />
+          {live ? <LiveIndicator /> : null}
+        </div>
       </header>
       <section
         aria-busy={loadingMoreTurns}

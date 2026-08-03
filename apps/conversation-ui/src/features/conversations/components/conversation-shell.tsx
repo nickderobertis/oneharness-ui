@@ -8,6 +8,10 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import {
+  CONVERSATION_POLL_INTERVAL_MS,
+  useConversationStream,
+} from "../hooks/use-conversation-stream";
+import {
   useContinueConversation,
   useConversation,
   useConversationList,
@@ -31,7 +35,13 @@ function LoadingState({ label }: { label: string }) {
 function Workspace() {
   const [selectedId, select] = useSessionUrl();
   const list = useConversationList();
-  const selected = useConversation(selectedId);
+  const stream = useConversationStream(selectedId, true);
+  // Polling only takes over once the live stream is unavailable, so a healthy
+  // stream never doubles the reads.
+  const selected = useConversation(
+    selectedId,
+    stream.error ? CONVERSATION_POLL_INTERVAL_MS : false,
+  );
   const continuation = useContinueConversation(select);
   const labels = useSetConversationLabels();
 
@@ -104,6 +114,7 @@ function Workspace() {
           conversation={selected.data}
           continueError={continuation.error}
           hasMoreTurns={selected.hasNextPage}
+          live={stream.live}
           loadMoreTurnsError={selected.isFetchNextPageError ? selected.error : null}
           loadingMoreTurns={selected.isFetchingNextPage}
           onContinue={async (message) => {

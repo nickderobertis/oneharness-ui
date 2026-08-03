@@ -14,3 +14,7 @@ JetBrains Mono variable fonts in the consumer when matching the desktop app typo
 React, Radix primitives, form/markdown dependencies, and Tailwind utilities remain peer
 dependencies so consumers keep one runtime copy. The exported conversation types are
 structural TypeScript interfaces and do not depend on the desktop app's Zod validators.
+
+The components stay presentational, so a consumer that follows a session live owns the
+transport itself: keep re-rendering `ConversationView` with the grown `conversation.turns`
+and pass `live` to show its live indicator.
