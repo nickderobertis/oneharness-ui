@@ -104,7 +104,6 @@ type Handler = (request: Record<string, unknown>) => unknown | Promise<unknown>;
 /// A live watch the test drives frame by frame, exactly as the sidecar's
 /// newline-delimited stream would.
 type WatchStream = {
-  fail: (error: Error) => void;
   push: (frame: unknown) => void;
 };
 
@@ -125,7 +124,6 @@ function installBridge(handler: Handler, onWatch?: (stream: WatchStream) => void
         },
       });
       const stream: WatchStream = {
-        fail: (error) => sink?.error(error),
         push: (frame) => sink?.enqueue(encoder.encode(`${JSON.stringify(frame)}\n`)),
       };
       stream.push(OPENED_FRAME);
@@ -767,13 +765,49 @@ describe("ConversationShell", () => {
 
     expect(await screen.findByRole("status", { name: "Live updates on" })).toBeTruthy();
     expect(await screen.findByText("Polled answer 1")).toBeTruthy();
-    live?.fail(new Error("the local bridge closed the live stream"));
+    live?.push({
+      error: { code: "stream_unavailable", message: "the local bridge closed the live stream" },
+      kind: "error",
+    });
     await waitFor(() =>
       expect(screen.queryByRole("status", { name: "Live updates on" })).toBeNull(),
     );
 
     // The reader keeps working: the conversation now refreshes on its own.
     expect(await screen.findByText("Polled answer 2", undefined, { timeout: 10_000 })).toBeTruthy();
+  }, 30_000);
+
+  test("polls when the live stream cannot open", async () => {
+    window.history.replaceState(null, "", "/?session=session-1");
+    let detailCalls = 0;
+    installBridge((request) => {
+      if (request.kind === "list") return listPage([summary]);
+      detailCalls += 1;
+      return success({
+        conversation: detailPage({
+          ...conversation,
+          turns: [
+            {
+              ...conversation.turns[0],
+              assistant: `Unavailable-stream answer ${detailCalls}`,
+            },
+          ],
+        }),
+        kind: "get",
+      });
+    });
+    const invokeFetch = globalThis.fetch;
+    globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
+      if (String(input).endsWith("/watch")) throw new Error("the live stream is unavailable");
+      return await invokeFetch(input, init);
+    }) as typeof fetch;
+
+    render(<ConversationShell />);
+
+    expect(
+      await screen.findByText("Unavailable-stream answer 2", undefined, { timeout: 10_000 }),
+    ).toBeTruthy();
+    expect(screen.queryByRole("status", { name: "Live updates on" })).toBeNull();
   }, 30_000);
 
   test("surfaces malformed bridge responses at the UI boundary", async () => {

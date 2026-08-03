@@ -69,9 +69,10 @@ export function useConversationStream(sessionId: string | null, enabled: boolean
     if (!sessionId || !enabled) return;
     const controller = new AbortController();
     const key = conversationKeys.detail(sessionId);
-    const fallBackToPolling = (cause: Error) => {
+    const fallBackToPolling = (cause: unknown) => {
+      if (controller.signal.aborted) return;
       setLive(false);
-      setError(cause);
+      setError(cause instanceof Error ? cause : new Error(String(cause)));
       // Do not make the reader wait for the first polling interval after a
       // dropped stream. Refresh once immediately, then let the interval keep
       // it current while live updates remain unavailable.
@@ -98,10 +99,7 @@ export function useConversationStream(sessionId: string | null, enabled: boolean
     };
     setError(null);
     watchBridge({ kind: "watch", sessionId }, apply, controller.signal)
-      .catch((cause: unknown) => {
-        if (controller.signal.aborted) return;
-        fallBackToPolling(cause instanceof Error ? cause : new Error(String(cause)));
-      })
+      .catch(fallBackToPolling)
       .finally(() => {
         if (!controller.signal.aborted) setLive(false);
       });
