@@ -111,6 +111,9 @@ type WatchStream = {
 const OPENED_FRAME = { cursor: null, kind: "opened", sessionId: "session-1", totalTurnCount: 1 };
 
 function installBridge(handler: Handler, onWatch?: (stream: WatchStream) => void) {
+  // The host fetch API accepts several input/body representations; this test
+  // double narrows the known JSON POST used by ConversationShell after routing
+  // its separately shaped session and watch requests.
   globalThis.fetch = (async (input: string | URL | Request, init?: RequestInit) => {
     if (String(input).endsWith("/session")) return new Response(null, { status: 204 });
     if (String(input).endsWith("/watch")) {
