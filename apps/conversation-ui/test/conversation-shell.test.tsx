@@ -767,14 +767,10 @@ describe("ConversationShell", () => {
 
     expect(await screen.findByRole("status", { name: "Live updates on" })).toBeTruthy();
     expect(await screen.findByText("Polled answer 1")).toBeTruthy();
-    live?.push({
-      error: { code: "ONEHARNESS_ERROR", message: "The live history stream stopped" },
-      kind: "error",
-    });
+    live?.fail(new Error("the local bridge closed the live stream"));
     await waitFor(() =>
       expect(screen.queryByRole("status", { name: "Live updates on" })).toBeNull(),
     );
-    live?.fail(new Error("the local bridge closed the live stream"));
 
     // The reader keeps working: the conversation now refreshes on its own.
     expect(await screen.findByText("Polled answer 2", undefined, { timeout: 10_000 })).toBeTruthy();
