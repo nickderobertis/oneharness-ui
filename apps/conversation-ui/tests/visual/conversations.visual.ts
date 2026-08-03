@@ -111,6 +111,23 @@ for (const viewport of viewports) {
         await capture(page, "conversation-formatted-json", viewport.name, theme);
       });
 
+      test("tool invocation detail", async ({ page }) => {
+        await page.goto("/");
+        await page.getByRole("button", { name: /tool-session/i }).click();
+        await expect(page.getByText('{"command":"pwd"}', { exact: true })).toBeVisible();
+        // Selecting the oldest session scrolls the history list by however far the click needed,
+        // so pin it to a stable extreme before capturing.
+        const history = page.getByRole("navigation", { name: "Conversation history" });
+        if (await history.isVisible()) {
+          await history.evaluate((node) => node.scrollTo(0, node.scrollHeight));
+        }
+        await capture(page, "conversation-tool-collapsed", viewport.name, theme);
+
+        await page.getByRole("button", { name: "Bash tool details" }).click();
+        await expect(page.getByLabel("Bash tool output")).toBeVisible();
+        await capture(page, "conversation-tool-expanded", viewport.name, theme);
+      });
+
       test("continued session", async ({ page }) => {
         await page.goto("/");
         await page

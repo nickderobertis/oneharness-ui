@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { bridgeRequestSchema, bridgeResponseSchema, usageSchema } from "../src/index.ts";
+import {
+  bridgeRequestSchema,
+  bridgeResponseSchema,
+  toolEventSchema,
+  usageSchema,
+} from "../src/index.ts";
 
 describe("IPC validation", () => {
   test("round-trips labels while omitting empty backward-compatible summaries", () => {
@@ -59,6 +64,43 @@ describe("IPC validation", () => {
         sessionId: "valid",
       }),
     ).toThrow();
+  });
+
+  test("carries tool timing and correlation without inventing absent measurements", () => {
+    const measured = {
+      durationMs: 0,
+      finishedAt: "2026-07-15T10:00:00Z",
+      index: 0,
+      input: { command: "pwd" },
+      kind: "tool_call",
+      name: "Bash",
+      output: null,
+      startedAt: "2026-07-15T10:00:00Z",
+      status: "completed",
+      timingSource: "provider_measured",
+      toolCallId: "call-1",
+    };
+    expect(toolEventSchema.parse(measured)).toEqual(measured);
+    const unmeasured = { index: 1, kind: "tool_result", output: "/repo", toolCallId: "call-1" };
+    const parsed = toolEventSchema.parse(unmeasured);
+    expect(parsed).toEqual(unmeasured);
+    expect(Object.hasOwn(parsed, "durationMs")).toBe(false);
+    expect(toolEventSchema.parse({ durationMs: null, index: 2, kind: "tool_call" })).toEqual({
+      durationMs: null,
+      index: 2,
+      kind: "tool_call",
+    });
+    expect(
+      toolEventSchema.safeParse({ index: 3, kind: "tool_call", toolCallId: "x".repeat(257) })
+        .success,
+    ).toBe(false);
+    expect(toolEventSchema.safeParse({ durationMs: -1, index: 4, kind: "tool_call" }).success).toBe(
+      false,
+    );
+    // Terminal states stay open text so an upstream token this build has never seen still renders.
+    expect(
+      toolEventSchema.parse({ index: 5, kind: "tool_call", status: "deferred" }),
+    ).toMatchObject({ status: "deferred" });
   });
 
   test("keeps unknown upstream structured values as data", () => {

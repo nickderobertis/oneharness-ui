@@ -93,7 +93,21 @@ const turn = {
   reasoning: null,
   status: "completed",
   timestamp: "2026-07-25T00:00:00Z",
-  tools: [],
+  tools: [
+    {
+      durationMs: 1240,
+      finishedAt: "2026-07-25T00:00:01Z",
+      index: 0,
+      input: { command: "pwd" },
+      kind: "tool_call",
+      name: "Bash",
+      startedAt: "2026-07-25T00:00:00Z",
+      status: "completed",
+      timingSource: "provider_measured",
+      toolCallId: "call-1",
+    },
+    { index: 1, kind: "tool_result", output: "/consumer", toolCallId: "call-1" },
+  ],
   unknown: {},
   usage: {},
   user: "Consumer question",
@@ -152,7 +166,15 @@ const html = renderToStaticMarkup(
     ),
   ),
 );
-for (const text of ["Running", "Public session", "Transcript session", "Consumer question"]) {
+for (const text of [
+  "Running",
+  "Public session",
+  "Transcript session",
+  "Consumer question",
+  "Bash tool details",
+  "1.2 s",
+  "completed",
+]) {
   if (!html.includes(text)) process.exit(1);
 }
 `,

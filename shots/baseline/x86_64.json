@@ -39,7 +39,7 @@
         "theme": "dark",
         "viewport": "desktop"
       },
-      "hash": "85bf4f5cabfecd55c5d8049ba0cc8b322a47d5c3ef9f005ef893e71264cdd21d"
+      "hash": "f33f3dfe8f58d39f8a4f29054b4f351bdbafb499ef07a78d306cea8bf922e276"
     },
     {
       "name": "conversation-formatted-json",
@@ -47,7 +47,7 @@
         "theme": "dark",
         "viewport": "mobile"
       },
-      "hash": "b332f7eca2662860cc705eadfd345e64f54a7aca87c8f6ee998c39a36286179f"
+      "hash": "5139896569df7e8ba7528044091f73d336f9918a6fff7715b0ef7d0710c7f06e"
     },
     {
       "name": "conversation-formatted-json",
@@ -55,7 +55,7 @@
         "theme": "light",
         "viewport": "desktop"
       },
-      "hash": "c827ddc041de7a725e2a18fcb46e94e931c2923d832118864ab7d0f3d0b62b59"
+      "hash": "f4e220cc65bd779fbdb933d0bda0887967594df39a187e4871f1983be7eefdd3"
     },
     {
       "name": "conversation-formatted-json",
@@ -63,7 +63,7 @@
         "theme": "light",
         "viewport": "mobile"
       },
-      "hash": "6dd0c19c481e927cfe20cdc0620f95c37418a59d51ad403ce656062c70484bb0"
+      "hash": "a5e219fb7df67d9e791034c58b223f86a43d27673be65558ec38d8ecfb1e8e61"
     },
     {
       "name": "conversation-list-label-dialog",
@@ -160,6 +160,70 @@
         "viewport": "mobile"
       },
       "hash": "67d29bd014a5e7afe6d5ccd78a99cc2d9a7182f4b2c669fd1959000fd37a1c45"
+    },
+    {
+      "name": "conversation-tool-collapsed",
+      "toggles": {
+        "theme": "dark",
+        "viewport": "desktop"
+      },
+      "hash": "7c634139d54376b7ea13477c68562c01c61197d965940215e0f260f266a0de3d"
+    },
+    {
+      "name": "conversation-tool-collapsed",
+      "toggles": {
+        "theme": "dark",
+        "viewport": "mobile"
+      },
+      "hash": "dfb2e0cbdb6c00932281400013df42a7c06f5d3a2f974e4e35312469989b1c84"
+    },
+    {
+      "name": "conversation-tool-collapsed",
+      "toggles": {
+        "theme": "light",
+        "viewport": "desktop"
+      },
+      "hash": "23bf6e06c4b9a13929f4e2399a8678fcf0767bdcb8590aa575f0b18eb19df92c"
+    },
+    {
+      "name": "conversation-tool-collapsed",
+      "toggles": {
+        "theme": "light",
+        "viewport": "mobile"
+      },
+      "hash": "e8b2f86347696102042450b1e50605b87034f561898e88a4b70e605426d938f6"
+    },
+    {
+      "name": "conversation-tool-expanded",
+      "toggles": {
+        "theme": "dark",
+        "viewport": "desktop"
+      },
+      "hash": "8cd99c984285f45a38da09c5028ce7905ee6e099b01025f168791508928a40da"
+    },
+    {
+      "name": "conversation-tool-expanded",
+      "toggles": {
+        "theme": "dark",
+        "viewport": "mobile"
+      },
+      "hash": "5d07c12fa1b6efc7d28a3dae58ed293280ee3cf99bc471f82142aa581cd42c4c"
+    },
+    {
+      "name": "conversation-tool-expanded",
+      "toggles": {
+        "theme": "light",
+        "viewport": "desktop"
+      },
+      "hash": "72cbf5977c40c5fe562da0982bebb6a137e62017eaaee994e2c70e31b0f17ac4"
+    },
+    {
+      "name": "conversation-tool-expanded",
+      "toggles": {
+        "theme": "light",
+        "viewport": "mobile"
+      },
+      "hash": "6faccc4b42623f2577709a04ffc875cb8647749218b69fc84b1961ba808341ef"
     }
   ]
 }
