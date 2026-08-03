@@ -7,7 +7,8 @@
   "implicitDependencies": ["conversation-ui", "oneharness-bridge"],
   "targets": {
     "build": {
-      "command": "cargo check --locked --manifest-path apps/desktop-shell/Cargo.toml --all-targets"
+      "command": "cargo check --locked --manifest-path apps/desktop-shell/Cargo.toml --all-targets",
+      "outputs": []
     },
     "bundle": {
       "command": "bunx tauri build --config apps/desktop-shell/tauri.conf.json"
