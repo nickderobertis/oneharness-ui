@@ -71,7 +71,7 @@ describe("conversationTimeline", () => {
         at: Date.parse("2026-08-03T10:00:00.800Z"),
         id: "turn-1-first-token",
         label: "First token",
-        payload: { turn: conversation.turns[0] as ConversationTurn, type: "milestone" },
+        payload: { turn: conversation.turns[0], type: "milestone" },
         status: "completed",
       },
     ]);

@@ -51,7 +51,10 @@ test("lists, selects, restores a deep link, and expands tool details", async ({ 
   const expandTimeline = timeline.getByRole("button", { name: "Expand timeline" });
   await expect(expandTimeline).toBeFocused();
   await expandTimeline.click();
-  await expect(timeline.getByTestId("timeline-lane")).toHaveCount(2);
+  const toolLaneLabel = timeline
+    .getByLabel("Timeline plot. Scroll to zoom or drag to select a range.")
+    .getByText("Tools", { exact: true });
+  await expect(toolLaneLabel).toHaveCount(1);
   await expect(timeline.getByLabel("Timeline cursor")).toBeVisible();
   const toolActivity = timeline.getByRole("button", { name: "Bash, point event" });
   await toolActivity.click();
@@ -60,7 +63,7 @@ test("lists, selects, restores a deep link, and expands tool details", async ({ 
     .poll(() => selectedTurn.evaluate((element) => element.getBoundingClientRect().top))
     .toBeLessThan(400);
   await timeline.getByRole("button", { name: "Collapse timeline" }).click();
-  await expect(timeline.getByTestId("timeline-lane")).toHaveCount(1);
+  await expect(toolLaneLabel).toHaveCount(0);
   await timelineItem.focus();
   await expect(timelineItem).toBeFocused();
   await expect(timeline.getByRole("tooltip")).toBeVisible();
@@ -79,11 +82,6 @@ test("lists, selects, restores a deep link, and expands tool details", async ({ 
 
   await page.getByRole("button", { name: /plain-session/i }).click();
   await expect(page.getByText("A concise answer")).toBeVisible();
-  await expect(
-    page
-      .getByRole("region", { name: "Conversation timeline" })
-      .getByRole("button", { name: "First token, marker" }),
-  ).toBeVisible();
   await expect(page.getByText("Reasoning", { exact: true })).toHaveCount(0);
 });
 

@@ -323,12 +323,12 @@ describe("ConversationShell", () => {
     const secondTurnEntry = turnArticles[1]?.parentElement;
     if (!firstTurnEntry || !secondTurnEntry) throw new Error("expected two transcript turns");
     Object.defineProperty(transcript, "clientHeight", { configurable: true, value: 400 });
-    transcript.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
-    firstTurnEntry.getBoundingClientRect = () => ({ top: -200 }) as DOMRect;
-    secondTurnEntry.getBoundingClientRect = () => ({ top: 300 }) as DOMRect;
+    transcript.getBoundingClientRect = () => DOMRect.fromRect({ y: 0 });
+    firstTurnEntry.getBoundingClientRect = () => DOMRect.fromRect({ y: -200 });
+    secondTurnEntry.getBoundingClientRect = () => DOMRect.fromRect({ y: 300 });
     fireEvent.scroll(transcript);
     const initialCursorPosition = cursor.style.left;
-    secondTurnEntry.getBoundingClientRect = () => ({ top: 20 }) as DOMRect;
+    secondTurnEntry.getBoundingClientRect = () => DOMRect.fromRect({ y: 20 });
     fireEvent.scroll(transcript);
     expect(cursor.style.left).not.toBe(initialCursorPosition);
     const secondTimelineTurn = screen.getByRole("button", { name: "judge turn, point event" });

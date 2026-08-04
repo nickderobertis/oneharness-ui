@@ -67,7 +67,7 @@ type TimelineView = {
   viewChanged: boolean;
   zoom: (clientX: number, deltaY: number) => void;
 };
-const laneColors = [
+const laneColors: readonly [string, string, string, string, string, string, string] = [
   "bg-spectrum-blue",
   "bg-spectrum-green",
   "bg-spectrum-orange",
@@ -75,7 +75,7 @@ const laneColors = [
   "bg-spectrum-red",
   "bg-spectrum-indigo",
   "bg-spectrum-yellow",
-] as const;
+];
 const implicitLaneId = "__timeline_implicit_lane__";
 
 /** Stable FNV-1a hashing makes color independent of render and item order. */

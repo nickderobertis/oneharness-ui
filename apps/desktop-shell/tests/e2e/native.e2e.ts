@@ -51,7 +51,7 @@ async function scrollSnapshot(region: ScrollRegion): Promise<ScrollSnapshot> {
 
 async function elementTop(element: ScrollRegion): Promise<number> {
   return await browser.execute(
-    (target) => (target as HTMLElement).getBoundingClientRect().top,
+    (target: HTMLElement) => target.getBoundingClientRect().top,
     element,
   );
 }

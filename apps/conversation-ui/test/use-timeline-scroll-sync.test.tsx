@@ -30,11 +30,12 @@ describe("useTimelineScrollSync", () => {
       render(<ScrollFixture />);
       const first = screen.getByRole("button", { name: "First" });
       const second = screen.getByRole("button", { name: "Second" });
-      const root = first.parentElement as HTMLElement;
+      const root = first.parentElement;
+      if (!root) throw new Error("expected the scroll fixture container");
       Object.defineProperty(root, "clientHeight", { configurable: true, value: 400 });
-      root.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
-      first.getBoundingClientRect = () => ({ top: -200 }) as DOMRect;
-      second.getBoundingClientRect = () => ({ top: 20 }) as DOMRect;
+      root.getBoundingClientRect = () => DOMRect.fromRect({ y: 0 });
+      first.getBoundingClientRect = () => DOMRect.fromRect({ y: -200 });
+      second.getBoundingClientRect = () => DOMRect.fromRect({ y: 20 });
       fireEvent.scroll(root);
       expect(screen.getByLabelText("Cursor").textContent).toBe("20");
 
