@@ -73,6 +73,10 @@ export function ConversationView({
     onLoadMore: onLoadMoreTurns,
   });
   const timelineItems = conversationTimelineItems(conversation);
+  const timelineLanes = [...new Set(timelineItems.map((item) => item.laneId))].map((id) => ({
+    id: id ?? "events",
+    label: id ?? "Events",
+  }));
   return (
     <main className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden max-[680px]:h-[100dvh]">
       <header className="relative z-2 flex min-h-[86px] items-center justify-between gap-3 border-b bg-background/90 px-[clamp(16px,5vw,70px)] py-3.5 backdrop-blur max-[680px]:sticky max-[680px]:top-0">
@@ -114,6 +118,7 @@ export function ConversationView({
             getFailureExcerpt={(item) => item.payload.turn.failureKind}
             items={timelineItems}
             label="Conversation timeline"
+            lanes={timelineLanes}
           />
         </div>
         <p
