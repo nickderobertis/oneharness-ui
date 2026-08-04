@@ -48,6 +48,8 @@ test("lists, selects, restores a deep link, and expands tool details", async ({ 
   await expect(timeline.getByRole("list", { name: "Timeline legend" })).toContainText("turn");
   const timelineItem = timelineItems.first();
   await page.keyboard.press("Tab");
+  await expect(timeline.getByRole("button", { name: "Expand timeline" })).toBeFocused();
+  await page.keyboard.press("Tab");
   await expect(timelineItem).toBeFocused();
   await expect(timeline.getByRole("tooltip")).toBeVisible();
   // The selected conversation follows oneharness's live history stream.
