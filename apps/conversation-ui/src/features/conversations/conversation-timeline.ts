@@ -32,7 +32,9 @@ function reported(value: number | null | undefined): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
-export function conversationTimeline(conversation: Conversation): ConversationTimeline {
+export function conversationTimeline(
+  conversation: Pick<Conversation, "turns"> & Partial<Pick<Conversation, "startedAt">>,
+): ConversationTimeline {
   const items: TimelineItem<ConversationTimelinePayload>[] = [];
   const markers: TimelineMarker<ConversationTimelinePayload>[] = [];
   for (const turn of conversation.turns) {

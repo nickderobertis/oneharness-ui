@@ -41,4 +41,15 @@ function AvatarFallback({
   );
 }
 
-export { Avatar, AvatarFallback };
+function AvatarImage({ className, ...props }: React.ComponentProps<"img">) {
+  return (
+    // biome-ignore lint/performance/noImgElement: shared package avatars accept runtime URLs unavailable to Next's static optimizer.
+    <img
+      className={cn("aspect-square size-full object-cover", className)}
+      data-slot="avatar-image"
+      {...props}
+    />
+  );
+}
+
+export { Avatar, AvatarFallback, AvatarImage };

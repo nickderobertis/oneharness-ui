@@ -2,7 +2,14 @@ import { describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
-import { ReplyForm, StatusBadge, Timeline, TooltipProvider } from "@oneharness/ui";
+import {
+  ConversationTimeline,
+  ReplyForm,
+  StatusBadge,
+  Timeline,
+  TooltipProvider,
+  TurnCard,
+} from "@oneharness/ui";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 
@@ -24,6 +31,24 @@ describe("@oneharness/ui public package", () => {
               start: 0,
             },
           ]}
+        />
+        <ConversationTimeline onSelectTurn={() => undefined} turns={[]} />
+        <TurnCard
+          author={{ avatar: "https://example.test/worker.png", label: "Worker" }}
+          turn={{
+            assistant: "Public answer",
+            failureKind: null,
+            harness: "codex",
+            id: "public-turn",
+            model: null,
+            reasoning: null,
+            status: "completed",
+            timestamp: "2026-08-04T00:00:00Z",
+            tools: [],
+            unknown: {},
+            usage: {},
+            user: "Public question",
+          }}
         />
         <ReplyForm
           error={null}
@@ -91,6 +116,7 @@ describe("@oneharness/ui public package", () => {
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   ConversationList,
+  ConversationTimeline,
   ConversationView,
   StatusBadge,
   Timeline,
@@ -152,6 +178,10 @@ const html = renderToStaticMarkup(
       createElement(Timeline, {
         items: [{ duration: 20, id: "consumer-span", kind: "work", label: "Consumer span", payload: {}, start: 0 }],
       }),
+      createElement(ConversationTimeline, {
+        onSelectTurn: () => undefined,
+        turns: [turn],
+      }),
       createElement(ConversationList, {
         conversations: [summary],
         hasMore: false,
@@ -179,7 +209,10 @@ const html = renderToStaticMarkup(
         pending: false,
         totalTurnCount: 1,
       }),
-      createElement(TurnCard, { turn }),
+      createElement(TurnCard, {
+        author: { avatar: "https://example.test/judge.png", label: "Judge" },
+        turn,
+      }),
     ),
   ),
 );
@@ -192,6 +225,8 @@ for (const text of [
   "Bash tool details",
   "1.2 s",
   "completed",
+  "Judge",
+  "https://example.test/judge.png",
 ]) {
   if (!html.includes(text)) process.exit(1);
 }

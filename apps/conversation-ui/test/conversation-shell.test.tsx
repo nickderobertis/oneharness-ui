@@ -303,7 +303,20 @@ describe("ConversationShell", () => {
     await user.click(item);
     expect(await screen.findByRole("heading", { name: "inspect-login" })).toBeTruthy();
     expect(screen.getByRole("region", { name: "Conversation timeline" })).toBeTruthy();
-    expect(screen.getByRole("button", { name: "claude-code turn, point event" })).toBeTruthy();
+    const timelineTurn = screen.getByRole("button", {
+      name: "claude-code turn, point event",
+    });
+    expect(screen.getByLabelText("Timeline cursor")).toBeTruthy();
+    const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
+    let focusedTurn: HTMLElement | null = null;
+    HTMLElement.prototype.scrollIntoView = function scrollIntoView() {
+      focusedTurn = this;
+    };
+    await user.click(timelineTurn);
+    HTMLElement.prototype.scrollIntoView = originalScrollIntoView;
+    expect(focusedTurn?.querySelector("article")?.getAttribute("aria-label")).toBe(
+      "Turn session-1-0 from claude-code",
+    );
     expect(screen.getByRole("button", { name: "Bash, span" })).toBeTruthy();
     expect(screen.getByText("The redirect drops the return path.")).toBeTruthy();
     expect(screen.getByRole("note", { name: "Failure: rate_limit" })).toBeTruthy();

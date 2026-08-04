@@ -24,6 +24,22 @@ function turnWith(tools: ConversationToolEvent[]): ConversationTurn {
 }
 
 describe("TurnCard tool invocations", () => {
+  test("keeps the default identity and renders a custom author identity when supplied", () => {
+    const { rerender } = render(<TurnCard turn={turnWith([])} />);
+    expect(screen.getByText("OH")).toBeTruthy();
+    expect(screen.getByText("claude-code")).toBeTruthy();
+
+    rerender(
+      <TurnCard
+        author={{ avatar: "https://example.test/judge.png", label: "Judge" }}
+        turn={turnWith([])}
+      />,
+    );
+    expect(screen.getByText("Judge")).toBeTruthy();
+    expect(document.querySelector('img[src="https://example.test/judge.png"]')).toBeTruthy();
+    expect(screen.queryByText("claude-code")).toBeNull();
+  });
+
   test("pairs a call with its result by tool call id and expands both payloads", async () => {
     const user = userEvent.setup();
     render(

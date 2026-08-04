@@ -189,7 +189,12 @@ function Usage({ usage }: { usage: Turn["usage"] }) {
   );
 }
 
-export function TurnCard({ turn }: { turn: Turn }) {
+export interface TurnAuthor {
+  avatar?: string;
+  label: string;
+}
+
+export function TurnCard({ author, turn }: { author?: TurnAuthor; turn: Turn }) {
   const hasUnknown = Object.keys(turn.unknown).length > 0;
   const invocations = pairToolEvents(turn.tools);
   return (
@@ -204,10 +209,12 @@ export function TurnCard({ turn }: { turn: Turn }) {
         </MessageContent>
       </Message>
       <Message from="assistant">
-        <MessageAvatar>OH</MessageAvatar>
+        <MessageAvatar {...(author?.avatar ? { src: author.avatar } : {})}>
+          {author ? author.label.slice(0, 2).toUpperCase() : "OH"}
+        </MessageAvatar>
         <MessageContent className="pt-1">
           <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.08em] text-subtle">
-            <span>{turn.harness}</span>
+            <span>{author?.label ?? turn.harness}</span>
             {turn.model ? (
               <Badge variant="secondary" className="font-medium normal-case tracking-normal">
                 {turn.model}

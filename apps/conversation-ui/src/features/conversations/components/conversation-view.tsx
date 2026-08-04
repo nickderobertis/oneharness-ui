@@ -1,13 +1,13 @@
 "use client";
 
 import { ArrowLeft } from "lucide-react";
-import { useEffect, useRef } from "react";
-import { Timeline } from "@/components/timeline";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { conversationTimeline } from "../conversation-timeline";
 import { useInfiniteScroll } from "../hooks/use-infinite-scroll";
+import { useTimelineScrollSync } from "../hooks/use-timeline-scroll-sync";
 import type { Conversation } from "../presentational-types";
+import { ConversationTimeline } from "./conversation-timeline-view";
 import { ReplyForm } from "./reply-form";
 import { StatusBadge } from "./status-badge";
 import { TurnCard } from "./turn-card";
@@ -72,7 +72,22 @@ export function ConversationView({
     loading: loadingMoreTurns,
     onLoadMore: onLoadMoreTurns,
   });
-  const timeline = conversationTimeline(conversation);
+  const scrollEntries = useMemo(
+    () =>
+      conversation.turns.flatMap((turn) => {
+        const time = Date.parse(turn.startedAt ?? turn.timestamp);
+        return Number.isFinite(time) ? [{ id: turn.id, time }] : [];
+      }),
+    [conversation.turns],
+  );
+  const scrollSync = useTimelineScrollSync(scrollEntries);
+  const setScrollContainer = useCallback(
+    (element: HTMLElement | null) => {
+      infiniteScroll.rootRef.current = element;
+      scrollSync.containerRef(element);
+    },
+    [infiniteScroll.rootRef, scrollSync.containerRef],
+  );
   return (
     <main className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden max-[680px]:h-[100dvh]">
       <header className="relative z-2 flex min-h-[86px] items-center justify-between gap-3 border-b bg-background/90 px-[clamp(16px,5vw,70px)] py-3.5 backdrop-blur max-[680px]:sticky max-[680px]:top-0">
@@ -107,16 +122,13 @@ export function ConversationView({
         aria-busy={loadingMoreTurns}
         aria-label="Conversation turns"
         className="min-h-0 overflow-y-auto px-[clamp(16px,7vw,94px)] pb-14 pt-9"
-        ref={infiniteScroll.rootRef}
+        ref={setScrollContainer}
       >
-        <div className="mx-auto mb-8 max-w-[850px]">
-          <Timeline
-            {...(timeline.origin === undefined ? {} : { axis: { origin: timeline.origin } })}
-            getFailureExcerpt={(item) => item.payload.turn.failureKind}
-            items={timeline.items}
-            label="Conversation timeline"
-            lanes={timeline.lanes}
-            markers={timeline.markers}
+        <div className="sticky top-0 z-1 mx-auto mb-8 max-w-[850px] bg-background/95 py-2 backdrop-blur">
+          <ConversationTimeline
+            {...(scrollSync.cursor === undefined ? {} : { cursor: scrollSync.cursor })}
+            onSelectTurn={scrollSync.scrollTo}
+            turns={conversation.turns}
           />
         </div>
         <p
@@ -129,7 +141,9 @@ export function ConversationView({
             : conversation.turns.length}
         </p>
         {conversation.turns.map((turn) => (
-          <TurnCard key={turn.id} turn={turn} />
+          <div key={turn.id} ref={(element) => scrollSync.register(turn.id, element)}>
+            <TurnCard turn={turn} />
+          </div>
         ))}
         <div className="mx-auto max-w-[850px] text-center">
           {hasMoreTurns ? (
