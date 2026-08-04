@@ -45,9 +45,26 @@ test("lists, selects, restores a deep link, and expands tool details", async ({ 
   await expect(timeline).toBeVisible();
   const timelineItems = timeline.getByRole("button", { name: /, (point event|span)$/i });
   await expect(timelineItems).not.toHaveCount(0);
-  await expect(timeline.getByRole("list", { name: "Timeline legend" })).toContainText("turn");
+  await expect(timeline.getByRole("list", { name: "Timeline legend" })).toContainText("Turns");
   const timelineItem = timelineItems.first();
   await page.keyboard.press("Tab");
+  const expandTimeline = timeline.getByRole("button", { name: "Expand timeline" });
+  await expect(expandTimeline).toBeFocused();
+  await expandTimeline.click();
+  const toolLaneLabel = timeline
+    .getByLabel("Timeline plot. Scroll to zoom or drag to select a range.")
+    .getByText("Tools", { exact: true });
+  await expect(toolLaneLabel).toHaveCount(1);
+  await expect(timeline.getByLabel("Timeline cursor")).toBeVisible();
+  const toolActivity = timeline.getByRole("button", { name: "Bash, point event" });
+  await toolActivity.click();
+  const selectedTurn = page.getByRole("article", { name: /from claude-code/ }).first();
+  await expect
+    .poll(() => selectedTurn.evaluate((element) => element.getBoundingClientRect().top))
+    .toBeLessThan(400);
+  await timeline.getByRole("button", { name: "Collapse timeline" }).click();
+  await expect(toolLaneLabel).toHaveCount(0);
+  await timelineItem.focus();
   await expect(timelineItem).toBeFocused();
   await expect(timeline.getByRole("tooltip")).toBeVisible();
   // The selected conversation follows oneharness's live history stream.

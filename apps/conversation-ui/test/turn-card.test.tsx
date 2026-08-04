@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, test } from "bun:test";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import type { ConversationToolEvent, ConversationTurn } from "@oneharness-ui/ipc-contract";
 import { cleanup, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { renderToStaticMarkup } from "react-dom/server";
 import { TurnCard } from "../src/features/conversations/components/turn-card";
 
 afterEach(cleanup);
@@ -24,6 +27,30 @@ function turnWith(tools: ConversationToolEvent[]): ConversationTurn {
 }
 
 describe("TurnCard tool invocations", () => {
+  test("keeps default rendered markup byte-for-byte compatible", async () => {
+    const expected = await readFile(
+      resolve(import.meta.dir, "goldens/turn-card-default.html"),
+      "utf8",
+    );
+    expect(renderToStaticMarkup(<TurnCard turn={turnWith([])} />)).toBe(expected.trimEnd());
+  });
+
+  test("keeps the default identity and renders a custom author identity when supplied", () => {
+    const { rerender } = render(<TurnCard turn={turnWith([])} />);
+    expect(screen.getByText("OH")).toBeTruthy();
+    expect(screen.getByText("claude-code")).toBeTruthy();
+
+    rerender(
+      <TurnCard
+        author={{ avatar: "https://example.test/judge.png", label: "Judge" }}
+        turn={turnWith([])}
+      />,
+    );
+    expect(screen.getByText("Judge")).toBeTruthy();
+    expect(document.querySelector('img[src="https://example.test/judge.png"]')).toBeTruthy();
+    expect(screen.queryByText("claude-code")).toBeNull();
+  });
+
   test("pairs a call with its result by tool call id and expands both payloads", async () => {
     const user = userEvent.setup();
     render(

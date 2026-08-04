@@ -20,6 +20,7 @@ export * from "../../../apps/conversation-ui/src/components/ui/textarea";
 export * from "../../../apps/conversation-ui/src/components/ui/tooltip";
 export { cn } from "../../../apps/conversation-ui/src/components/utils";
 export * from "../../../apps/conversation-ui/src/features/conversations/components/conversation-list";
+export * from "../../../apps/conversation-ui/src/features/conversations/components/conversation-timeline-view";
 export * from "../../../apps/conversation-ui/src/features/conversations/components/conversation-view";
 export * from "../../../apps/conversation-ui/src/features/conversations/components/error-state";
 export * from "../../../apps/conversation-ui/src/features/conversations/components/message";
@@ -30,4 +31,5 @@ export * from "../../../apps/conversation-ui/src/features/conversations/componen
 export * from "../../../apps/conversation-ui/src/features/conversations/hooks/use-conversation-organization";
 export * from "../../../apps/conversation-ui/src/features/conversations/hooks/use-infinite-scroll";
 export * from "../../../apps/conversation-ui/src/features/conversations/hooks/use-label-editor";
+export * from "../../../apps/conversation-ui/src/features/conversations/hooks/use-timeline-scroll-sync";
 export * from "../../../apps/conversation-ui/src/features/conversations/presentational-types";
