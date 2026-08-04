@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { useState } from "react";
 import { Timeline, type TimelineItem, type TimelineMarker } from "../src/components/timeline";
 
 afterEach(cleanup);
@@ -82,8 +83,13 @@ describe("Timeline", () => {
     await user.click(screen.getByRole("button", { name: "Checkpoint, marker" }));
     expect(selected).toEqual(["turn", "marker"]);
 
-    rerender(<Timeline expanded items={items} lanes={lanes} markers={markers} />);
+    rerender(
+      <Timeline expanded items={items} lanes={lanes} markers={markers} selectedId="marker" />,
+    );
     expect(screen.getByTestId("timeline-marker-line").className).toContain("inset-y-0");
+    expect(screen.getByRole("button", { name: "Checkpoint, marker" }).dataset.selected).toBe(
+      "true",
+    );
   });
 
   test("shows wall-clock and elapsed axis labels and a controlled cursor", () => {
@@ -105,37 +111,49 @@ describe("Timeline", () => {
 
   test("controlled range synchronizes stacked instances and receives zoom, brush, and reset", () => {
     const changes: Array<[number, number]> = [];
-    const shared = { current: [1_500, 4_500] as [number, number] };
-    const view = (
-      <>
-        <Timeline
-          items={items}
-          lanes={lanes}
-          onRangeChange={(range) => changes.push(range)}
-          range={shared.current}
-        />
-        <Timeline items={items} lanes={lanes} range={shared.current} />
-      </>
-    );
-    const { rerender } = render(view);
-    expect(screen.getAllByTestId("timeline-axis").map((axis) => axis.textContent)).toEqual([
-      screen.getAllByTestId("timeline-axis")[0]?.textContent,
-      screen.getAllByTestId("timeline-axis")[0]?.textContent,
-    ]);
+    function StackedTimelines() {
+      const [range, setRange] = useState<[number, number]>([1_500, 4_500]);
+      return (
+        <>
+          <Timeline
+            items={items}
+            lanes={lanes}
+            onRangeChange={(nextRange) => {
+              changes.push(nextRange);
+              setRange(nextRange);
+            }}
+            range={range}
+          />
+          <Timeline items={items} lanes={lanes} range={range} />
+        </>
+      );
+    }
+    const axisText = () => screen.getAllByTestId("timeline-axis").map((axis) => axis.textContent);
+    render(<StackedTimelines />);
+    const initialAxis = axisText();
+    expect(initialAxis[1]).toBe(initialAxis[0]);
     const [plot] = screen.getAllByLabelText(
       "Timeline plot. Scroll to zoom or drag to select a range.",
     );
     if (!plot) throw new Error("expected the first timeline plot");
     fireEvent.wheel(plot, { clientX: 500, deltaY: -100 });
     expect(changes).toHaveLength(1);
+    const zoomedAxis = axisText();
+    expect(zoomedAxis[0]).not.toBe(initialAxis[0]);
+    expect(zoomedAxis[1]).toBe(zoomedAxis[0]);
     fireEvent.pointerDown(plot, { clientX: 100 });
     fireEvent.pointerUp(plot, { clientX: 700 });
     expect(changes).toHaveLength(2);
+    const brushedAxis = axisText();
+    expect(brushedAxis[0]).not.toBe(zoomedAxis[0]);
+    expect(brushedAxis[1]).toBe(brushedAxis[0]);
     const [reset] = screen.getAllByRole("button", { name: "Reset timeline zoom" });
     if (!reset) throw new Error("expected the first timeline reset button");
     fireEvent.click(reset);
     expect(changes.at(-1)).toEqual([1_000, 5_000]);
-    rerender(view);
+    const resetAxis = axisText();
+    expect(resetAxis[0]).not.toBe(brushedAxis[0]);
+    expect(resetAxis[1]).toBe(resetAxis[0]);
   });
 
   test("assigns lane color solely from lane id and keeps zero-duration items legible", () => {
