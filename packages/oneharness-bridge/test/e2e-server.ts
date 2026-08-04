@@ -1,10 +1,11 @@
 import { existsSync } from "node:fs";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
-import { OneHarness } from "@oneharness/sdk";
+import { HistoryLineSchema, HistoryRecordSchema, OneHarness } from "@oneharness/sdk";
 import { z } from "zod";
 import { startWebServer } from "../src/server.ts";
 import { e2eProject, e2eWebPort } from "./e2e-configuration.ts";
+import { readFixtureHistoryRecord } from "./history-fixture.ts";
 
 const repository = resolve(import.meta.dir, "../../..");
 const webAccessToken = z
@@ -82,11 +83,38 @@ await seed({
     '{"type":"result","result":"Tool inspection complete","session_id":"e2e-native-tool","usage":{"input_tokens":0,"output_tokens":5}}',
   ].join("\n"),
 });
-await seed({
+const plainSession = await seed({
   name: "plain-session",
   prompt: "Answer without reasoning",
   stdout: '{"result":"A concise answer","session_id":"e2e-native-plain"}',
 });
+const { historyFile: plainSessionFile, record: plainSessionRecord } =
+  await readFixtureHistoryRecord(historyDir, plainSession);
+const startedAt = plainSessionRecord.timestamp;
+const timedPlainSession = HistoryRecordSchema.parse({
+  ...plainSessionRecord,
+  duration_ms: 10,
+  finished_at: new Date(Date.parse(startedAt) + 10).toISOString(),
+  model_ms: 10,
+  started_at: startedAt,
+  time_to_first_token_ms: 1,
+  tool_ms: 0,
+});
+const { events, ...run } = timedPlainSession;
+const plainSessionLines = (events ?? []).map((event) =>
+  HistoryLineSchema.parse({
+    event,
+    harness: timedPlainSession.harness,
+    run_id: timedPlainSession.history_id,
+    schema_version: "1.0",
+    type: "event",
+  }),
+);
+plainSessionLines.push(HistoryLineSchema.parse({ ...run, type: "run" }));
+await writeFile(
+  plainSessionFile,
+  `${plainSessionLines.map((line) => JSON.stringify(line)).join("\n")}\n`,
+);
 await seed({
   name: "markdown-session",
   prompt:

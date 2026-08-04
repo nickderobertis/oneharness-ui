@@ -48,8 +48,20 @@ test("lists, selects, restores a deep link, and expands tool details", async ({ 
   await expect(timeline.getByRole("list", { name: "Timeline legend" })).toContainText("Turns");
   const timelineItem = timelineItems.first();
   await page.keyboard.press("Tab");
-  await expect(timeline.getByRole("button", { name: "Expand timeline" })).toBeFocused();
-  await page.keyboard.press("Tab");
+  const expandTimeline = timeline.getByRole("button", { name: "Expand timeline" });
+  await expect(expandTimeline).toBeFocused();
+  await expandTimeline.click();
+  await expect(timeline.getByTestId("timeline-lane")).toHaveCount(2);
+  await expect(timeline.getByLabel("Timeline cursor")).toBeVisible();
+  const toolActivity = timeline.getByRole("button", { name: "Bash, point event" });
+  await toolActivity.click();
+  const selectedTurn = page.getByRole("article", { name: /from claude-code/ }).first();
+  await expect
+    .poll(() => selectedTurn.evaluate((element) => element.getBoundingClientRect().top))
+    .toBeLessThan(400);
+  await timeline.getByRole("button", { name: "Collapse timeline" }).click();
+  await expect(timeline.getByTestId("timeline-lane")).toHaveCount(1);
+  await timelineItem.focus();
   await expect(timelineItem).toBeFocused();
   await expect(timeline.getByRole("tooltip")).toBeVisible();
   // The selected conversation follows oneharness's live history stream.
@@ -67,6 +79,11 @@ test("lists, selects, restores a deep link, and expands tool details", async ({ 
 
   await page.getByRole("button", { name: /plain-session/i }).click();
   await expect(page.getByText("A concise answer")).toBeVisible();
+  await expect(
+    page
+      .getByRole("region", { name: "Conversation timeline" })
+      .getByRole("button", { name: "First token, marker" }),
+  ).toBeVisible();
   await expect(page.getByText("Reasoning", { exact: true })).toHaveCount(0);
 });
 

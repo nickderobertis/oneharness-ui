@@ -49,6 +49,13 @@ async function scrollSnapshot(region: ScrollRegion): Promise<ScrollSnapshot> {
   }, region);
 }
 
+async function elementTop(element: ScrollRegion): Promise<number> {
+  return await browser.execute(
+    (target) => (target as HTMLElement).getBoundingClientRect().top,
+    element,
+  );
+}
+
 async function driveWheelUntilNextPage(
   region: ScrollRegion,
   pageStart: ScrollSnapshot,
@@ -78,7 +85,7 @@ async function wheelThroughAutomaticPages(
   firstItem: ScrollRegion,
 ): Promise<void> {
   const initial = await scrollSnapshot(region);
-  const firstItemTop = await firstItem.getLocation("y");
+  const firstItemTop = await elementTop(firstItem);
   expect(initial.scrollHeight).toBeGreaterThan(initial.clientHeight);
 
   let appendedPages = 0;
@@ -93,7 +100,9 @@ async function wheelThroughAutomaticPages(
     appendedPages += 1;
   }
 
-  expect(await firstItem.getLocation("y")).toBeLessThan(firstItemTop);
+  // Pagination intentionally moves this element outside the scroll viewport.
+  // Reading its DOM geometry avoids Webdriver's interactability precondition.
+  expect(await elementTop(firstItem)).toBeLessThan(firstItemTop);
   expect(appendedPages).toBe(requiredAutomaticPageBoundaries);
 }
 
