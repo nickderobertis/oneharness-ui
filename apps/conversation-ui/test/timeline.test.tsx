@@ -122,15 +122,18 @@ describe("Timeline", () => {
       screen.getAllByTestId("timeline-axis")[0]?.textContent,
       screen.getAllByTestId("timeline-axis")[0]?.textContent,
     ]);
-    const plot = screen.getAllByLabelText(
+    const [plot] = screen.getAllByLabelText(
       "Timeline plot. Scroll to zoom or drag to select a range.",
-    )[0]!;
+    );
+    if (!plot) throw new Error("expected the first timeline plot");
     fireEvent.wheel(plot, { clientX: 500, deltaY: -100 });
     expect(changes).toHaveLength(1);
     fireEvent.pointerDown(plot, { clientX: 100 });
     fireEvent.pointerUp(plot, { clientX: 700 });
     expect(changes).toHaveLength(2);
-    fireEvent.click(screen.getAllByRole("button", { name: "Reset timeline zoom" })[0]!);
+    const [reset] = screen.getAllByRole("button", { name: "Reset timeline zoom" });
+    if (!reset) throw new Error("expected the first timeline reset button");
+    fireEvent.click(reset);
     expect(changes.at(-1)).toEqual([1_000, 5_000]);
     rerender(view);
   });
