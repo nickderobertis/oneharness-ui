@@ -1,4 +1,4 @@
-import type { TimelineItem } from "../../components/timeline";
+import type { TimelineItem, TimelineLane, TimelineMarker } from "../../components/timeline";
 import type { Conversation, ConversationTurn } from "./presentational-types";
 import { pairToolEvents } from "./tool-invocations";
 
@@ -7,6 +7,20 @@ export type ConversationTimelinePayload =
   | { type: "phase"; turn: ConversationTurn }
   | { type: "tool"; turn: ConversationTurn }
   | { type: "turn"; turn: ConversationTurn };
+
+export interface ConversationTimeline {
+  items: TimelineItem<ConversationTimelinePayload>[];
+  lanes: TimelineLane[];
+  markers: TimelineMarker<ConversationTimelinePayload>[];
+  origin?: number;
+}
+
+/** Rendered in this order when expanded; lanes without recorded items are omitted. */
+const conversationLanes: readonly TimelineLane[] = [
+  { id: "turns", label: "Turns" },
+  { id: "phases", label: "Phases" },
+  { id: "tools", label: "Tools" },
+];
 
 function instant(value: string | null | undefined): number | null {
   if (!value) return null;
@@ -18,10 +32,9 @@ function reported(value: number | null | undefined): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value >= 0 ? value : undefined;
 }
 
-export function conversationTimelineItems(
-  conversation: Conversation,
-): TimelineItem<ConversationTimelinePayload>[] {
+export function conversationTimeline(conversation: Conversation): ConversationTimeline {
   const items: TimelineItem<ConversationTimelinePayload>[] = [];
+  const markers: TimelineMarker<ConversationTimelinePayload>[] = [];
   for (const turn of conversation.turns) {
     const start = instant(turn.startedAt) ?? instant(turn.timestamp);
     if (start === null) continue;
@@ -32,7 +45,7 @@ export function conversationTimelineItems(
       id: turn.id,
       kind: "turn",
       label: `${turn.harness} turn`,
-      laneId: "turn",
+      laneId: "turns",
       payload: { turn, type: "turn" },
       start,
       status: turn.status,
@@ -51,7 +64,7 @@ export function conversationTimelineItems(
         id: `${turn.id}-phase-${kind}`,
         kind: `${kind} phase`,
         label: `${kind === "model" ? "Model" : "Tool"} time`,
-        laneId: `${kind} phase`,
+        laneId: "phases",
         parent: turn.id,
         payload: { turn, type: "phase" },
         start: phaseStart,
@@ -61,14 +74,11 @@ export function conversationTimelineItems(
     }
     const firstToken = reported(turn.timeToFirstTokenMs);
     if (firstToken !== undefined) {
-      items.push({
+      markers.push({
+        at: start + firstToken,
         id: `${turn.id}-first-token`,
-        kind: "first token",
         label: "First token",
-        laneId: "first token",
-        parent: turn.id,
         payload: { turn, type: "milestone" },
-        start: start + firstToken,
         status: turn.status,
       });
     }
@@ -86,7 +96,7 @@ export function conversationTimelineItems(
         id: `${turn.id}-${invocation.id}`,
         kind: invocation.kind,
         label: invocation.name,
-        laneId: invocation.kind,
+        laneId: "tools",
         parent: turn.id,
         payload: { turn, type: "tool" },
         start: invocationStart,
@@ -94,5 +104,11 @@ export function conversationTimelineItems(
       });
     }
   }
-  return items;
+  const origin = instant(conversation.startedAt);
+  return {
+    items,
+    lanes: conversationLanes.filter((lane) => items.some((item) => item.laneId === lane.id)),
+    markers,
+    ...(origin === null ? {} : { origin }),
+  };
 }

@@ -19,7 +19,7 @@ const baseTurn: ConversationTurn = {
   user: "work",
 };
 
-import { conversationTimelineItems } from "../src/features/conversations/conversation-timeline";
+import { conversationTimeline } from "../src/features/conversations/conversation-timeline";
 
 const base: Conversation = {
   canContinue: false,
@@ -32,7 +32,7 @@ const base: Conversation = {
   turns: [baseTurn],
 };
 
-describe("conversationTimelineItems", () => {
+describe("conversationTimeline", () => {
   test("uses recorded turn, phase, and tool timing", () => {
     const conversation: Conversation = {
       ...base,
@@ -56,14 +56,26 @@ describe("conversationTimelineItems", () => {
         },
       ],
     };
-    const items = conversationTimelineItems(conversation);
-    expect(items.map(({ duration, kind, parent }) => ({ duration, kind, parent }))).toEqual([
-      { duration: 10_000, kind: "turn", parent: undefined },
-      { duration: 6_000, kind: "model phase", parent: "turn-1" },
-      { duration: 4_000, kind: "tools phase", parent: "turn-1" },
-      { duration: undefined, kind: "first token", parent: "turn-1" },
-      { duration: 2_000, kind: "tool_call", parent: "turn-1" },
+    const { items, lanes, markers, origin } = conversationTimeline(conversation);
+    expect(
+      items.map(({ duration, kind, laneId, parent }) => ({ duration, kind, laneId, parent })),
+    ).toEqual([
+      { duration: 10_000, kind: "turn", laneId: "turns", parent: undefined },
+      { duration: 6_000, kind: "model phase", laneId: "phases", parent: "turn-1" },
+      { duration: 4_000, kind: "tools phase", laneId: "phases", parent: "turn-1" },
+      { duration: 2_000, kind: "tool_call", laneId: "tools", parent: "turn-1" },
     ]);
+    expect(lanes.map((lane) => lane.id)).toEqual(["turns", "phases", "tools"]);
+    expect(markers).toEqual([
+      {
+        at: Date.parse("2026-08-03T10:00:00.800Z"),
+        id: "turn-1-first-token",
+        label: "First token",
+        payload: { turn: conversation.turns[0] as ConversationTurn, type: "milestone" },
+        status: "completed",
+      },
+    ]);
+    expect(origin).toBe(Date.parse(conversation.startedAt));
   });
 
   test("keeps absent timing as points instead of inventing duration", () => {
@@ -71,8 +83,10 @@ describe("conversationTimelineItems", () => {
       ...base,
       turns: [{ ...baseTurn, tools: [{ index: 0, kind: "tool_call", name: "Unknown clock" }] }],
     };
-    const items = conversationTimelineItems(conversation);
+    const { items, lanes, markers } = conversationTimeline(conversation);
     expect(items).toHaveLength(2);
     expect(items.every((item) => item.duration === undefined && item.end === undefined)).toBe(true);
+    expect(lanes.map((lane) => lane.id)).toEqual(["turns", "tools"]);
+    expect(markers).toEqual([]);
   });
 });

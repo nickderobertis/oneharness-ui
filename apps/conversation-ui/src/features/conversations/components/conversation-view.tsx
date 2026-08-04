@@ -5,7 +5,7 @@ import { useEffect, useRef } from "react";
 import { Timeline } from "@/components/timeline";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
-import { conversationTimelineItems } from "../conversation-timeline";
+import { conversationTimeline } from "../conversation-timeline";
 import { useInfiniteScroll } from "../hooks/use-infinite-scroll";
 import type { Conversation } from "../presentational-types";
 import { ReplyForm } from "./reply-form";
@@ -72,11 +72,7 @@ export function ConversationView({
     loading: loadingMoreTurns,
     onLoadMore: onLoadMoreTurns,
   });
-  const timelineItems = conversationTimelineItems(conversation);
-  const timelineLanes = [...new Set(timelineItems.map((item) => item.laneId))].map((id) => ({
-    id: id ?? "events",
-    label: id ?? "Events",
-  }));
+  const timeline = conversationTimeline(conversation);
   return (
     <main className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden max-[680px]:h-[100dvh]">
       <header className="relative z-2 flex min-h-[86px] items-center justify-between gap-3 border-b bg-background/90 px-[clamp(16px,5vw,70px)] py-3.5 backdrop-blur max-[680px]:sticky max-[680px]:top-0">
@@ -115,10 +111,12 @@ export function ConversationView({
       >
         <div className="mx-auto mb-8 max-w-[850px]">
           <Timeline
+            {...(timeline.origin === undefined ? {} : { axis: { origin: timeline.origin } })}
             getFailureExcerpt={(item) => item.payload.turn.failureKind}
-            items={timelineItems}
+            items={timeline.items}
             label="Conversation timeline"
-            lanes={timelineLanes}
+            lanes={timeline.lanes}
+            markers={timeline.markers}
           />
         </div>
         <p
