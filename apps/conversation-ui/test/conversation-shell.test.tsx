@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { Conversation, ConversationSummary } from "@oneharness-ui/ipc-contract";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ConversationShell } from "../src/features/conversations/components/conversation-shell";
 
@@ -287,6 +287,15 @@ describe("ConversationShell", () => {
           reasoning: "Checked the redirect boundary before answering.",
           unknown: { future_payload: { preserved: true } },
         },
+        {
+          ...conversation.turns[0],
+          assistant: "The follow-up is complete.",
+          harness: "judge",
+          id: "session-1-1",
+          timestamp: "2026-07-15T10:00:01Z",
+          tools: [],
+          user: "Review the fix",
+        },
       ],
     };
     installBridge((request) =>
@@ -307,6 +316,23 @@ describe("ConversationShell", () => {
       name: "claude-code turn, point event",
     });
     expect(screen.getByLabelText("Timeline cursor")).toBeTruthy();
+    const cursor = screen.getByTestId("timeline-cursor");
+    const transcript = screen.getByRole("region", { name: "Conversation turns" });
+    const turnArticles = screen.getAllByRole("article", { name: /Turn .* from/ });
+    const firstTurnEntry = turnArticles[0]?.parentElement;
+    const secondTurnEntry = turnArticles[1]?.parentElement;
+    if (!firstTurnEntry || !secondTurnEntry) throw new Error("expected two transcript turns");
+    Object.defineProperty(transcript, "clientHeight", { configurable: true, value: 400 });
+    transcript.getBoundingClientRect = () => ({ top: 0 }) as DOMRect;
+    firstTurnEntry.getBoundingClientRect = () => ({ top: -200 }) as DOMRect;
+    secondTurnEntry.getBoundingClientRect = () => ({ top: 300 }) as DOMRect;
+    fireEvent.scroll(transcript);
+    const initialCursorPosition = cursor.style.left;
+    secondTurnEntry.getBoundingClientRect = () => ({ top: 20 }) as DOMRect;
+    fireEvent.scroll(transcript);
+    expect(cursor.style.left).not.toBe(initialCursorPosition);
+    const secondTimelineTurn = screen.getByRole("button", { name: "judge turn, point event" });
+    expect(cursor.style.left).toBe(secondTimelineTurn.parentElement?.style.left);
     const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
     let focusedTurn: HTMLElement | null = null;
     HTMLElement.prototype.scrollIntoView = function scrollIntoView() {
@@ -320,8 +346,8 @@ describe("ConversationShell", () => {
     expect(screen.getByRole("button", { name: "Bash, span" })).toBeTruthy();
     expect(screen.getByText("The redirect drops the return path.")).toBeTruthy();
     expect(screen.getByRole("note", { name: "Failure: rate_limit" })).toBeTruthy();
-    expect(screen.getByText("0")).toBeTruthy();
-    expect(screen.getByText("Not reported")).toBeTruthy();
+    expect(screen.getAllByText("0")).toHaveLength(2);
+    expect(screen.getAllByText("Not reported")).toHaveLength(2);
 
     expect(screen.getByText('{"command":"rg redirect"}')).toBeTruthy();
     expect(screen.getByText("1.2 s")).toBeTruthy();
