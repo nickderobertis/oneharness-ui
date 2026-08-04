@@ -164,6 +164,16 @@ describe("Timeline", () => {
     expect(screen.getByRole("tooltip").textContent).toContain("Failure: permission denied");
   });
 
+  test("puts every legacy kind in one implicit expanded lane", () => {
+    const legacy = items.map(({ laneId: _laneId, ...item }) => item);
+    render(<Timeline expanded items={legacy} />);
+
+    expect(screen.getAllByTestId("timeline-lane")).toHaveLength(1);
+    expect(screen.getByRole("button", { name: "Agent turn, span" }).dataset.laneColor).toBe(
+      screen.getByRole("button", { name: "Unmeasured tool, point event" }).dataset.laneColor,
+    );
+  });
+
   test("reports an honest empty state", () => {
     render(<Timeline items={[]} />);
     expect(screen.getByText("No timeline events recorded.")).toBeTruthy();

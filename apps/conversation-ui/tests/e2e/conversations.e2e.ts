@@ -45,7 +45,7 @@ test("lists, selects, restores a deep link, and expands tool details", async ({ 
   await expect(timeline).toBeVisible();
   const timelineItems = timeline.getByRole("button", { name: /, (point event|span)$/i });
   await expect(timelineItems).not.toHaveCount(0);
-  await expect(timeline.getByRole("list", { name: "Timeline legend" })).toContainText("turn");
+  await expect(timeline.getByRole("list", { name: "Timeline legend" })).toContainText("Turns");
   const timelineItem = timelineItems.first();
   await page.keyboard.press("Tab");
   await expect(timeline.getByRole("button", { name: "Expand timeline" })).toBeFocused();

@@ -89,7 +89,7 @@ export function timelineLaneColor(laneId: string): (typeof laneColors)[number] {
 }
 
 function itemLane(item: TimelineItem): string {
-  return item.laneId ?? item.kind ?? implicitLaneId;
+  return item.laneId ?? implicitLaneId;
 }
 
 function itemEnd(item: TimelineItem): number {
