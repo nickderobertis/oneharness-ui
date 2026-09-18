@@ -11,6 +11,10 @@ if (!Number.isSafeInteger(legacyHistoryBytes) || legacyHistoryBytes <= 4 * 1024 
   throw new Error("native oversized history fixture must exceed the legacy 4 MiB bridge response");
 }
 
+// Fixture ids are session names and turn ids: a bounded, quote-free alphabet
+// that can sit inside a selector string unescaped.
+const fixtureIdPattern = /^[A-Za-z0-9._-]{1,200}$/;
+
 function expectedIds(name: string): string[] {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is required for the native pagination journey`);
@@ -18,10 +22,10 @@ function expectedIds(name: string): string[] {
   if (
     !Array.isArray(parsed) ||
     parsed.length === 0 ||
-    parsed.some((item) => typeof item !== "string") ||
+    parsed.some((item) => typeof item !== "string" || !fixtureIdPattern.test(item)) ||
     new Set(parsed).size !== parsed.length
   ) {
-    throw new Error(`${name} must contain a non-empty JSON array of unique ids`);
+    throw new Error(`${name} must contain a non-empty JSON array of unique fixture ids`);
   }
   return parsed as string[];
 }
@@ -122,7 +126,7 @@ async function expectUniqueAriaLabels(
     const matches = await Promise.all(
       batch.map(
         // llmlint: ignore[e2e_uses_accessible_selectors] The attribute is the element's accessible name, not a brittle DOM hook; the comment above records why the aria/ selector cannot be used here.
-        async (id) => await $$(`[aria-label="${ariaLabel(id).replaceAll(/["\\]/g, "\\$&")}"]`),
+        async (id) => await $$(`[aria-label="${ariaLabel(id)}"]`),
       ),
     );
     for (const match of matches) {
