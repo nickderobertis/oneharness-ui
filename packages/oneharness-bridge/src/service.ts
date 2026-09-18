@@ -100,7 +100,15 @@ function resolveExecutable(environment: BridgeEnvironment): Executable {
 
 async function invokeDiscovery(environment: BridgeEnvironment): Promise<HistorySessionSummary[]> {
   const executable = resolveExecutable(environment);
-  const args = [...executable.prefix, "history", "list", "--compact", "--all-projects"];
+  const args = [
+    ...executable.prefix,
+    "history",
+    "list",
+    "--format",
+    "json",
+    "--compact",
+    "--all-projects",
+  ];
   if (environment.historyDir) args.push("--history-dir", environment.historyDir);
   return await new Promise((resolve, reject) => {
     const child = spawn(executable.command, args, {

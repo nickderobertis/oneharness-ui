@@ -34,6 +34,10 @@ const provider =
     repository,
     `target/oneharness-ui-test/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
   );
+const textDefaultCli = resolve(
+  import.meta.dir,
+  `fixtures/text-default-cli.${process.platform === "win32" ? "cmd" : "ts"}`,
+);
 const TEST_AUTHORIZATION = "oneharness-ui-integration-authorization";
 
 let historyDir = "";
@@ -53,7 +57,8 @@ function historyLines(record: HistoryRecord): string {
       event,
       harness: record.harness,
       run_id: record.history_id,
-      schema_version: "1.0",
+      // The event-line version the pinned CLI writes; older versions forbid `timing_source`.
+      schema_version: "1.9",
       type: "event",
     }),
   );
@@ -109,7 +114,7 @@ async function seed(
     mode: "bypass",
     prompt: options.prompt ?? "Inspect the repository",
   });
-  expect(report.oneharness_version).toBe("0.5.5");
+  expect(report.oneharness_version).toBe("0.14.0");
   return report;
 }
 
@@ -134,8 +139,8 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       ),
     ) as { dependencies?: Record<string, string>; version?: string };
     expect(manifest).toMatchObject({
-      dependencies: { "oneharness-cli": "0.5.5" },
-      version: "0.5.5",
+      dependencies: { "oneharness-cli": "0.14.0" },
+      version: "0.14.0",
     });
     expect(
       RunOptionsSchema.safeParse({ prompt: "Valid prompt", repositoryOwnedOption: true }).success,
@@ -147,7 +152,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       string,
       unknown
     >;
-    expect(rawLine.schema_version).toBe("1.0");
+    expect(rawLine.schema_version).toBe("1.1");
     expect(Object.hasOwn(rawLine, "labels")).toBe(false);
     expect(Object.hasOwn(record, "labels")).toBe(false);
     const unlabelled = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
@@ -263,7 +268,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     ).toBe("Bash");
   });
 
-  test("preserves call identity while keeping unavailable timing absent", async () => {
+  test("preserves call identity with observed timing while keeping unavailable timing absent", async () => {
     const report = await seed(
       "tool-timing",
       [
@@ -275,30 +280,36 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     const { historyFile } = await readFixtureHistoryRecord(historyDir, report);
     const sessionId = basename(historyFile, extname(historyFile));
 
-    const untimed = await service().handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
-    const untimedTools =
-      untimed.ok && untimed.data.kind === "get"
-        ? untimed.data.conversation.turns[0]?.tools
+    const selected = await service().handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
+    const tools =
+      selected.ok && selected.data.kind === "get"
+        ? selected.data.conversation.turns[0]?.tools
         : undefined;
-    // The deterministic provider reports no tool boundary, so every timing field stays null
-    // rather than being zero-filled, and the call identity still pairs call with result.
-    expect(untimedTools?.[0]).toMatchObject({
-      durationMs: null,
-      finishedAt: null,
+    // oneharness observes the tool call's boundary on the provider's stdout and says so.
+    expect(tools?.[0]).toMatchObject({
+      durationMs: expect.any(Number),
+      finishedAt: expect.any(String),
       index: 0,
       kind: "tool_call",
       name: "Bash",
+      startedAt: expect.any(String),
+      status: "completed",
+      timingSource: "stdout_observed",
+      toolCallId: "t1",
+    });
+    // The result carries no boundary, so every timing field stays null rather than being
+    // zero-filled, and the call identity still pairs it with its call.
+    expect(tools?.[1]).toMatchObject({
+      durationMs: null,
+      finishedAt: null,
+      index: 1,
+      kind: "tool_result",
+      output: "/repo",
       startedAt: null,
       status: null,
       toolCallId: "t1",
     });
-    expect(untimedTools?.[1]).toMatchObject({
-      index: 1,
-      kind: "tool_result",
-      output: "/repo",
-      toolCallId: "t1",
-    });
-    expect(Object.hasOwn(untimedTools?.[0] ?? {}, "timingSource")).toBe(false);
+    expect(Object.hasOwn(tools?.[1] ?? {}, "timingSource")).toBe(false);
   });
 
   test("continues a labeled session and returns the new history selection", async () => {
@@ -454,6 +465,27 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     ).handle({ kind: "list" }, TEST_AUTHORIZATION);
     expect(storage.ok).toBe(false);
     if (!storage.ok) expect(storage.error.detail).toContain("not-a-directory");
+  });
+
+  test("asks for JSON discovery from a CLI whose default view is text", async () => {
+    await seed("text-default", '{"result":"Listed","session_id":"native-text-default"}');
+    const bridge = new BridgeService(
+      { executable: textDefaultCli, historyDir },
+      TEST_AUTHORIZATION,
+    );
+
+    const listed = await bridge.handle({ kind: "list" }, TEST_AUTHORIZATION);
+    expect(listed).toMatchObject({
+      data: { conversations: [{ name: "text-default" }], totalCount: 1 },
+      ok: true,
+    });
+    const sessionId =
+      listed.ok && listed.data.kind === "list" ? listed.data.conversations[0]?.id : "";
+    const selected = await bridge.handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
+    expect(selected).toMatchObject({
+      data: { conversation: { turns: [{ assistant: "Listed" }] } },
+      ok: true,
+    });
   });
 
   test("pages SDK summaries without loading every conversation detail", async () => {

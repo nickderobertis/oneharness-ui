@@ -186,6 +186,8 @@ async function seed(
       "--history-name",
       options.name,
       "--bypass",
+      "--format",
+      "json",
       "--compact",
       "--no-config",
     ],
@@ -226,7 +228,9 @@ async function patchRecord(
   const lines = (await readFile(historyFile, "utf8")).trim().split("\n");
   const parsed = lines.map((line) => HistoryLineSchema.parse(JSON.parse(line)));
   const runIndex = parsed.findLastIndex((line) => line.type === "run");
-  const run = parsed[runIndex];
+  // The SDK's line type is a wide union; narrowing or spreading it exceeds
+  // TypeScript's union limit, so the schema validates the merged fields.
+  const run: Readonly<Record<string, unknown>> | undefined = parsed[runIndex];
   if (run?.type !== "run") {
     throw new Error(`fixture history record is not an object: ${historyFile}`);
   }
@@ -256,7 +260,8 @@ function historyLines(record: ReturnType<typeof HistoryRecordSchema.parse>): str
       event,
       harness: record.harness,
       run_id: record.history_id,
-      schema_version: "1.0",
+      // The event-line version the pinned CLI writes; older versions forbid `timing_source`.
+      schema_version: "1.9",
       type: "event",
     }),
   );
@@ -403,7 +408,7 @@ export async function createDesktopFixture(
 ): Promise<DesktopFixture> {
   for (const [label, path] of [
     [
-      cliOverride ? "configured oneharness test CLI" : "@oneharness/sdk 0.5.5 packaged CLI",
+      cliOverride ? "configured oneharness test CLI" : "@oneharness/sdk 0.14.0 packaged CLI",
       fixtureOneHarnessCli,
     ],
     ["deterministic provider", providerPath],
