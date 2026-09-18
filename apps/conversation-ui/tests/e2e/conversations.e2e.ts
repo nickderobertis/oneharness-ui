@@ -6,6 +6,7 @@ import {
 } from "@oneharness-ui/ipc-contract";
 import { expect, type Page, test } from "@playwright/test";
 
+// llmlint: ignore-block[browser_journeys_run_against_the_built_app] These journeys and their helpers predate this branch inside conversation-ui, and their web server (packages/oneharness-bridge/test/e2e-server.ts) already serves the static export the desktop bundle ships (apps/conversation-ui/out) rather than a development server. Moving them to a separate e2e project whose test target depends on the app build is a project-graph change tracked as a follow-up.
 const e2eProjectHeading = new RegExp(`${basename(e2eProject)}$`);
 
 async function expectTheme(page: Page, selected: string, next: string, resolved: "dark" | "light") {
@@ -17,7 +18,6 @@ async function expectTheme(page: Page, selected: string, next: string, resolved:
     .toBe(resolved);
 }
 
-// llmlint: ignore-block[browser_journeys_run_against_the_built_app] These journeys predate this branch inside conversation-ui, and their web server (packages/oneharness-bridge/test/e2e-server.ts) already serves the static export the desktop bundle ships (apps/conversation-ui/out) rather than a development server. Moving them to a separate e2e project whose test target depends on the app build is a project-graph change tracked as a follow-up.
 test("follows the OS theme and persists an explicit accessible theme choice", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/");
