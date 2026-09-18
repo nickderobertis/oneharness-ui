@@ -24,7 +24,17 @@ if ! mkdir -p "$HISTORY_PARENT" || ! HISTORY_DIR="$(mktemp -d "$HISTORY_PARENT/r
   exit 1
 fi
 readonly HISTORY_DIR
-trap 'rm -rf "$HISTORY_DIR" || echo "Rust tests: could not remove the empty history store $HISTORY_DIR. Delete it by hand before the next run." >&2' EXIT
+# A store left behind is a failure of this run: report it and fail a run
+# that would otherwise have passed, without masking the tests' own status.
+remove_history_store() {
+  local status=$?
+  if ! rm -rf "$HISTORY_DIR"; then
+    echo "Rust tests: could not remove the empty history store $HISTORY_DIR. Delete it by hand, then rerun just test." >&2
+    if [ "$status" -eq 0 ]; then status=1; fi
+  fi
+  exit "$status"
+}
+trap remove_history_store EXIT
 export ONEHARNESS_UI_HISTORY_DIR="$HISTORY_DIR"
 
 "$ROOT/scripts/run-quiet.sh" \
