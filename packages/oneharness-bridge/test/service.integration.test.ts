@@ -456,8 +456,8 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     if (!storage.ok) expect(storage.error.detail).toContain("not-a-directory");
   });
 
-  // llmlint: ignore[e2e_not_mocked] No released CLI defaults to text yet; the stand-in renders only that view and forwards every other call, including JSON discovery, to the packaged CLI.
-  // llmlint: ignore[tests_mirror_real_usage] This service-boundary case isolates the argv the bridge hands the CLI, entered the same way as every discovery case in this suite; cli.integration.test.ts and server.integration.test.ts separately drive the same requests through the sidecar's stdio and HTTP transports.
+  // llmlint: ignore-block[e2e_not_mocked] No released CLI defaults to text yet; the stand-in renders only that view and forwards every other call, including JSON discovery, to the packaged CLI.
+  // llmlint: ignore-block[tests_mirror_real_usage] This service-boundary case isolates the argv the bridge hands the CLI, entered the same way as every discovery case in this suite; cli.integration.test.ts and server.integration.test.ts separately drive the same requests through the sidecar's stdio and HTTP transports.
   test("asks for JSON discovery from a CLI whose default view is text", async () => {
     await seed("text-default", '{"result":"Listed","session_id":"native-text-default"}');
     const bridge = new BridgeService(
@@ -478,6 +478,8 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       ok: true,
     });
   });
+  // llmlint: ignore-end[e2e_not_mocked]
+  // llmlint: ignore-end[tests_mirror_real_usage]
 
   test("pages SDK summaries without loading every conversation detail", async () => {
     const report = await seed(
