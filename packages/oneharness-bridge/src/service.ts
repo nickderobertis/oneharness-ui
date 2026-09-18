@@ -64,13 +64,27 @@ const CLI_ENVIRONMENT_KEYS = [
   "XDG_STATE_HOME",
 ] as const;
 type HistoryRecordJsonSchema = {
-  anyOf?: Array<{ properties?: Record<string, unknown> }>;
+  allOf?: HistoryRecordJsonSchema[];
+  anyOf?: HistoryRecordJsonSchema[];
+  oneOf?: HistoryRecordJsonSchema[];
+  properties?: Record<string, unknown>;
 };
-const historyRecordJsonSchema = HistoryRecordSchema.toJSONSchema() as HistoryRecordJsonSchema;
+
+// The SDK composes its record schema from object variants joined by unions and
+// intersections, and each release nests them differently. Only the composition
+// is walked, never a property's own schema, so nested keys such as usage
+// counters stay out of the set.
+function recordPropertyKeys(schema: HistoryRecordJsonSchema): string[] {
+  return [
+    ...Object.keys(schema.properties ?? {}),
+    ...[...(schema.allOf ?? []), ...(schema.anyOf ?? []), ...(schema.oneOf ?? [])].flatMap(
+      recordPropertyKeys,
+    ),
+  ];
+}
+
 const knownRecordKeys = new Set([
-  ...(historyRecordJsonSchema.anyOf ?? []).flatMap((variant) =>
-    Object.keys(variant.properties ?? {}),
-  ),
+  ...recordPropertyKeys(HistoryRecordSchema.toJSONSchema() as HistoryRecordJsonSchema),
   // Legacy SDK records may carry either alias outside the current schema.
   "reasoning",
   "thinking",

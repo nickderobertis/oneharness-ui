@@ -242,9 +242,17 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       finishedAt: record.finished_at,
       reasoning: null,
       status: "completed",
-      unknown: {},
       usage: { inputTokens: 0, outputTokens: 4 },
     });
+    // Every field the SDK schema names is mapped above, so nothing the packaged
+    // CLI writes reaches the "Additional upstream data" disclosure; its history
+    // show re-serialises the record and drops the file's extra key before the
+    // bridge reads it.
+    expect(
+      selected.ok && selected.data.kind === "get"
+        ? selected.data.conversation.turns[0]?.unknown
+        : undefined,
+    ).toEqual({});
     expect(
       selected.ok && selected.data.kind === "get"
         ? selected.data.conversation.historyLabels
