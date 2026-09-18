@@ -84,6 +84,8 @@ function recordPropertyKeys(schema: HistoryRecordJsonSchema): string[] {
 }
 
 const knownRecordKeys = new Set([
+  // zod types the generated schema as an open JSON-schema record; the cast
+  // names just the composition keys the walk reads, each optional.
   ...recordPropertyKeys(HistoryRecordSchema.toJSONSchema() as HistoryRecordJsonSchema),
   // Legacy SDK records may carry either alias outside the current schema.
   "reasoning",

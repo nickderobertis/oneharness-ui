@@ -121,7 +121,7 @@ async function expectUniqueAriaLabels(
     const batch = ids.slice(start, start + batchSize);
     const matches = await Promise.all(
       batch.map(
-        // llmlint: ignore[e2e_uses_accessible_selectors] The attribute is the element's accessible name, so this is not a brittle DOM selector; wdio's aria/ XPath rescans every text node per candidate, and on WebKitGTK the 45 turn-id lookups alone consumed four and a half of the journey's six minutes (run 35394333875) once every turn was loaded.
+        // llmlint: ignore[e2e_uses_accessible_selectors] The attribute is the element's accessible name, not a brittle DOM hook; the comment above records why the aria/ selector cannot be used here.
         async (id) => await $$(`[aria-label="${ariaLabel(id).replaceAll(/["\\]/g, "\\$&")}"]`),
       ),
     );
