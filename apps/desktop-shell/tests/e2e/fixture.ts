@@ -408,7 +408,7 @@ export async function createDesktopFixture(
 ): Promise<DesktopFixture> {
   for (const [label, path] of [
     [
-      cliOverride ? "configured oneharness test CLI" : "@oneharness/sdk 0.14.0 packaged CLI",
+      cliOverride ? "configured oneharness test CLI" : "@oneharness/sdk packaged CLI",
       fixtureOneHarnessCli,
     ],
     ["deterministic provider", providerPath],
