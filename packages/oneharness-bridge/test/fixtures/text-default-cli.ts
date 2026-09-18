@@ -7,6 +7,11 @@
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
 import { HistoryListSchema } from "@oneharness/sdk";
+import { z } from "zod";
+
+// The bridge and SDK pass a short argv of flags, ids, and paths; anything
+// larger is not a call this stand-in was written for.
+const argvSchema = z.array(z.string().min(1).max(4096)).max(64);
 
 function packagedCli(argv: readonly string[], capture: boolean) {
   const sdkRequire = createRequire(import.meta.resolve("@oneharness/sdk"));
@@ -33,7 +38,7 @@ function textView(argv: readonly string[]): number {
   return 0;
 }
 
-const argv = process.argv.slice(2);
+const argv = argvSchema.parse(process.argv.slice(2));
 process.exitCode =
   argv[0] === "history" && argv[1] === "list" && !argv.includes("--format")
     ? textView(argv)
