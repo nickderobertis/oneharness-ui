@@ -26,8 +26,7 @@
         "{workspaceRoot}/scripts/install.sh",
         "{workspaceRoot}/scripts/install.test.ts",
         "{workspaceRoot}/scripts/release-assets.mjs",
-        "{workspaceRoot}/scripts/release-assets.test.ts",
-        "{workspaceRoot}/scripts/test-rust.sh"
+        "{workspaceRoot}/scripts/release-assets.test.ts"
       ],
       "options": {
         "commands": [
