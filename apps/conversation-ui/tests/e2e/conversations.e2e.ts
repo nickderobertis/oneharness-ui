@@ -1,10 +1,10 @@
 import { basename } from "node:path";
+import { e2eProject } from "@oneharness-ui/bridge/test/e2e-configuration.ts";
 import {
   conversationLabelMaxLength,
   conversationLabelsMaxCount,
 } from "@oneharness-ui/ipc-contract";
 import { expect, type Page, test } from "@playwright/test";
-import { e2eProject } from "../../../../packages/oneharness-bridge/test/e2e-configuration";
 
 const e2eProjectHeading = new RegExp(`${basename(e2eProject)}$`);
 

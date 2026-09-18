@@ -1,7 +1,7 @@
 import { randomBytes } from "node:crypto";
+import { e2eWebOrigin } from "@oneharness-ui/bridge/test/e2e-configuration.ts";
 import { defineConfig, devices } from "@playwright/test";
 import { z } from "zod";
-import { e2eWebOrigin } from "../../packages/oneharness-bridge/test/e2e-configuration";
 
 const webAccessToken = z
   .string()
