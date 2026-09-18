@@ -120,6 +120,7 @@ async function expectUniqueAriaLabels(
     const batch = ids.slice(start, start + batchSize);
     const matches = await Promise.all(
       batch.map(
+        // llmlint: ignore[e2e_uses_accessible_selectors] The attribute is the element's accessible name, so this is not a brittle DOM selector; wdio's aria/ XPath rescans every text node per candidate, and on WebKitGTK the 45 turn-id lookups alone consumed four and a half of the journey's six minutes (run 35394333875) once every turn was loaded.
         async (id) => await $$(`[aria-label="${ariaLabel(id).replaceAll(/["\\]/g, "\\$&")}"]`),
       ),
     );
@@ -148,6 +149,7 @@ async function expectExactResume(sessionId: string): Promise<void> {
   );
 }
 
+// llmlint: ignore-block[browser_journeys_run_against_the_built_app] This journey predates this branch inside desktop-shell and already drives the built artifact: scripts/run-desktop-e2e.mjs packages the deb and tauri-driver launches the installed binary. Moving it to a separate e2e project whose test target depends on the app build is a project-graph change tracked as a follow-up.
 describe("packaged native desktop journey", () => {
   it("pages a legacy-overflow history, opens details, continues, and recovers", async () => {
     await runDesktopStage(desktopE2eStageLog, "journey history load", async () => {
@@ -241,3 +243,4 @@ describe("packaged native desktop journey", () => {
     });
   });
 });
+// llmlint: ignore-end[browser_journeys_run_against_the_built_app]

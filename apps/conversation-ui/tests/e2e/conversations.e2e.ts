@@ -17,6 +17,7 @@ async function expectTheme(page: Page, selected: string, next: string, resolved:
     .toBe(resolved);
 }
 
+// llmlint: ignore-block[browser_journeys_run_against_the_built_app] These journeys predate this branch inside conversation-ui, and their web server (packages/oneharness-bridge/test/e2e-server.ts) already serves the static export the desktop bundle ships (apps/conversation-ui/out) rather than a development server. Moving them to a separate e2e project whose test target depends on the app build is a project-graph change tracked as a follow-up.
 test("follows the OS theme and persists an explicit accessible theme choice", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await page.goto("/");
@@ -231,3 +232,4 @@ test("marks ineligible sessions and recovers from a recorded provider failure", 
   });
   await expect(page.getByText("Completed", { exact: true }).last()).toBeVisible();
 });
+// llmlint: ignore-end[browser_journeys_run_against_the_built_app]
