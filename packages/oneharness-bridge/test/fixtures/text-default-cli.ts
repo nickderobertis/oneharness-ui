@@ -13,7 +13,7 @@ import { z } from "zod";
 // larger is not a call this stand-in was written for.
 const argvSchema = z.array(z.string().min(1).max(4096)).max(64);
 
-function packagedCli(argv: readonly string[], capture: boolean) {
+function runPackagedCli(argv: readonly string[], capture: boolean) {
   const sdkRequire = createRequire(import.meta.resolve("@oneharness/sdk"));
   const result = spawnSync(
     process.execPath,
@@ -30,7 +30,7 @@ function packagedCli(argv: readonly string[], capture: boolean) {
 }
 
 function textView(argv: readonly string[]): number {
-  const listed = packagedCli([...argv, "--format", "json"], true);
+  const listed = runPackagedCli([...argv, "--format", "json"], true);
   if (listed.status !== 0) return listed.status ?? 1;
   for (const session of HistoryListSchema.parse(JSON.parse(listed.stdout))) {
     process.stdout.write(`${session.id}  ${session.name}  ${session.started}\n`);
@@ -42,4 +42,4 @@ const argv = argvSchema.parse(process.argv.slice(2));
 process.exitCode =
   argv[0] === "history" && argv[1] === "list" && !argv.includes("--format")
     ? textView(argv)
-    : (packagedCli(argv, false).status ?? 1);
+    : (runPackagedCli(argv, false).status ?? 1);
