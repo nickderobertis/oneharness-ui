@@ -106,15 +106,22 @@ async function wheelThroughAutomaticPages(
   expect(appendedPages).toBe(requiredAutomaticPageBoundaries);
 }
 
-async function expectUniqueAccessibleIds(
+// These ids are the elements' own aria-label attributes. WebdriverIO's aria/
+// selector is an XPath that rescans every text node for each candidate, so on
+// WebKitGTK one lookup costs seconds once every turn is loaded and the batch
+// of them consumes most of the journey's budget; an attribute selector proves
+// the same uniqueness in milliseconds.
+async function expectUniqueAriaLabels(
   ids: string[],
-  accessibleName: (id: string) => string,
+  ariaLabel: (id: string) => string,
 ): Promise<void> {
   const batchSize = 5;
   for (let start = 0; start < ids.length; start += batchSize) {
     const batch = ids.slice(start, start + batchSize);
     const matches = await Promise.all(
-      batch.map(async (id) => await $$(`aria/${accessibleName(id)}`)),
+      batch.map(
+        async (id) => await $$(`[aria-label="${ariaLabel(id).replaceAll(/["\\]/g, "\\$&")}"]`),
+      ),
     );
     for (const match of matches) {
       expect(match).toHaveLength(1);
@@ -163,7 +170,7 @@ describe("packaged native desktop journey", () => {
       await wheelThroughAutomaticPages(history, firstConversation);
       await expect($("aria/58 of 58 conversations loaded")).toBeDisplayed();
       await expect(allConversations).toBeDisplayed();
-      await expectUniqueAccessibleIds(expectedSessionIds, (id) => `Session ID ${id}`);
+      await expectUniqueAriaLabels(expectedSessionIds, (id) => `Session ID ${id}`);
       await expect(await conversation("oversized-session-00")).toBeDisplayed();
       await expect(await conversation("plain-session")).toBeDisplayed();
       await (await conversation("oversized-session-00")).click();
@@ -192,7 +199,7 @@ describe("packaged native desktop journey", () => {
       await wheelThroughAutomaticPages(turns, firstTurn);
       await expect($("aria/45 of 45 turns loaded")).toBeDisplayed();
       await expect(allTurns).toBeDisplayed();
-      await expectUniqueAccessibleIds(expectedTurnIds, (id) => `Turn ${id} from claude-code`);
+      await expectUniqueAriaLabels(expectedTurnIds, (id) => `Turn ${id} from claude-code`);
     });
 
     await runDesktopStage(desktopE2eStageLog, "journey tool disclosure", async () => {
