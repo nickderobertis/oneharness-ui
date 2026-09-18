@@ -467,6 +467,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     if (!storage.ok) expect(storage.error.detail).toContain("not-a-directory");
   });
 
+  // llmlint: ignore[e2e_not_mocked] No released CLI defaults to text yet; the stand-in renders only that view and forwards every other call, including JSON discovery, to the packaged CLI.
   test("asks for JSON discovery from a CLI whose default view is text", async () => {
     await seed("text-default", '{"result":"Listed","session_id":"native-text-default"}');
     const bridge = new BridgeService(

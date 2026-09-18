@@ -33,6 +33,7 @@ layout on a native Ubuntu 22.04 ARM runner. It sets
 FUSE, and asserts that the real window, local sidecar, empty SDK history, and
 refreshable conversation UI reach the native startup boundary. Release builds
 repeat that journey before uploading the ARM64 assets. The ARM bundle compiles
+<!-- llmlint: ignore[contracts_have_one_source_or_a_drift_gate] scripts/check-version-drift.mjs fails unless this version matches the bridge's @oneharness/sdk pin. -->
 the SDK-matched oneharness 0.14.0 CLI from its pinned upstream commit on the
 same Ubuntu 22.04 runner, so initial history discovery crosses the compatible
 CLI boundary too.
