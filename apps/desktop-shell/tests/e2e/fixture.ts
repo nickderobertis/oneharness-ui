@@ -256,11 +256,11 @@ function fixtureHistoryId(index: number): string {
 type HistoryLine = ReturnType<typeof HistoryLineSchema.parse>;
 type EventLineVersion = Extract<HistoryLine, { type: "event" }>["schema_version"];
 
-/// Serialize records the way the packaged CLI laid out `historyFile`: one line
-/// per event, stamped with the version the CLI itself wrote there rather than
-/// one restated here, then the run line. A file without event lines yields no
-/// version, and only records that carry events need one.
-async function fixtureHistoryLines(
+/// Build a serializer that lays a record out the way the packaged CLI laid out
+/// `historyFile`: one line per event, stamped with the version the CLI itself
+/// wrote there rather than one restated here, then the run line. A file without
+/// event lines yields no version, and only records that carry events need one.
+async function historyLineSerializer(
   historyFile: string,
 ): Promise<(record: ReturnType<typeof HistoryRecordSchema.parse>) => string> {
   const written = (await readFile(historyFile, "utf8"))
@@ -298,9 +298,9 @@ async function seedOversizedHistory(
   // Paid model execution cannot deterministically produce a history corpus
   // above the legacy bridge limit. Derive every synthetic record from a real
   // packaged-CLI record and validate it with the SDK schema before persistence.
-  const [template, historyLines] = await Promise.all([
+  const [template, serializeHistoryLines] = await Promise.all([
     readFirstHistoryRecord(historyFile),
-    fixtureHistoryLines(historyFile),
+    historyLineSerializer(historyFile),
   ]);
   const prompt = "Deterministic oversized native history prompt. ".repeat(2_100);
   const summaries: Array<Record<string, unknown>> = [];
@@ -332,7 +332,7 @@ async function seedOversizedHistory(
       });
       await writeFile(
         resolve(dirname(historyFile), `${session}.jsonl`),
-        `${historyLines(record)}\n`,
+        `${serializeHistoryLines(record)}\n`,
       );
     }),
   );
@@ -346,9 +346,9 @@ async function seedOversizedHistory(
 }
 
 async function seedPaginatedTurns(historyFile: string): Promise<string[]> {
-  const [template, historyLines] = await Promise.all([
+  const [template, serializeHistoryLines] = await Promise.all([
     readFirstHistoryRecord(historyFile),
-    fixtureHistoryLines(historyFile),
+    historyLineSerializer(historyFile),
   ]);
   const records = Array.from({ length: PAGINATED_TURN_COUNT }, (_, index) =>
     HistoryRecordSchema.parse({
@@ -361,7 +361,7 @@ async function seedPaginatedTurns(historyFile: string): Promise<string[]> {
       thinking: index === 0 ? template.thinking : undefined,
     }),
   );
-  await writeFile(historyFile, `${records.map(historyLines).join("\n")}\n`);
+  await writeFile(historyFile, `${records.map(serializeHistoryLines).join("\n")}\n`);
   return records.map((record, index) => `${record.session}-${index}`);
 }
 
