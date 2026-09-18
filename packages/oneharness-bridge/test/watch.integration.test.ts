@@ -3,12 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, resolve } from "node:path";
-import {
-  HistoryLineSchema,
-  type HistoryRecord,
-  HistoryRecordSchema,
-  OneHarness,
-} from "@oneharness/sdk";
+import { type HistoryRecord, HistoryRecordSchema, OneHarness } from "@oneharness/sdk";
 import type { BridgeStreamFrame } from "@oneharness-ui/ipc-contract";
 import { BridgeService } from "../src/service.ts";
 import { readFixtureHistoryRecord } from "./history-fixture.ts";
@@ -65,22 +60,6 @@ afterEach(async () => {
   await rm(historyDir, { force: true, recursive: true });
 });
 
-function historyLines(record: HistoryRecord): string {
-  const { events, ...run } = record;
-  const lines = (events ?? []).map((event) =>
-    HistoryLineSchema.parse({
-      event,
-      harness: record.harness,
-      run_id: record.history_id,
-      // The event-line version the pinned CLI writes; older versions forbid `timing_source`.
-      schema_version: "1.9",
-      type: "event",
-    }),
-  );
-  lines.push(HistoryLineSchema.parse({ ...run, type: "run" }));
-  return lines.map((line) => JSON.stringify(line)).join("\n");
-}
-
 /// Build a real history session on disk from a real fixture run, so the watch
 /// resolves its starting turns through the packaged CLI's own lookup.
 async function seedSession(
@@ -103,7 +82,7 @@ async function seedSession(
     mode: "bypass",
     prompt: "Seed the watched session",
   });
-  const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
+  const { historyFile, historyLines, record } = await readFixtureHistoryRecord(historyDir, report);
   // The SDK's record type is a wide union; spreading it with a partial override
   // exceeds TypeScript's union limit, so the schema validates the merged fields.
   const template: Readonly<Record<string, unknown>> = record;

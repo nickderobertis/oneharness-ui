@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { basename, dirname, extname, isAbsolute, resolve } from "node:path";
 import {
   HistoryLineSchema,
-  type HistoryRecord,
   HistoryRecordSchema,
   OneHarness,
   RunOptionsSchema,
@@ -49,22 +48,6 @@ const mockKeys = [
   "ONEHARNESS_HISTORY_LABELS",
   "ONEHARNESS_NO_CONFIG",
 ];
-
-function historyLines(record: HistoryRecord): string {
-  const { events, ...run } = record;
-  const lines = (events ?? []).map((event) =>
-    HistoryLineSchema.parse({
-      event,
-      harness: record.harness,
-      run_id: record.history_id,
-      // The event-line version the pinned CLI writes; older versions forbid `timing_source`.
-      schema_version: "1.9",
-      type: "event",
-    }),
-  );
-  lines.push(HistoryLineSchema.parse({ ...run, type: "run" }));
-  return lines.map((line) => JSON.stringify(line)).join("\n");
-}
 
 function fixtureHistoryId(index: number): string {
   return `019f94e5-f419-7a12-bfef-${index.toString(16).padStart(12, "0")}`;
@@ -147,7 +130,10 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     ).toBe(false);
 
     const report = await seed("schema-boundary", '{"result":"Validated","session_id":"sdk-1"}');
-    const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
+    const { historyFile, historyLines, record } = await readFixtureHistoryRecord(
+      historyDir,
+      report,
+    );
     const rawLine = JSON.parse((await readFile(historyFile, "utf8")).trim()) as Record<
       string,
       unknown
@@ -226,7 +212,10 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       ].join("\n"),
       { historyLabels: { role: "judge", worker: "7" } },
     );
-    const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
+    const { historyFile, historyLines, record } = await readFixtureHistoryRecord(
+      historyDir,
+      report,
+    );
     record.thinking = "Checked the project shape before answering.";
     record.future_payload = { preserved: true };
     await writeFile(historyFile, `${historyLines(record)}\n`);
@@ -495,7 +484,10 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       '{"result":"Page template answer","session_id":"native-page-template"}',
       { prompt: "summary pages must not include this detail prompt" },
     );
-    const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
+    const { historyFile, historyLines, record } = await readFixtureHistoryRecord(
+      historyDir,
+      report,
+    );
     await Promise.all(
       Array.from({ length: 26 }, async (_, index) => {
         const session = `page-session-${String(index).padStart(2, "0")}`;
@@ -563,7 +555,10 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       "large-conversation",
       '{"result":"Bounded detail answer","session_id":"native-large-conversation"}',
     );
-    const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
+    const { historyFile, historyLines, record } = await readFixtureHistoryRecord(
+      historyDir,
+      report,
+    );
     const largePrompt = "bounded conversation detail ".repeat(6_500);
     const records = Array.from({ length: 5 }, (_, index) =>
       HistoryRecordSchema.parse({
@@ -602,7 +597,10 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       "oversized-single-turn",
       '{"result":"Oversized turn answer","session_id":"native-oversized-single-turn"}',
     );
-    const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
+    const { historyFile, historyLines, record } = await readFixtureHistoryRecord(
+      historyDir,
+      report,
+    );
     const oversizedPrompt = "oversized history detail ".repeat(25_000);
     const oversizedRecord = HistoryRecordSchema.parse({ ...record, prompt: oversizedPrompt });
     expect(Buffer.byteLength(JSON.stringify(oversizedRecord))).toBeGreaterThan(

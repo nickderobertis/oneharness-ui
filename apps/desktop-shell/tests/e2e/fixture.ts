@@ -253,20 +253,43 @@ function fixtureHistoryId(index: number): string {
   return `019f94e5-f419-7a12-bfef-${index.toString(16).padStart(12, "0")}`;
 }
 
-function historyLines(record: ReturnType<typeof HistoryRecordSchema.parse>): string {
-  const { events, ...run } = record;
-  const lines = (events ?? []).map((event) =>
-    HistoryLineSchema.parse({
-      event,
-      harness: record.harness,
-      run_id: record.history_id,
-      // The event-line version the pinned CLI writes; older versions forbid `timing_source`.
-      schema_version: "1.9",
-      type: "event",
-    }),
-  );
-  lines.push(HistoryLineSchema.parse({ ...run, type: "run" }));
-  return lines.map((line) => JSON.stringify(line)).join("\n");
+type HistoryLine = ReturnType<typeof HistoryLineSchema.parse>;
+type EventLineVersion = Extract<HistoryLine, { type: "event" }>["schema_version"];
+
+/// Serialize records the way the packaged CLI laid out `historyFile`: one line
+/// per event, stamped with the version the CLI itself wrote there rather than
+/// one restated here, then the run line. A file without event lines yields no
+/// version, and only records that carry events need one.
+async function fixtureHistoryLines(
+  historyFile: string,
+): Promise<(record: ReturnType<typeof HistoryRecordSchema.parse>) => string> {
+  const written = (await readFile(historyFile, "utf8"))
+    .trim()
+    .split("\n")
+    .map((line): HistoryLine => HistoryLineSchema.parse(JSON.parse(line)));
+  const versions = new Set<EventLineVersion>();
+  for (const line of written) if (line.type === "event") versions.add(line.schema_version);
+  if (versions.size > 1) {
+    throw new Error(`fixture history event lines disagree on their schema version: ${historyFile}`);
+  }
+  const [eventLineVersion] = versions;
+  return (record) => {
+    const { events, ...run } = record;
+    if (events?.length && eventLineVersion === undefined) {
+      throw new Error(`fixture record carries events but ${historyFile} wrote no event lines`);
+    }
+    const lines = (events ?? []).map((event) =>
+      HistoryLineSchema.parse({
+        event,
+        harness: record.harness,
+        run_id: record.history_id,
+        schema_version: eventLineVersion,
+        type: "event",
+      }),
+    );
+    lines.push(HistoryLineSchema.parse({ ...run, type: "run" }));
+    return lines.map((line) => JSON.stringify(line)).join("\n");
+  };
 }
 
 async function seedOversizedHistory(
@@ -275,7 +298,10 @@ async function seedOversizedHistory(
   // Paid model execution cannot deterministically produce a history corpus
   // above the legacy bridge limit. Derive every synthetic record from a real
   // packaged-CLI record and validate it with the SDK schema before persistence.
-  const template = await readFirstHistoryRecord(historyFile);
+  const [template, historyLines] = await Promise.all([
+    readFirstHistoryRecord(historyFile),
+    fixtureHistoryLines(historyFile),
+  ]);
   const prompt = "Deterministic oversized native history prompt. ".repeat(2_100);
   const summaries: Array<Record<string, unknown>> = [];
   const sessionIds = Array.from(
@@ -320,7 +346,10 @@ async function seedOversizedHistory(
 }
 
 async function seedPaginatedTurns(historyFile: string): Promise<string[]> {
-  const template = await readFirstHistoryRecord(historyFile);
+  const [template, historyLines] = await Promise.all([
+    readFirstHistoryRecord(historyFile),
+    fixtureHistoryLines(historyFile),
+  ]);
   const records = Array.from({ length: PAGINATED_TURN_COUNT }, (_, index) =>
     HistoryRecordSchema.parse({
       ...template,
