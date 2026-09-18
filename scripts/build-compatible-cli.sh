@@ -37,7 +37,11 @@ cleanup() {
 trap cleanup EXIT
 
 install_root="$temporary/install"
+# The upstream crate compiles under its own lint settings: this repository's
+# RUSTFLAGS="-D warnings" would otherwise fail its pinned revision on any lint
+# a newer compiler adds, which is not this repository's to fix.
 CARGO_TARGET_DIR="$ROOT/target/oneharness-ui-upstream-build" \
+  env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS \
   cargo install \
   --git "$UPSTREAM_REPOSITORY" \
   --rev "$UPSTREAM_REVISION" \
