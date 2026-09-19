@@ -63,18 +63,28 @@ const CLI_ENVIRONMENT_KEYS = [
   "XDG_DATA_HOME",
   "XDG_STATE_HOME",
 ] as const;
-type HistoryRecordJsonSchema = {
-  allOf?: HistoryRecordJsonSchema[];
-  anyOf?: HistoryRecordJsonSchema[];
-  oneOf?: HistoryRecordJsonSchema[];
-  properties?: Record<string, unknown>;
+// The generated record schema is JSON Schema, whose composition keywords
+// (allOf/anyOf/oneOf) and object property maps are the standard's, not the
+// SDK's; the SDK composes its object variants with unions and intersections
+// and nests them differently per release. The walk reads only those
+// keywords, validated at this boundary, never a property's own schema, so
+// nested keys such as usage counters stay out of the set.
+type SchemaComposition = {
+  allOf?: SchemaComposition[] | undefined;
+  anyOf?: SchemaComposition[] | undefined;
+  oneOf?: SchemaComposition[] | undefined;
+  properties?: Record<string, unknown> | undefined;
 };
+const schemaCompositionSchema: z.ZodType<SchemaComposition> = z.lazy(() =>
+  z.looseObject({
+    allOf: z.array(schemaCompositionSchema).optional(),
+    anyOf: z.array(schemaCompositionSchema).optional(),
+    oneOf: z.array(schemaCompositionSchema).optional(),
+    properties: z.record(z.string(), z.unknown()).optional(),
+  }),
+);
 
-// The SDK composes its record schema from object variants joined by unions and
-// intersections, and each release nests them differently. Only the composition
-// is walked, never a property's own schema, so nested keys such as usage
-// counters stay out of the set.
-function recordPropertyKeys(schema: HistoryRecordJsonSchema): string[] {
+function recordPropertyKeys(schema: SchemaComposition): string[] {
   return [
     ...Object.keys(schema.properties ?? {}),
     ...[...(schema.allOf ?? []), ...(schema.anyOf ?? []), ...(schema.oneOf ?? [])].flatMap(
@@ -84,9 +94,7 @@ function recordPropertyKeys(schema: HistoryRecordJsonSchema): string[] {
 }
 
 const knownRecordKeys = new Set([
-  // zod types the generated schema as an open JSON-schema record; the cast
-  // names just the composition keys the walk reads, each optional.
-  ...recordPropertyKeys(HistoryRecordSchema.toJSONSchema() as HistoryRecordJsonSchema),
+  ...recordPropertyKeys(schemaCompositionSchema.parse(HistoryRecordSchema.toJSONSchema())),
   // Legacy SDK records may carry either alias outside the current schema.
   "reasoning",
   "thinking",
