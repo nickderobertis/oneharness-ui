@@ -1,6 +1,11 @@
 [test]
 coverage = true
-coverageReporter = ["text", "lcov"]
+# Only the lcov file: the gate reads coverage/*/lcov.info, and Bun 1.3.14 writes
+# it after the text table. Under `nx run-many` the table's many small writes go
+# through a pipe whose reader can lag; the first EAGAIN aborts the whole report,
+# so the lcov file is silently skipped while the run still exits 0. Pass
+# `--coverage-reporter=text` to see the table locally.
+coverageReporter = ["lcov"]
 coverageThreshold = 0.0
 coverageSkipTestFiles = true
 coveragePathIgnorePatterns = ["**/dist/**"]
