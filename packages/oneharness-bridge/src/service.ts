@@ -63,14 +63,38 @@ const CLI_ENVIRONMENT_KEYS = [
   "XDG_DATA_HOME",
   "XDG_STATE_HOME",
 ] as const;
-type HistoryRecordJsonSchema = {
-  anyOf?: Array<{ properties?: Record<string, unknown> }>;
+// The generated record schema is JSON Schema, whose composition keywords
+// (allOf/anyOf/oneOf) and object property maps are the standard's, not the
+// SDK's; the SDK composes its object variants with unions and intersections
+// and nests them differently per release. The walk reads only those
+// keywords, validated at this boundary, never a property's own schema, so
+// nested keys such as usage counters stay out of the set.
+type SchemaComposition = {
+  allOf?: SchemaComposition[] | undefined;
+  anyOf?: SchemaComposition[] | undefined;
+  oneOf?: SchemaComposition[] | undefined;
+  properties?: Record<string, unknown> | undefined;
 };
-const historyRecordJsonSchema = HistoryRecordSchema.toJSONSchema() as HistoryRecordJsonSchema;
+const schemaCompositionSchema: z.ZodType<SchemaComposition> = z.lazy(() =>
+  z.looseObject({
+    allOf: z.array(schemaCompositionSchema).optional(),
+    anyOf: z.array(schemaCompositionSchema).optional(),
+    oneOf: z.array(schemaCompositionSchema).optional(),
+    properties: z.record(z.string(), z.unknown()).optional(),
+  }),
+);
+
+function recordPropertyKeys(schema: SchemaComposition): string[] {
+  return [
+    ...Object.keys(schema.properties ?? {}),
+    ...[...(schema.allOf ?? []), ...(schema.anyOf ?? []), ...(schema.oneOf ?? [])].flatMap(
+      recordPropertyKeys,
+    ),
+  ];
+}
+
 const knownRecordKeys = new Set([
-  ...(historyRecordJsonSchema.anyOf ?? []).flatMap((variant) =>
-    Object.keys(variant.properties ?? {}),
-  ),
+  ...recordPropertyKeys(schemaCompositionSchema.parse(HistoryRecordSchema.toJSONSchema())),
   // Legacy SDK records may carry either alias outside the current schema.
   "reasoning",
   "thinking",
@@ -100,7 +124,15 @@ function resolveExecutable(environment: BridgeEnvironment): Executable {
 
 async function invokeDiscovery(environment: BridgeEnvironment): Promise<HistorySessionSummary[]> {
   const executable = resolveExecutable(environment);
-  const args = [...executable.prefix, "history", "list", "--compact", "--all-projects"];
+  const args = [
+    ...executable.prefix,
+    "history",
+    "list",
+    "--format",
+    "json",
+    "--compact",
+    "--all-projects",
+  ];
   if (environment.historyDir) args.push("--history-dir", environment.historyDir);
   return await new Promise((resolve, reject) => {
     const child = spawn(executable.command, args, {

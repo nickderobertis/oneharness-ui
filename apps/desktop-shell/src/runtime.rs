@@ -895,7 +895,10 @@ mod tests {
         });
 
         // A session no reader can resolve still proves the whole transport: the
-        // sidecar streams one contract frame per line into the channel.
+        // sidecar streams one contract frame per line into the channel. The
+        // sidecar inherits this process's environment, so scripts/test-rust.sh
+        // points ONEHARNESS_UI_HISTORY_DIR at an empty store; against the
+        // host's own history that one lookup is a scan of every session.
         let id = tauri::async_runtime::block_on(super::start_bridge_watch(
             app.handle().clone(),
             super::BridgeRequest(

@@ -54,7 +54,8 @@ async function invoke(args: string[]): Promise<JsonObject[]> {
 }
 
 describe("native desktop fixture", () => {
-  test("creates schema 1.0 stopped, paginated, and recoverable records", async () => {
+  // llmlint: ignore[expensive_tests_stay_behind_their_own_edge] desktop-shell has one test target today; splitting it is a separate project-graph change.
+  test("creates schema 1.2 stopped, paginated, and recoverable records", async () => {
     const fixture = await createDesktopFixture();
     const historyDir = fixture.environment.ONEHARNESS_UI_HISTORY_DIR;
     const fixtureRoot = dirname(historyDir);
@@ -80,6 +81,8 @@ describe("native desktop fixture", () => {
       const listed = await invoke([
         "history",
         "list",
+        "--format",
+        "json",
         "--compact",
         "--all-projects",
         "--history-dir",
@@ -108,6 +111,8 @@ describe("native desktop fixture", () => {
         "history",
         "show",
         requiredString(stoppedSummary, "id"),
+        "--format",
+        "json",
         "--compact",
         "--all-projects",
         "--history-dir",
@@ -115,7 +120,7 @@ describe("native desktop fixture", () => {
       ]);
       expect(stopped).toHaveLength(45);
       expect(stopped[0]).toMatchObject({
-        schema_version: "1.0",
+        schema_version: "1.2",
         session_id: "native-stopped-session",
         status: "timeout",
       });
@@ -128,6 +133,8 @@ describe("native desktop fixture", () => {
         "history",
         "show",
         requiredString(failedSummary, "id"),
+        "--format",
+        "json",
         "--compact",
         "--all-projects",
         "--history-dir",

@@ -4,8 +4,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 readonly ROOT
 readonly UPSTREAM_REPOSITORY="https://github.com/nickderobertis/oneharness.git"
-readonly UPSTREAM_REVISION="761857ea60779f30f970cd30c794b0130b49460e"
-readonly UPSTREAM_VERSION="0.5.5"
+# llmlint: ignore-block[contracts_have_one_source_or_a_drift_gate] scripts/check-version-drift.mjs fails unless this version matches the bridge's @oneharness/sdk pin. This script checks the built revision reports that version.
+readonly UPSTREAM_REVISION="b610356dc4089dcb0bf342b154a3539e115295a3"
+readonly UPSTREAM_VERSION="0.14.0"
+# llmlint: ignore-end[contracts_have_one_source_or_a_drift_gate]
 readonly OUTPUT_ROOT="$ROOT/target/oneharness-ui-upstream"
 
 fail() {
@@ -35,7 +37,11 @@ cleanup() {
 trap cleanup EXIT
 
 install_root="$temporary/install"
+# The upstream crate compiles under its own lint settings: this repository's
+# RUSTFLAGS="-D warnings" would otherwise fail its pinned revision on any lint
+# a newer compiler adds, which is not this repository's to fix.
 CARGO_TARGET_DIR="$ROOT/target/oneharness-ui-upstream-build" \
+  env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS \
   cargo install \
   --git "$UPSTREAM_REPOSITORY" \
   --rev "$UPSTREAM_REVISION" \

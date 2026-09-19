@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { basename, dirname, extname, isAbsolute, resolve } from "node:path";
 import {
   HistoryLineSchema,
-  type HistoryRecord,
   HistoryRecordSchema,
   OneHarness,
   RunOptionsSchema,
@@ -34,6 +33,10 @@ const provider =
     repository,
     `target/oneharness-ui-test/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
   );
+const textDefaultCli = resolve(
+  import.meta.dir,
+  `fixtures/text-default-cli.${process.platform === "win32" ? "cmd" : "ts"}`,
+);
 const TEST_AUTHORIZATION = "oneharness-ui-integration-authorization";
 
 let historyDir = "";
@@ -45,21 +48,6 @@ const mockKeys = [
   "ONEHARNESS_HISTORY_LABELS",
   "ONEHARNESS_NO_CONFIG",
 ];
-
-function historyLines(record: HistoryRecord): string {
-  const { events, ...run } = record;
-  const lines = (events ?? []).map((event) =>
-    HistoryLineSchema.parse({
-      event,
-      harness: record.harness,
-      run_id: record.history_id,
-      schema_version: "1.0",
-      type: "event",
-    }),
-  );
-  lines.push(HistoryLineSchema.parse({ ...run, type: "run" }));
-  return lines.map((line) => JSON.stringify(line)).join("\n");
-}
 
 function fixtureHistoryId(index: number): string {
   return `019f94e5-f419-7a12-bfef-${index.toString(16).padStart(12, "0")}`;
@@ -109,7 +97,7 @@ async function seed(
     mode: "bypass",
     prompt: options.prompt ?? "Inspect the repository",
   });
-  expect(report.oneharness_version).toBe("0.5.5");
+  expect(report.oneharness_version).toBe("0.14.0");
   return report;
 }
 
@@ -134,20 +122,23 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       ),
     ) as { dependencies?: Record<string, string>; version?: string };
     expect(manifest).toMatchObject({
-      dependencies: { "oneharness-cli": "0.5.5" },
-      version: "0.5.5",
+      dependencies: { "oneharness-cli": "0.14.0" },
+      version: "0.14.0",
     });
     expect(
       RunOptionsSchema.safeParse({ prompt: "Valid prompt", repositoryOwnedOption: true }).success,
     ).toBe(false);
 
     const report = await seed("schema-boundary", '{"result":"Validated","session_id":"sdk-1"}');
-    const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
+    const { historyFile, historyLines, record } = await readFixtureHistoryRecord(
+      historyDir,
+      report,
+    );
     const rawLine = JSON.parse((await readFile(historyFile, "utf8")).trim()) as Record<
       string,
       unknown
     >;
-    expect(rawLine.schema_version).toBe("1.0");
+    expect(rawLine.schema_version).toBe("1.1");
     expect(Object.hasOwn(rawLine, "labels")).toBe(false);
     expect(Object.hasOwn(record, "labels")).toBe(false);
     const unlabelled = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
@@ -221,7 +212,10 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       ].join("\n"),
       { historyLabels: { role: "judge", worker: "7" } },
     );
-    const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
+    const { historyFile, historyLines, record } = await readFixtureHistoryRecord(
+      historyDir,
+      report,
+    );
     record.thinking = "Checked the project shape before answering.";
     record.future_payload = { preserved: true };
     await writeFile(historyFile, `${historyLines(record)}\n`);
@@ -248,9 +242,17 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       finishedAt: record.finished_at,
       reasoning: null,
       status: "completed",
-      unknown: {},
       usage: { inputTokens: 0, outputTokens: 4 },
     });
+    // Every field the SDK schema names is mapped above, so nothing the packaged
+    // CLI writes reaches the "Additional upstream data" disclosure; its history
+    // show re-serialises the record and drops the file's extra key before the
+    // bridge reads it.
+    expect(
+      selected.ok && selected.data.kind === "get"
+        ? selected.data.conversation.turns[0]?.unknown
+        : undefined,
+    ).toEqual({});
     expect(
       selected.ok && selected.data.kind === "get"
         ? selected.data.conversation.historyLabels
@@ -263,7 +265,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     ).toBe("Bash");
   });
 
-  test("preserves call identity while keeping unavailable timing absent", async () => {
+  test("preserves call identity with observed timing while keeping unavailable timing absent", async () => {
     const report = await seed(
       "tool-timing",
       [
@@ -275,30 +277,36 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     const { historyFile } = await readFixtureHistoryRecord(historyDir, report);
     const sessionId = basename(historyFile, extname(historyFile));
 
-    const untimed = await service().handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
-    const untimedTools =
-      untimed.ok && untimed.data.kind === "get"
-        ? untimed.data.conversation.turns[0]?.tools
+    const selected = await service().handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
+    const tools =
+      selected.ok && selected.data.kind === "get"
+        ? selected.data.conversation.turns[0]?.tools
         : undefined;
-    // The deterministic provider reports no tool boundary, so every timing field stays null
-    // rather than being zero-filled, and the call identity still pairs call with result.
-    expect(untimedTools?.[0]).toMatchObject({
-      durationMs: null,
-      finishedAt: null,
+    // oneharness observes the tool call's boundary on the provider's stdout and says so.
+    expect(tools?.[0]).toMatchObject({
+      durationMs: expect.any(Number),
+      finishedAt: expect.any(String),
       index: 0,
       kind: "tool_call",
       name: "Bash",
+      startedAt: expect.any(String),
+      status: "completed",
+      timingSource: "stdout_observed",
+      toolCallId: "t1",
+    });
+    // The result carries no boundary, so every timing field stays null rather than being
+    // zero-filled, and the call identity still pairs it with its call.
+    expect(tools?.[1]).toMatchObject({
+      durationMs: null,
+      finishedAt: null,
+      index: 1,
+      kind: "tool_result",
+      output: "/repo",
       startedAt: null,
       status: null,
       toolCallId: "t1",
     });
-    expect(untimedTools?.[1]).toMatchObject({
-      index: 1,
-      kind: "tool_result",
-      output: "/repo",
-      toolCallId: "t1",
-    });
-    expect(Object.hasOwn(untimedTools?.[0] ?? {}, "timingSource")).toBe(false);
+    expect(Object.hasOwn(tools?.[1] ?? {}, "timingSource")).toBe(false);
   });
 
   test("continues a labeled session and returns the new history selection", async () => {
@@ -456,13 +464,41 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     if (!storage.ok) expect(storage.error.detail).toContain("not-a-directory");
   });
 
+  // llmlint: ignore-block[e2e_not_mocked] No released CLI defaults to text yet; the stand-in renders only that view and forwards every other call, including JSON discovery, to the packaged CLI.
+  // llmlint: ignore-block[tests_mirror_real_usage] This service-boundary case isolates the argv the bridge hands the CLI, entered the same way as every discovery case in this suite; cli.integration.test.ts and server.integration.test.ts separately drive the same requests through the sidecar's stdio and HTTP transports.
+  test("asks for JSON discovery from a CLI whose default view is text", async () => {
+    await seed("text-default", '{"result":"Listed","session_id":"native-text-default"}');
+    const bridge = new BridgeService(
+      { executable: textDefaultCli, historyDir },
+      TEST_AUTHORIZATION,
+    );
+
+    const listed = await bridge.handle({ kind: "list" }, TEST_AUTHORIZATION);
+    expect(listed).toMatchObject({
+      data: { conversations: [{ name: "text-default" }], totalCount: 1 },
+      ok: true,
+    });
+    const sessionId =
+      listed.ok && listed.data.kind === "list" ? listed.data.conversations[0]?.id : "";
+    const selected = await bridge.handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
+    expect(selected).toMatchObject({
+      data: { conversation: { turns: [{ assistant: "Listed" }] } },
+      ok: true,
+    });
+  });
+  // llmlint: ignore-end[e2e_not_mocked]
+  // llmlint: ignore-end[tests_mirror_real_usage]
+
   test("pages SDK summaries without loading every conversation detail", async () => {
     const report = await seed(
       "page-template",
       '{"result":"Page template answer","session_id":"native-page-template"}',
       { prompt: "summary pages must not include this detail prompt" },
     );
-    const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
+    const { historyFile, historyLines, record } = await readFixtureHistoryRecord(
+      historyDir,
+      report,
+    );
     await Promise.all(
       Array.from({ length: 26 }, async (_, index) => {
         const session = `page-session-${String(index).padStart(2, "0")}`;
@@ -530,7 +566,10 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       "large-conversation",
       '{"result":"Bounded detail answer","session_id":"native-large-conversation"}',
     );
-    const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
+    const { historyFile, historyLines, record } = await readFixtureHistoryRecord(
+      historyDir,
+      report,
+    );
     const largePrompt = "bounded conversation detail ".repeat(6_500);
     const records = Array.from({ length: 5 }, (_, index) =>
       HistoryRecordSchema.parse({
@@ -569,7 +608,10 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       "oversized-single-turn",
       '{"result":"Oversized turn answer","session_id":"native-oversized-single-turn"}',
     );
-    const { historyFile, record } = await readFixtureHistoryRecord(historyDir, report);
+    const { historyFile, historyLines, record } = await readFixtureHistoryRecord(
+      historyDir,
+      report,
+    );
     const oversizedPrompt = "oversized history detail ".repeat(25_000);
     const oversizedRecord = HistoryRecordSchema.parse({ ...record, prompt: oversizedPrompt });
     expect(Buffer.byteLength(JSON.stringify(oversizedRecord))).toBeGreaterThan(

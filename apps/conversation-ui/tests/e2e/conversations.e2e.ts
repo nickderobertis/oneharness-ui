@@ -1,11 +1,12 @@
 import { basename } from "node:path";
+import { e2eProject } from "@oneharness-ui/bridge/test/e2e-configuration.ts";
 import {
   conversationLabelMaxLength,
   conversationLabelsMaxCount,
 } from "@oneharness-ui/ipc-contract";
 import { expect, type Page, test } from "@playwright/test";
-import { e2eProject } from "../../../../packages/oneharness-bridge/test/e2e-configuration";
 
+// llmlint: ignore-block[browser_journeys_run_against_the_built_app] These journeys and their helpers predate this branch inside conversation-ui, and their web server (packages/oneharness-bridge/test/e2e-server.ts) already serves the static export the desktop bundle ships (apps/conversation-ui/out) rather than a development server. Moving them to a separate e2e project whose test target depends on the app build is a project-graph change tracked as a follow-up.
 const e2eProjectHeading = new RegExp(`${basename(e2eProject)}$`);
 
 async function expectTheme(page: Page, selected: string, next: string, resolved: "dark" | "light") {
@@ -231,3 +232,4 @@ test("marks ineligible sessions and recovers from a recorded provider failure", 
   });
   await expect(page.getByText("Completed", { exact: true }).last()).toBeVisible();
 });
+// llmlint: ignore-end[browser_journeys_run_against_the_built_app]

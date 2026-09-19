@@ -37,12 +37,12 @@ rules:
       include:
         - ".github/workflows/**/*.yml"
     require_line_attribution: true
-    relevance: permissions exceed audited reusable-workflow requirements
+    relevance: a workflow declares permissions
   - name: work_goes_through_command_surface
     override: true
     description: Automation uses the command surface required by its execution environment.
     require_line_attribution: true
-    relevance: automation bypasses the required command surface
+    relevance: automation invokes the project's commands
   - name: live_tier_compiles_and_requires_credential
     override: true
     relevance: the target files define a test tier that connects to a credentialed external service
@@ -55,4 +55,4 @@ plugins:
   - "https://raw.githubusercontent.com/nickderobertis/dero-skills/main/skills/bootstrap/create-repo/assets/llmlint/languages/rust.llmlint.yml@1"
   - "https://raw.githubusercontent.com/nickderobertis/dero-skills/main/skills/bootstrap/create-repo/assets/llmlint/languages/typescript.llmlint.yml@1"
   - "https://raw.githubusercontent.com/nickderobertis/dero-skills/main/skills/bootstrap/create-repo/assets/llmlint/ci.llmlint.yml@1"
-  - "https://raw.githubusercontent.com/nickderobertis/dero-skills/main/skills/bootstrap/create-repo/assets/llmlint/monorepo.llmlint.yml@1"
+  - "https://raw.githubusercontent.com/nickderobertis/dero-skills/main/skills/bootstrap/create-repo/assets/llmlint/project-graph.llmlint.yml@1"
