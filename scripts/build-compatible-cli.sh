@@ -39,8 +39,11 @@ trap cleanup EXIT
 install_root="$temporary/install"
 # The upstream crate compiles under its own lint settings: this repository's
 # RUSTFLAGS="-D warnings" would otherwise fail its pinned revision on any lint
-# a newer compiler adds, which is not this repository's to fix.
-CARGO_TARGET_DIR="$ROOT/target/oneharness-ui-upstream-build" \
+# a newer compiler adds, which is not this repository's to fix. The build lands
+# in the clone's one target directory rather than the temporary one cargo
+# install would otherwise use and discard.
+# llmlint: ignore[contracts_have_one_source_or_a_drift_gate] cargo install reloads its configuration rooted at CARGO_HOME for a non-path crate, so the clone's .cargo/config.toml build.target-dir is never read by it; this environment variable is the one channel that reaches it, carrying the value the config names.
+CARGO_TARGET_DIR="$ROOT/target" \
   env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS \
   cargo install \
   --git "$UPSTREAM_REPOSITORY" \
@@ -55,8 +58,17 @@ CARGO_TARGET_DIR="$ROOT/target/oneharness-ui-upstream-build" \
 source_binary="$install_root/bin/oneharness"
 [ -x "$source_binary" ] \
   || fail "the pinned source build produced no executable; inspect the Cargo diagnostic and rerun just bundle"
-[ "$($source_binary --version)" = "oneharness $UPSTREAM_VERSION" ] \
-  || fail "the pinned source build reported an unexpected version; clear target/oneharness-ui-upstream-build and rerun just bundle"
+observed_version="$("$source_binary" --version)" \
+  || fail "the pinned source build could not report its version; inspect the diagnostic above and rerun just bundle"
+# The built executable's output is untrusted: only its first line's printable
+# ASCII, bounded, is compared or repeated in a diagnostic. tr reads its whole
+# input, so nothing here closes a pipe early under pipefail.
+observed_version="${observed_version%%$'\n'*}"
+observed_version="$(printf '%s' "$observed_version" | tr -cd ' -~')" \
+  || fail "could not sanitize the pinned source build's version output; rerun just bundle"
+observed_version="${observed_version:0:80}"
+[ "$observed_version" = "oneharness $UPSTREAM_VERSION" ] \
+  || fail "the pinned source build reported '$observed_version' rather than 'oneharness $UPSTREAM_VERSION'; run cargo clean --release and rerun just bundle"
 
 mkdir -p "$OUTPUT_ROOT/bin" \
   || fail "could not create the compatible CLI output directory; check target permissions and rerun just bundle"
