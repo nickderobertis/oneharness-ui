@@ -58,8 +58,11 @@ CARGO_TARGET_DIR="$ROOT/target" \
 source_binary="$install_root/bin/oneharness"
 [ -x "$source_binary" ] \
   || fail "the pinned source build produced no executable; inspect the Cargo diagnostic and rerun just bundle"
-observed_version="$("$source_binary" --version 2>&1)" \
-  || fail "the pinned source build could not report its version: $observed_version; inspect the Cargo diagnostic and rerun just bundle"
+observed_version="$("$source_binary" --version)" \
+  || fail "the pinned source build could not report its version; inspect the diagnostic above and rerun just bundle"
+# The built executable's output is untrusted: only its first line's printable
+# ASCII, bounded, is compared or repeated in a diagnostic.
+observed_version="$(printf '%s' "$observed_version" | head -n 1 | tr -cd ' -~' | head -c 80)"
 [ "$observed_version" = "oneharness $UPSTREAM_VERSION" ] \
   || fail "the pinned source build reported '$observed_version' rather than 'oneharness $UPSTREAM_VERSION'; run cargo clean --release and rerun just bundle"
 
