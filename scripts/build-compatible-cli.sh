@@ -58,8 +58,10 @@ CARGO_TARGET_DIR="$ROOT/target" \
 source_binary="$install_root/bin/oneharness"
 [ -x "$source_binary" ] \
   || fail "the pinned source build produced no executable; inspect the Cargo diagnostic and rerun just bundle"
-[ "$($source_binary --version)" = "oneharness $UPSTREAM_VERSION" ] \
-  || fail "the pinned source build reported an unexpected version; run cargo clean --release and rerun just bundle"
+observed_version="$("$source_binary" --version 2>&1)" \
+  || fail "the pinned source build could not report its version: $observed_version; inspect the Cargo diagnostic and rerun just bundle"
+[ "$observed_version" = "oneharness $UPSTREAM_VERSION" ] \
+  || fail "the pinned source build reported '$observed_version' rather than 'oneharness $UPSTREAM_VERSION'; run cargo clean --release and rerun just bundle"
 
 mkdir -p "$OUTPUT_ROOT/bin" \
   || fail "could not create the compatible CLI output directory; check target permissions and rerun just bundle"
