@@ -61,8 +61,12 @@ source_binary="$install_root/bin/oneharness"
 observed_version="$("$source_binary" --version)" \
   || fail "the pinned source build could not report its version; inspect the diagnostic above and rerun just bundle"
 # The built executable's output is untrusted: only its first line's printable
-# ASCII, bounded, is compared or repeated in a diagnostic.
-observed_version="$(printf '%s' "$observed_version" | head -n 1 | tr -cd ' -~' | head -c 80)"
+# ASCII, bounded, is compared or repeated in a diagnostic. tr reads its whole
+# input, so nothing here closes a pipe early under pipefail.
+observed_version="${observed_version%%$'\n'*}"
+observed_version="$(printf '%s' "$observed_version" | tr -cd ' -~')" \
+  || fail "could not sanitize the pinned source build's version output; rerun just bundle"
+observed_version="${observed_version:0:80}"
 [ "$observed_version" = "oneharness $UPSTREAM_VERSION" ] \
   || fail "the pinned source build reported '$observed_version' rather than 'oneharness $UPSTREAM_VERSION'; run cargo clean --release and rerun just bundle"
 
