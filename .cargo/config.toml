@@ -1,3 +1,4 @@
+# llmlint: ignore-block[comments_earn_their_place] This block is the workstream's shared contract text, landed word for word in every repository; the one invocation it does not reach, cargo install of a non-path crate, is documented at the site that meets it in scripts/build-compatible-cli.sh.
 # Build configuration every cargo invocation anywhere inside this clone reads.
 #
 # `target-dir` here is resolved relative to the directory holding `.cargo/`, so
@@ -6,6 +7,7 @@
 # of this repository, carrying its own copy of this file, builds into its own
 # root. Never point this outside the clone: concurrent worktrees must not share
 # one target directory.
+# llmlint: ignore-end[comments_earn_their_place]
 [build]
 target-dir = "target"
 
