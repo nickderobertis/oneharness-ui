@@ -39,8 +39,11 @@ trap cleanup EXIT
 install_root="$temporary/install"
 # The upstream crate compiles under its own lint settings: this repository's
 # RUSTFLAGS="-D warnings" would otherwise fail its pinned revision on any lint
-# a newer compiler adds, which is not this repository's to fix.
-CARGO_TARGET_DIR="$ROOT/target/oneharness-ui-upstream-build" \
+# a newer compiler adds, which is not this repository's to fix. The build lands
+# in the clone's one target directory rather than the temporary one cargo
+# install would otherwise use and discard; the dependencies it shares with the
+# desktop shell recompile whenever the two flag sets alternate.
+CARGO_TARGET_DIR="$ROOT/target" \
   env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS \
   cargo install \
   --git "$UPSTREAM_REPOSITORY" \
@@ -56,7 +59,7 @@ source_binary="$install_root/bin/oneharness"
 [ -x "$source_binary" ] \
   || fail "the pinned source build produced no executable; inspect the Cargo diagnostic and rerun just bundle"
 [ "$($source_binary --version)" = "oneharness $UPSTREAM_VERSION" ] \
-  || fail "the pinned source build reported an unexpected version; clear target/oneharness-ui-upstream-build and rerun just bundle"
+  || fail "the pinned source build reported an unexpected version; run cargo clean --release and rerun just bundle"
 
 mkdir -p "$OUTPUT_ROOT/bin" \
   || fail "could not create the compatible CLI output directory; check target permissions and rerun just bundle"
