@@ -41,8 +41,8 @@ install_root="$temporary/install"
 # RUSTFLAGS="-D warnings" would otherwise fail its pinned revision on any lint
 # a newer compiler adds, which is not this repository's to fix. The build lands
 # in the clone's one target directory rather than the temporary one cargo
-# install would otherwise use and discard; the dependencies it shares with the
-# desktop shell recompile whenever the two flag sets alternate.
+# install would otherwise use and discard.
+# llmlint: ignore[contracts_have_one_source_or_a_drift_gate] cargo install reloads its configuration rooted at CARGO_HOME for a non-path crate, so the clone's .cargo/config.toml build.target-dir is never read by it; this environment variable is the one channel that reaches it, carrying the value the config names.
 CARGO_TARGET_DIR="$ROOT/target" \
   env -u RUSTFLAGS -u CARGO_ENCODED_RUSTFLAGS \
   cargo install \
