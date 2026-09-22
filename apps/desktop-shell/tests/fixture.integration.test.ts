@@ -13,7 +13,7 @@ import {
   validateFixtureHistoryFile,
 } from "./fixture.ts";
 
-const repository = resolve(import.meta.dir, "../../../..");
+const repository = resolve(import.meta.dir, "../../..");
 
 type JsonObject = Record<string, unknown>;
 

@@ -1,6 +1,6 @@
 import { extname, join, normalize } from "node:path";
 
-const root = join(import.meta.dir, "../../out");
+const root = join(import.meta.dir, "../../conversation-ui/out");
 const contentTypes: Readonly<Record<string, string>> = {
   ".css": "text/css",
   ".html": "text/html; charset=utf-8",

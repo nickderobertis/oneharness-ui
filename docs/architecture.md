@@ -48,6 +48,8 @@ selection; every other discovered setting remains available.
 - `packages/oneharness-bridge`: local privilege/SDK boundary.
 - `apps/conversation-ui`: static UI, imports feature public surfaces only.
 - `apps/desktop-shell`: Tauri capability and packaging, no contracts.
+- `apps/conversation-ui-e2e`: browser journeys against the built static export.
+- `apps/desktop-shell-e2e`: native journeys against the packaged desktop build.
 
 Nx owns the project graph and delegates targets to Bun, Biome, Next, and Cargo.
 A deterministic boundary checker prevents feature/package dependency reversal.

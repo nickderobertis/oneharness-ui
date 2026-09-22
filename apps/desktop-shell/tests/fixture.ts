@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { HistoryLineSchema, HistoryRecordSchema, OneHarness } from "@oneharness/sdk";
 
-const repository = resolve(import.meta.dir, "../../../..");
+const repository = resolve(import.meta.dir, "../../..");
 const executableSuffix = process.platform === "win32" ? ".exe" : "";
 const platformPackages: Readonly<Record<string, string>> = {
   "darwin-arm64": "@oneharness/cli-darwin-arm64",

@@ -16,8 +16,7 @@ export default defineConfig({
   outputDir: "test-results/playwright",
   reporter: [["list"]],
   retries: 0,
-  // llmlint: ignore[browser_journeys_run_against_the_built_app] The journeys predate this branch inside conversation-ui and run against the shipped static export served by the bridge's e2e server; a separate e2e project is a project-graph change tracked as a follow-up.
-  testDir: "./tests/e2e",
+  testDir: "./tests",
   testMatch: "**/*.e2e.ts",
   timeout: 30_000,
   use: {

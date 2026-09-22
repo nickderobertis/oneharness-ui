@@ -9,7 +9,9 @@ test("accepts reconciled versions and rejects workflow drift with a remedy", asy
     await Promise.all([
       mkdir(resolve(root, ".github/workflows"), { recursive: true }),
       mkdir(resolve(root, "apps/conversation-ui"), { recursive: true }),
+      mkdir(resolve(root, "apps/conversation-ui-e2e"), { recursive: true }),
       mkdir(resolve(root, "apps/desktop-shell"), { recursive: true }),
+      mkdir(resolve(root, "apps/desktop-shell-e2e"), { recursive: true }),
       mkdir(resolve(root, "packages/ipc-contract"), { recursive: true }),
       mkdir(resolve(root, "packages/oneharness-bridge"), { recursive: true }),
       mkdir(resolve(root, "packages/ui"), { recursive: true }),
@@ -40,6 +42,8 @@ test("accepts reconciled versions and rejects workflow drift with a remedy", asy
       ),
       ...[
         "apps/conversation-ui/package.json",
+        "apps/conversation-ui-e2e/package.json",
+        "apps/desktop-shell-e2e/package.json",
         "packages/ipc-contract/package.json",
         "packages/ui/package.json",
       ].map((path) =>

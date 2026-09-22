@@ -62,7 +62,7 @@ test:
     @if [ "${ONEHARNESS_QUIET:-}" != "1" ]; then echo "test: ok"; fi
 
 test-e2e:
-    @./scripts/run-quiet.sh "browser journeys" "Inspect the Playwright artifact, fix the user journey, and rerun 'just test-e2e'." -- bunx nx run conversation-ui:e2e --outputStyle=static
+    @./scripts/run-quiet.sh "browser journeys" "Inspect the Playwright artifact, fix the user journey, and rerun 'just test-e2e'." -- bunx nx run conversation-ui-e2e:e2e --outputStyle=static
 
 # Pixel capture is intentionally separate from the cross-OS check matrix.
 visual:
@@ -70,7 +70,7 @@ visual:
 
 # Packages and drives the real desktop binary with official tauri-driver. Upstream supports Linux and Windows only.
 test-desktop-e2e:
-    @./scripts/run-quiet.sh "native desktop journey" "Install the documented WebDriver prerequisite, inspect test-results/desktop-e2e, and rerun 'just test-desktop-e2e'." -- env RUSTFLAGS="-D warnings" bunx nx run desktop-shell:desktop-e2e --outputStyle=static
+    @./scripts/run-quiet.sh "native desktop journey" "Install the documented WebDriver prerequisite, inspect test-results/desktop-e2e, and rerun 'just test-desktop-e2e'." -- env RUSTFLAGS="-D warnings" bunx nx run desktop-shell-e2e:desktop-e2e --outputStyle=static
 
 build:
     @./scripts/run-quiet.sh "build" "Fix the reported static-export or native build error, then rerun 'just build'." -- env RUSTFLAGS="-D warnings" bunx nx run-many -t build --all --outputStyle=static

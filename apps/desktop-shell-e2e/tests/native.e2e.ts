@@ -4,7 +4,6 @@ import { validateProviderArgvPath } from "./capabilities.ts";
 import { desktopE2eStageLog, runDesktopStage } from "./stage-log.ts";
 import { type ScrollSnapshot, wheelUntilNextPage } from "./wheel-scroll.ts";
 
-// llmlint: ignore-block[browser_journeys_run_against_the_built_app] This journey and its helpers predate this branch inside desktop-shell and already drives the built artifact: scripts/run-desktop-e2e.mjs packages the deb and tauri-driver launches the installed binary. Moving it to a separate e2e project whose test target depends on the app build is a project-graph change tracked as a follow-up.
 const providerArgv = validateProviderArgvPath(process.env.ONEHARNESS_UI_E2E_PROVIDER_ARGV);
 const legacyHistoryBytes = Number(process.env.ONEHARNESS_UI_E2E_LEGACY_HISTORY_BYTES);
 if (!Number.isSafeInteger(legacyHistoryBytes) || legacyHistoryBytes <= 4 * 1024 * 1024) {
@@ -247,4 +246,3 @@ describe("packaged native desktop journey", () => {
     });
   });
 });
-// llmlint: ignore-end[browser_journeys_run_against_the_built_app]
