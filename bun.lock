@@ -113,6 +113,7 @@
         "@wdio/spec-reporter": "9.29.1",
         "@wdio/tauri-service": "1.2.0",
         "typescript": "6.0.3",
+        "zod": "^4.4.3",
       },
     },
     "packages/ipc-contract": {

@@ -52,7 +52,9 @@ export const fixtureProvider = resolve(
   repository,
   `target/oneharness-ui-test/oneharness-mock-harness${executableSuffix}`,
 );
-const FIXTURE_ROOT_PREFIX = "oneharness-ui-desktop-e2e-";
+// The native runtime recognises its automation fixtures by this prefix.
+// fixture.integration.test.ts reconciles this copy with runtime.rs.
+export const FIXTURE_ROOT_PREFIX = "oneharness-ui-desktop-e2e-";
 const FIXTURE_REMOVAL_OPTIONS: Readonly<RmOptions> = {
   force: true,
   maxRetries: 30,

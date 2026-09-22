@@ -3,9 +3,29 @@ import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { z } from "zod";
 
 const repository = resolve(import.meta.dir, "../../..");
 const project = "apps/desktop-shell-e2e";
+
+// Nx's graph and project payloads are subprocess output: this test reads only
+// the parts it asserts on, so it parses only those and fails on anything else.
+const projectGraphSchema = z.object({
+  graph: z.object({
+    dependencies: z.record(z.string(), z.array(z.object({ target: z.string() }))),
+    nodes: z.record(z.string(), z.object({ data: z.object({ root: z.string() }) })),
+  }),
+});
+const journeyTargetSchema = z.object({
+  targets: z.object({
+    "desktop-e2e": z.object({
+      dependsOn: z.array(z.string()),
+      options: z.object({ command: z.string() }),
+    }),
+  }),
+});
+const buildTargetSchema = z.object({ targets: z.object({ build: z.object({}) }) });
+const manifestSchema = z.object({ scripts: z.object({ "test:e2e": z.string() }) });
 
 async function nx(args: string[]): Promise<string> {
   const child = Bun.spawn(["bunx", "nx", ...args], {
@@ -35,22 +55,20 @@ describe("native desktop journey project graph", () => {
     try {
       const graphFile = resolve(scratch, "graph.json");
       await nx(["graph", "--file", graphFile]);
-      const { graph } = JSON.parse(await readFile(graphFile, "utf8"));
+      const { graph } = projectGraphSchema.parse(JSON.parse(await readFile(graphFile, "utf8")));
 
       expect(Object.keys(graph.nodes)).toContain("desktop-shell-e2e");
-      expect(graph.nodes["desktop-shell-e2e"].data.root).toBe(project);
-      expect(
-        graph.dependencies["desktop-shell-e2e"].map(
-          (dependency: { target: string }) => dependency.target,
-        ),
-      ).toContain("desktop-shell");
+      expect(graph.nodes["desktop-shell-e2e"]?.data.root).toBe(project);
+      expect(graph.dependencies["desktop-shell-e2e"]?.map(({ target }) => target)).toContain(
+        "desktop-shell",
+      );
 
-      const journey = JSON.parse(await nx(["show", "project", "desktop-shell-e2e", "--json"]))
-        .targets["desktop-e2e"];
+      const { targets } = journeyTargetSchema.parse(
+        JSON.parse(await nx(["show", "project", "desktop-shell-e2e", "--json"])),
+      );
+      const journey = targets["desktop-e2e"];
       expect(journey.dependsOn).toContain("desktop-shell:build");
-      expect(
-        JSON.parse(await nx(["show", "project", "desktop-shell", "--json"])).targets.build,
-      ).toBeDefined();
+      buildTargetSchema.parse(JSON.parse(await nx(["show", "project", "desktop-shell", "--json"])));
 
       // The target names its entrypoint, the entrypoint names the WebdriverIO
       // runner, and the runner names the journey specs. Every hop has to reach
@@ -66,9 +84,11 @@ describe("native desktop journey project graph", () => {
       const runner = await readFile(resolve(repository, entrypoint), "utf8");
       expect(runner).toContain('"--cwd", "apps/desktop-shell-e2e", "test:e2e"');
 
-      const manifest = await readFile(resolve(repository, project, "package.json"), "utf8");
+      const manifest = manifestSchema.parse(
+        JSON.parse(await readFile(resolve(repository, project, "package.json"), "utf8")),
+      );
       const configuration = captured(
-        JSON.parse(manifest).scripts["test:e2e"],
+        manifest.scripts["test:e2e"],
         /([\w.-]+\.conf\.ts)/,
         "its WebdriverIO configuration",
       );

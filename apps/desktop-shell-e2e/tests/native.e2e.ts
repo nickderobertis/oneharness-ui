@@ -15,19 +15,19 @@ if (!Number.isSafeInteger(legacyHistoryBytes) || legacyHistoryBytes <= maxBridge
 // that can sit inside a selector string unescaped.
 const fixtureIdPattern = /^[A-Za-z0-9._-]{1,200}$/;
 
+function isFixtureId(item: unknown): item is string {
+  return typeof item === "string" && fixtureIdPattern.test(item);
+}
+
 function expectedIds(name: string): string[] {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is required for the native pagination journey`);
   const parsed: unknown = JSON.parse(value);
-  if (
-    !Array.isArray(parsed) ||
-    parsed.length === 0 ||
-    parsed.some((item) => typeof item !== "string" || !fixtureIdPattern.test(item)) ||
-    new Set(parsed).size !== parsed.length
-  ) {
+  const items: readonly unknown[] = Array.isArray(parsed) ? parsed : [];
+  if (items.length === 0 || !items.every(isFixtureId) || new Set(items).size !== items.length) {
     throw new Error(`${name} must contain a non-empty JSON array of unique fixture ids`);
   }
-  return parsed as string[];
+  return [...items];
 }
 
 const expectedSessionIds = expectedIds("ONEHARNESS_UI_E2E_SESSION_IDS");

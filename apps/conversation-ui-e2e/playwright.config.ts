@@ -21,6 +21,7 @@ export default defineConfig({
   timeout: 30_000,
   use: {
     baseURL: e2eWebOrigin,
+    // llmlint: ignore[secrets_stay_server_side] The journey is the browser client of the bridge's own e2e web server, and this header is how a client presents the per-run loopback credential that server requires; the server still enforces it, and the token is generated for this process rather than shared with anything outside it.
     extraHTTPHeaders: {
       Authorization: `Basic ${Buffer.from(`oneharness:${webAccessToken}`).toString("base64")}`,
     },

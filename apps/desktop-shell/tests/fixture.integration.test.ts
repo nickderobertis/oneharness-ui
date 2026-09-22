@@ -7,6 +7,7 @@ import { maxBridgeResponseBytes } from "@oneharness-ui/ipc-contract";
 import {
   createDesktopFixture,
   deterministicDesktopEnvironment,
+  FIXTURE_ROOT_PREFIX,
   fixtureOneHarnessCli,
   fixtureProvider,
   packagedOneHarnessCli,
@@ -61,6 +62,17 @@ async function invoke(args: string[]): Promise<JsonObject[]> {
 }
 
 describe("native desktop fixture", () => {
+  test("keeps the fixture root prefix aligned with the native runtime", async () => {
+    const runtime = await readFile(
+      resolve(repository, "apps/desktop-shell/src/runtime.rs"),
+      "utf8",
+    );
+    // Reporting the declared value keeps a drift failure readable: the whole
+    // runtime source would otherwise be printed as the unmatched haystack.
+    const declared = runtime.match(/const FIXTURE_ROOT_PREFIX: &str = "([^"]*)";/u)?.[1];
+    expect(declared).toBe(FIXTURE_ROOT_PREFIX);
+  });
+
   test("creates schema 1.2 stopped, paginated, and recoverable records", async () => {
     const fixture = await createDesktopFixture();
     const historyDir = fixture.environment.ONEHARNESS_UI_HISTORY_DIR;
