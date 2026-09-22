@@ -500,6 +500,8 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
   // llmlint: ignore-end[e2e_not_mocked]
   // llmlint: ignore-end[tests_mirror_real_usage]
 
+  // llmlint: ignore-block[e2e_not_mocked] The layer under test is the bridge, and it is real here: the stand-in is an upstream oneharness release no published CLI reaches yet, and it forwards every call — including the `history show` whose records it then patches — to the packaged CLI, so the SDK, its schemas, and the history store all stay real.
+  // llmlint: ignore-block[tests_mirror_real_usage] Every case in this service-boundary suite enters at `BridgeService.handle`, which is where a per-test stand-in executable can be selected at all; the transports that wrap it are driven separately, by server.integration.test.ts over HTTP and by the conversation-ui e2e suite, whose conversation selection reaches this same `get` through the real UI.
   test("preserves a record field this SDK does not know as unknown upstream data", async () => {
     await seed("future-record", '{"result":"Ahead of this SDK","session_id":"native-future"}');
     process.env.ONEHARNESS_UI_TEST_FUTURE_RECORD_PATCH = JSON.stringify(FUTURE_RECORD_FIELD);
@@ -539,6 +541,8 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     // cannot render, not upstream data to preserve.
     expect(selected).toMatchObject({ ok: false, error: { code: "MALFORMED_HISTORY" } });
   });
+  // llmlint: ignore-end[e2e_not_mocked]
+  // llmlint: ignore-end[tests_mirror_real_usage]
 
   test("pages SDK summaries without loading every conversation detail", async () => {
     const report = await seed(

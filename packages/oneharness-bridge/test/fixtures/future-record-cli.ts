@@ -45,7 +45,7 @@ function recordPatch(): Record<string, unknown> {
   return patchSchema.parse(JSON.parse(raw));
 }
 
-function aheadOfThisSdk(argv: readonly string[]): number {
+function writePatchedShowOutput(argv: readonly string[]): number {
   const shown = runPackagedCli(argv, true);
   if (shown.status !== 0) return shown.status ?? 1;
   const records = HistoryRecordsSchema.parse(JSON.parse(shown.stdout));
@@ -57,5 +57,5 @@ function aheadOfThisSdk(argv: readonly string[]): number {
 const argv = argvSchema.parse(process.argv.slice(2));
 process.exitCode =
   argv[0] === "history" && argv[1] === "show"
-    ? aheadOfThisSdk(argv)
+    ? writePatchedShowOutput(argv)
     : (runPackagedCli(argv, false).status ?? 1);
