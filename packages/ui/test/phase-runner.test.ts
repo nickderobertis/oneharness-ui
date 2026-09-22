@@ -2,7 +2,12 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
-import { PhaseFailure, runPhase } from "./phase-runner.ts";
+import {
+  CAPTURE_DROPPED_PREFIX,
+  MAX_CAPTURED_CHARS,
+  PhaseFailure,
+  runPhase,
+} from "./phase-runner.ts";
 
 /**
  * How long a phase that ignores its bound keeps running before finishing on its
@@ -19,13 +24,25 @@ const STOP_SLACK_MS = 6_000;
  */
 const OVER_BOUND_MS = 2_000;
 
+/** Announced first by the flooding fixture, so it is the part the cap must drop. */
+const FLOOD_HEAD = "flood head marker";
+/** Announced last by the flooding fixture, so it is the part the cap must keep. */
+const FLOOD_TAIL = "flood tail marker";
+/**
+ * Exactly what the flooding fixture writes, so the test asserts the reported
+ * dropped count rather than a bound on it. Twice the cap of filler puts both
+ * markers well clear of the boundary the cap cuts at.
+ */
+const FLOOD_OUTPUT = `${FLOOD_HEAD}\n${"x".repeat(MAX_CAPTURED_CHARS * 2)}\n${FLOOD_TAIL}\n`;
+
 let workspace = "";
-let scripts = { failing: "", passing: "" };
+let scripts = { failing: "", flooding: "", passing: "" };
 
 beforeAll(async () => {
   workspace = await mkdtemp(resolve(tmpdir(), "oneharness-ui-phase-runner-"));
   scripts = {
     failing: resolve(workspace, "failing.ts"),
+    flooding: resolve(workspace, "flooding.ts"),
     passing: resolve(workspace, "passing.ts"),
   };
   await Promise.all([
@@ -40,6 +57,12 @@ await Bun.write(Bun.stderr, "resolving offline\\n");
       `await Bun.write(Bun.stdout, "resolving @oneharness/ui\\n");
 await Bun.write(Bun.stderr, "offline install refused: package not cached\\n");
 process.exit(3);
+`,
+    ),
+    writeFile(
+      scripts.flooding,
+      `await Bun.write(Bun.stdout, ${JSON.stringify(FLOOD_OUTPUT)});
+process.exit(4);
 `,
     ),
   ]);
@@ -78,6 +101,26 @@ describe("bounded package-test phases", () => {
     expect(error.message).toContain("offline install phase exited with code 3");
     expect(error.message).toContain("offline install refused: package not cached");
   });
+
+  test("keeps the tail of a flooding phase and reports what it dropped", async () => {
+    const error = await captureFailure({
+      command: ["bun", scripts.flooding],
+      cwd: workspace,
+      name: "offline install",
+      timeoutMs: 30_000,
+    });
+    const dropped = FLOOD_OUTPUT.length - MAX_CAPTURED_CHARS;
+
+    expect(error.details.exitCode).toBe(4);
+    expect(error.details.stdout).toContain(`${CAPTURE_DROPPED_PREFIX} ${dropped}]`);
+    expect(error.details.stdout).toContain(FLOOD_TAIL);
+    expect(error.details.stdout).not.toContain(FLOOD_HEAD);
+    expect(error.details.stdout.length).toBeLessThan(
+      MAX_CAPTURED_CHARS + `${CAPTURE_DROPPED_PREFIX} ${dropped}]\n`.length + 1,
+    );
+    expect(error.message).toContain("offline install phase exited with code 4");
+    expect(error.message).toContain(FLOOD_TAIL);
+  }, 60_000);
 
   test("names the phase when its command cannot be started", async () => {
     const error = await captureFailure({

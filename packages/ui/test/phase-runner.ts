@@ -12,6 +12,16 @@
 const TERMINATION_GRACE_MS = 2_000;
 /** Bound on draining output a stopped phase left behind in its pipes. */
 const OUTPUT_DRAIN_MS = 2_000;
+/**
+ * Bound on the characters kept per stream. A phase's output is untrusted CLI
+ * output of no declared size — a looping install can write without end — and
+ * everything kept is held in memory and embedded in the failure message. The
+ * most recent output is what says how far a phase got, so the tail is what
+ * survives and {@link CAPTURE_DROPPED_PREFIX} reports what did not.
+ */
+export const MAX_CAPTURED_CHARS = 64 * 1024;
+/** Marks output whose head was dropped, so a truncated tail is never read as the whole. */
+export const CAPTURE_DROPPED_PREFIX = "[dropped earlier characters:";
 
 export type Phase = {
   /** Argument vector, passed without a shell. */
@@ -38,11 +48,6 @@ export type PhaseFailureDetails = {
 };
 
 export class PhaseFailure extends Error {
-  /**
-   * What the phase was doing and what it produced. {@link PhaseFailureDetails}
-   * declares that shape once and this carries it whole, so a field added there
-   * reaches every reader without being restated here.
-   */
   readonly details: PhaseFailureDetails;
 
   constructor(details: PhaseFailureDetails) {
@@ -60,8 +65,8 @@ export class PhaseFailure extends Error {
  */
 export async function runPhase(phase: Phase): Promise<PhaseResult> {
   const child = spawnPhase(phase);
-  const stdout = { text: "" };
-  const stderr = { text: "" };
+  const stdout: Sink = { dropped: 0, text: "" };
+  const stderr: Sink = { dropped: 0, text: "" };
   const drained = Promise.all([collect(child.stdout, stdout), collect(child.stderr, stderr)]).then(
     ignore,
     ignore,
@@ -85,13 +90,13 @@ export async function runPhase(phase: Phase): Promise<PhaseResult> {
     throw new PhaseFailure({
       exitCode: timedOut ? null : exitCode,
       phase: phase.name,
-      stderr: stderr.text,
-      stdout: stdout.text,
+      stderr: captured(stderr),
+      stdout: captured(stdout),
       timedOut,
       timeoutMs: phase.timeoutMs,
     });
   }
-  return { exitCode, stderr: stderr.text, stdout: stdout.text };
+  return { exitCode, stderr: captured(stderr), stdout: captured(stdout) };
 }
 
 function spawnPhase(phase: Phase) {
@@ -114,11 +119,27 @@ function spawnPhase(phase: Phase) {
   }
 }
 
+/** The tail a phase wrote, plus what was dropped to stay inside {@link MAX_CAPTURED_CHARS}. */
+type Sink = { dropped: number; text: string };
+
 /** Accumulates decoded output as it arrives so a stopped phase still reports what it wrote. */
-async function collect(stream: ReadableStream<Uint8Array>, sink: { text: string }): Promise<void> {
+async function collect(stream: ReadableStream<Uint8Array>, sink: Sink): Promise<void> {
   const decoder = new TextDecoder();
-  for await (const chunk of stream) sink.text += decoder.decode(chunk, { stream: true });
-  sink.text += decoder.decode();
+  for await (const chunk of stream) append(sink, decoder.decode(chunk, { stream: true }));
+  append(sink, decoder.decode());
+}
+
+/** Keeps the newest {@link MAX_CAPTURED_CHARS} characters and counts the rest as dropped. */
+function append(sink: Sink, text: string): void {
+  sink.text += text;
+  if (sink.text.length <= MAX_CAPTURED_CHARS) return;
+  sink.dropped += sink.text.length - MAX_CAPTURED_CHARS;
+  sink.text = sink.text.slice(-MAX_CAPTURED_CHARS);
+}
+
+function captured(sink: Sink): string {
+  if (sink.dropped === 0) return sink.text;
+  return `${CAPTURE_DROPPED_PREFIX} ${sink.dropped}]\n${sink.text}`;
 }
 
 async function withDeadline(work: Promise<void>, timeoutMs: number): Promise<void> {

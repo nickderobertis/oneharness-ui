@@ -250,10 +250,14 @@ for (const text of [
           name: "offline install",
           timeoutMs: INSTALL_TIMEOUT_MS,
         });
-        const installedManifest: unknown = JSON.parse(
+        const installedManifest = parseInstalledManifest(
           await readFile(resolve(consumerRoot, "node_modules/@oneharness/ui/package.json"), "utf8"),
         );
-        expect(JSON.stringify(installedManifest)).not.toContain("workspace:");
+        expect(installedManifest.name).toBe("@oneharness/ui");
+        expect(installedManifest.version).toMatch(/^\d+\.\d+\.\d+/);
+        for (const [dependency, range] of installedManifest.dependencyRanges) {
+          expect(`${dependency} is pinned to ${range}`).not.toContain("workspace:");
+        }
         await runPhase({
           command: ["bun", "run", "verify"],
           cwd: consumerRoot,
@@ -267,3 +271,44 @@ for (const text of [
     PACKAGE_TEST_TIMEOUT_MS,
   );
 });
+
+/** Dependency maps a published manifest may pin a range in. */
+const DEPENDENCY_FIELDS = ["dependencies", "optionalDependencies", "peerDependencies"] as const;
+
+type InstalledManifest = {
+  /** Every `<name, range>` pair the manifest pins, across {@link DEPENDENCY_FIELDS}. */
+  readonly dependencyRanges: readonly (readonly [string, string])[];
+  readonly name: string;
+  readonly version: string;
+};
+
+/**
+ * Validates the manifest the install wrote into the consumer before the test
+ * reads anything out of it. It is a file produced by a subprocess, so its shape
+ * is asserted here rather than assumed by the reader.
+ */
+function parseInstalledManifest(source: string): InstalledManifest {
+  const manifest: unknown = JSON.parse(source);
+  if (typeof manifest !== "object" || manifest === null || Array.isArray(manifest)) {
+    throw new Error("the installed manifest is not a JSON object");
+  }
+  const fields: Record<string, unknown> = manifest;
+  if (typeof fields.name !== "string" || typeof fields.version !== "string") {
+    throw new Error("the installed manifest has no string name and version");
+  }
+  const dependencyRanges: [string, string][] = [];
+  for (const field of DEPENDENCY_FIELDS) {
+    const pinned: unknown = fields[field];
+    if (pinned === undefined) continue;
+    if (typeof pinned !== "object" || pinned === null || Array.isArray(pinned)) {
+      throw new Error(`the installed manifest's ${field} is not a JSON object`);
+    }
+    for (const [dependency, range] of Object.entries(pinned)) {
+      if (typeof range !== "string") {
+        throw new Error(`the installed manifest pins ${dependency} to a non-string range`);
+      }
+      dependencyRanges.push([dependency, range]);
+    }
+  }
+  return { dependencyRanges, name: fields.name, version: fields.version };
+}
