@@ -11,6 +11,7 @@ import {
   type RunReport,
 } from "@oneharness/sdk";
 import { BridgeService, MAX_CONVERSATION_PAGE_BYTES } from "../src/service.ts";
+import { FUTURE_RECORD_PATCH_ENV } from "./fixtures/future-record-contract.ts";
 import { readFixtureHistoryRecord } from "./history-fixture.ts";
 
 const repository = resolve(import.meta.dir, "../../..");
@@ -56,7 +57,7 @@ const mockKeys = [
   "MOCK_STDOUT",
   "ONEHARNESS_HISTORY_LABELS",
   "ONEHARNESS_NO_CONFIG",
-  "ONEHARNESS_UI_TEST_FUTURE_RECORD_PATCH",
+  FUTURE_RECORD_PATCH_ENV,
 ];
 
 function fixtureHistoryId(index: number): string {
@@ -504,7 +505,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
   // llmlint: ignore-block[tests_mirror_real_usage] Every case in this service-boundary suite enters at `BridgeService.handle`, which is where a per-test stand-in executable can be selected at all; the transports that wrap it are driven separately, by server.integration.test.ts over HTTP and by the conversation-ui e2e suite, whose conversation selection reaches this same `get` through the real UI.
   test("preserves a record field this SDK does not know as unknown upstream data", async () => {
     await seed("future-record", '{"result":"Ahead of this SDK","session_id":"native-future"}');
-    process.env.ONEHARNESS_UI_TEST_FUTURE_RECORD_PATCH = JSON.stringify(FUTURE_RECORD_FIELD);
+    process.env[FUTURE_RECORD_PATCH_ENV] = JSON.stringify(FUTURE_RECORD_FIELD);
     const bridge = new BridgeService(
       { executable: futureRecordCli, historyDir },
       TEST_AUTHORIZATION,
@@ -524,9 +525,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
 
   test("refuses a future value in a record field this SDK does know", async () => {
     await seed("future-status", '{"result":"Ahead of this SDK","session_id":"native-future-2"}');
-    process.env.ONEHARNESS_UI_TEST_FUTURE_RECORD_PATCH = JSON.stringify({
-      status: "future-status",
-    });
+    process.env[FUTURE_RECORD_PATCH_ENV] = JSON.stringify({ status: "future-status" });
     const bridge = new BridgeService(
       { executable: futureRecordCli, historyDir },
       TEST_AUTHORIZATION,

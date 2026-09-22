@@ -8,8 +8,15 @@
 //! and drops anything the file carries beyond it.
 import { spawnSync } from "node:child_process";
 import { createRequire } from "node:module";
-import { HistoryRecordsSchema } from "@oneharness/sdk";
+import { CAPABILITIES, HistoryRecordsSchema } from "@oneharness/sdk";
 import { z } from "zod";
+import { FUTURE_RECORD_PATCH_ENV } from "./future-record-contract.ts";
+
+// Which call carries the records to patch is the SDK's to say: `CAPABILITIES`
+// is the manifest the SDK itself renders this argv from, so a release that
+// renames the lookup subcommand moves this stand-in with it rather than
+// leaving it forwarding a call it no longer recognises.
+const LOOKUP_ARGV = CAPABILITIES.history.argv;
 
 // The bridge and SDK pass a short argv of flags, ids, and paths; anything
 // larger is not a call this stand-in was written for.
@@ -36,11 +43,9 @@ function runPackagedCli(argv: readonly string[], capture: boolean) {
 }
 
 function recordPatch(): Record<string, unknown> {
-  const raw = process.env.ONEHARNESS_UI_TEST_FUTURE_RECORD_PATCH ?? "";
+  const raw = process.env[FUTURE_RECORD_PATCH_ENV] ?? "";
   if (raw.length === 0 || Buffer.byteLength(raw) > MAX_PATCH_BYTES) {
-    throw new Error(
-      "ONEHARNESS_UI_TEST_FUTURE_RECORD_PATCH must be a bounded JSON object of record fields",
-    );
+    throw new Error(`${FUTURE_RECORD_PATCH_ENV} must be a bounded JSON object of record fields`);
   }
   return patchSchema.parse(JSON.parse(raw));
 }
@@ -55,7 +60,6 @@ function writePatchedShowOutput(argv: readonly string[]): number {
 }
 
 const argv = argvSchema.parse(process.argv.slice(2));
-process.exitCode =
-  argv[0] === "history" && argv[1] === "show"
-    ? writePatchedShowOutput(argv)
-    : (runPackagedCli(argv, false).status ?? 1);
+process.exitCode = LOOKUP_ARGV.every((word, index) => argv[index] === word)
+  ? writePatchedShowOutput(argv)
+  : (runPackagedCli(argv, false).status ?? 1);
