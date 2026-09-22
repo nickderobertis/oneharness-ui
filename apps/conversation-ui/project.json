@@ -11,8 +11,14 @@
       "outputs": ["{projectRoot}/out"]
     },
     "test": {
-      "command": "bun test --preload ./apps/conversation-ui/test/setup.ts --coverage --coverage-dir coverage/conversation-ui apps/conversation-ui/src apps/conversation-ui/test",
-      "outputs": ["{workspaceRoot}/coverage/conversation-ui"]
+      "command": "bun test --preload ./packages/ui/test/setup.ts --coverage --coverage-dir coverage/conversation-ui apps/conversation-ui/src apps/conversation-ui/test",
+      "outputs": ["{workspaceRoot}/coverage/conversation-ui"],
+      "inputs": [
+        "default",
+        "^production",
+        "testRunners",
+        "{workspaceRoot}/packages/ui/test/setup.ts"
+      ]
     },
     "lint": {
       "executor": "nx:run-commands",
