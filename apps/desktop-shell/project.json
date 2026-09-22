@@ -33,6 +33,18 @@
         "parallel": false
       }
     },
+    "fixture-integration": {
+      "cache": true,
+      "command": "bun test apps/desktop-shell/tests/fixture.integration.test.ts",
+      "inputs": [
+        "sharedGlobals",
+        "{projectRoot}/tests/fixture.ts",
+        "{projectRoot}/tests/fixture.integration.test.ts",
+        "{workspaceRoot}/packages/oneharness-bridge/test/fixtures/oneharness-mock-harness.rs",
+        "{workspaceRoot}/scripts/build-test-provider.mjs"
+      ],
+      "outputs": []
+    },
     "lint": {
       "executor": "nx:run-commands",
       "inputs": [

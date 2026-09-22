@@ -54,7 +54,6 @@ async function invoke(args: string[]): Promise<JsonObject[]> {
 }
 
 describe("native desktop fixture", () => {
-  // llmlint: ignore[expensive_tests_stay_behind_their_own_edge] desktop-shell has one test target today; splitting it is a separate project-graph change.
   test("creates schema 1.2 stopped, paginated, and recoverable records", async () => {
     const fixture = await createDesktopFixture();
     const historyDir = fixture.environment.ONEHARNESS_UI_HISTORY_DIR;
