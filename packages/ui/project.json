@@ -13,7 +13,13 @@
     "test": {
       "command": "bun test --preload ./apps/conversation-ui/test/setup.ts --coverage --coverage-dir coverage/ui packages/ui/test",
       "dependsOn": ["build"],
-      "outputs": ["{workspaceRoot}/coverage/ui"]
+      "outputs": ["{workspaceRoot}/coverage/ui"],
+      "inputs": [
+        "default",
+        "^production",
+        "testRunners",
+        "{workspaceRoot}/apps/conversation-ui/test/setup.ts"
+      ]
     },
     "lint": {
       "executor": "nx:run-commands",
@@ -25,8 +31,14 @@
         "parallel": false
       }
     },
-    "format": { "command": "bunx biome format --write packages/ui" },
-    "typecheck": { "command": "bunx tsc -p packages/ui/tsconfig.json --noEmit" },
-    "format-check": { "command": "bunx biome format packages/ui" }
+    "format": {
+      "command": "bunx biome format --write packages/ui"
+    },
+    "typecheck": {
+      "command": "bunx tsc -p packages/ui/tsconfig.json --noEmit"
+    },
+    "format-check": {
+      "command": "bunx biome format packages/ui"
+    }
   }
 }

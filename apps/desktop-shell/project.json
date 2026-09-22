@@ -18,6 +18,7 @@
       "inputs": [
         "default",
         "^production",
+        "testRunners",
         "{workspaceRoot}/scripts/build-native.mjs",
         "{workspaceRoot}/scripts/build-native.test.ts",
         "{workspaceRoot}/scripts/install.sh",
@@ -38,6 +39,7 @@
       "command": "bun test apps/desktop-shell/tests/fixture.integration.test.ts",
       "inputs": [
         "sharedGlobals",
+        "testRunners",
         "{projectRoot}/tests/fixture.ts",
         "{projectRoot}/tests/fixture.integration.test.ts",
         "{workspaceRoot}/packages/oneharness-bridge/test/fixtures/oneharness-mock-harness.rs",

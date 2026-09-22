@@ -12,6 +12,7 @@
       "dependsOn": ["desktop-shell:build"],
       "inputs": [
         "default",
+        "testRunners",
         "{workspaceRoot}/justfile",
         "{workspaceRoot}/scripts/build-native.mjs",
         "{workspaceRoot}/scripts/run-desktop-e2e.mjs",
@@ -19,7 +20,9 @@
         "{workspaceRoot}/apps/desktop-shell/src/**/*",
         "{workspaceRoot}/apps/desktop-shell/tauri.conf.json",
         "{workspaceRoot}/apps/desktop-shell/tests/fixture.ts",
-        { "dependentTasksOutputFiles": "**/*" }
+        {
+          "dependentTasksOutputFiles": "**/*"
+        }
       ],
       "outputs": []
     },
@@ -28,6 +31,7 @@
       "inputs": [
         "default",
         "^production",
+        "testRunners",
         "{workspaceRoot}/nx.json",
         "{workspaceRoot}/project.json",
         "{workspaceRoot}/apps/*/project.json",
@@ -36,9 +40,17 @@
         "{workspaceRoot}/apps/desktop-shell/src/runtime.rs"
       ]
     },
-    "lint": { "command": "bunx biome check --error-on-warnings apps/desktop-shell-e2e" },
-    "format": { "command": "bunx biome format --write apps/desktop-shell-e2e" },
-    "typecheck": { "command": "bunx tsc -p apps/desktop-shell-e2e/tsconfig.json --noEmit" },
-    "format-check": { "command": "bunx biome format apps/desktop-shell-e2e" }
+    "lint": {
+      "command": "bunx biome check --error-on-warnings apps/desktop-shell-e2e"
+    },
+    "format": {
+      "command": "bunx biome format --write apps/desktop-shell-e2e"
+    },
+    "typecheck": {
+      "command": "bunx tsc -p apps/desktop-shell-e2e/tsconfig.json --noEmit"
+    },
+    "format-check": {
+      "command": "bunx biome format apps/desktop-shell-e2e"
+    }
   }
 }
