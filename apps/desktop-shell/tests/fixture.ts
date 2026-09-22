@@ -77,6 +77,7 @@ function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+const MAX_INHERITED_ENVIRONMENT_BYTES = 32 * 1024;
 const INHERITED_ENVIRONMENT_KEYS: readonly string[] = [
   "APPDATA",
   "AR",
@@ -134,7 +135,11 @@ export function deterministicDesktopEnvironment(
   const environment: Record<string, string> = {};
   for (const key of INHERITED_ENVIRONMENT_KEYS) {
     const value = process.env[key];
-    if (typeof value === "string") environment[key] = value;
+    // The allowlist decides which host values reach the subprocess; this bound
+    // decides how much, so an oversized inherited value cannot be handed on.
+    if (typeof value === "string" && value.length <= MAX_INHERITED_ENVIRONMENT_BYTES) {
+      environment[key] = value;
+    }
   }
   for (const [key, value] of Object.entries(overrides)) {
     if (typeof value === "string") environment[key] = value;

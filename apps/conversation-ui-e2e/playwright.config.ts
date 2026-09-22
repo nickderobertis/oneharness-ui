@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { e2eWebOrigin } from "@oneharness-ui/bridge/test/e2e-configuration.ts";
+import { bridgeWebUser } from "@oneharness-ui/ipc-contract";
 import { defineConfig, devices } from "@playwright/test";
 import { z } from "zod";
 
@@ -21,10 +22,11 @@ export default defineConfig({
   timeout: 30_000,
   use: {
     baseURL: e2eWebOrigin,
-    // llmlint: ignore[secrets_stay_server_side] The journey is the browser client of the bridge's own e2e web server, and this header is how a client presents the per-run loopback credential that server requires; the server still enforces it, and the token is generated for this process rather than shared with anything outside it.
+    // llmlint: ignore-block[secrets_stay_server_side] The journey is the browser client of the bridge's own e2e web server, and this header is how a client presents the per-run loopback credential that server requires; the server still enforces it, and the token is generated for this process rather than shared with anything outside it.
     extraHTTPHeaders: {
-      Authorization: `Basic ${Buffer.from(`oneharness:${webAccessToken}`).toString("base64")}`,
+      Authorization: `Basic ${Buffer.from(`${bridgeWebUser}:${webAccessToken}`).toString("base64")}`,
     },
+    // llmlint: ignore-end[secrets_stay_server_side]
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },

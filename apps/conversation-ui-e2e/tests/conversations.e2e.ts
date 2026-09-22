@@ -1,6 +1,7 @@
 import { basename } from "node:path";
 import { e2eProject } from "@oneharness-ui/bridge/test/e2e-configuration.ts";
 import {
+  bridgeResponseSchema,
   conversationLabelMaxLength,
   conversationLabelsMaxCount,
 } from "@oneharness-ui/ipc-contract";
@@ -210,7 +211,7 @@ test("rejects labels for an unknown session at the public bridge boundary", asyn
     });
     return await result.json();
   });
-  expect(response).toMatchObject({ ok: false });
+  expect(bridgeResponseSchema.parse(response).ok).toBe(false);
 });
 
 test("marks ineligible sessions and recovers from a recorded provider failure", async ({

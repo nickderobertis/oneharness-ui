@@ -27,10 +27,19 @@ const journeyTargetSchema = z.object({
 const buildTargetSchema = z.object({ targets: z.object({ build: z.object({}) }) });
 const manifestSchema = z.object({ scripts: z.object({ "test:e2e": z.string() }) });
 
+// Nx runs as a subprocess of this test, so it receives the few ambient values
+// it needs to find its toolchain rather than the whole host environment.
+const forwardedEnvironment = ["HOME", "PATH", "TMPDIR"] as const;
+
 async function nx(args: string[]): Promise<string> {
+  const environment: Record<string, string> = { NX_DAEMON: "false", NX_TUI: "false" };
+  for (const key of forwardedEnvironment) {
+    const value = process.env[key];
+    if (typeof value === "string") environment[key] = value;
+  }
   const child = Bun.spawn(["bunx", "nx", ...args], {
     cwd: repository,
-    env: { ...process.env, NX_DAEMON: "false", NX_TUI: "false" },
+    env: environment,
     stderr: "pipe",
     stdout: "pipe",
   });

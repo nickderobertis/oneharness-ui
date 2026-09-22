@@ -37,6 +37,7 @@ if (!firstExpectedTurnId) throw new Error("native turn fixture must contain a fi
 
 type ScrollRegion = ReturnType<typeof $>;
 
+const maxProviderArgvBytes = 64 * 1024;
 const maxWheelInputsPerPage = 20;
 const pageAppendTimeout = 20_000;
 const paginationPollInterval = 250;
@@ -143,9 +144,15 @@ async function expectExactResume(sessionId: string): Promise<void> {
   await browser.waitUntil(
     async () => {
       try {
-        const args = (await readFile(providerArgv, "utf8")).split("\0");
+        const recorded = await readFile(providerArgv, "utf8");
+        // The provider writes this file, so its size and shape are bounded
+        // here before the journey reads a session id back out of it.
+        if (recorded.length > maxProviderArgvBytes) {
+          throw new Error(`recorded provider argv exceeded ${maxProviderArgvBytes} bytes`);
+        }
+        const args = recorded.split("\0");
         const resume = args.indexOf("--resume");
-        return resume >= 0 && args[resume + 1] === sessionId;
+        return resume >= 0 && resume + 1 < args.length && args[resume + 1] === sessionId;
       } catch {
         return false;
       }
