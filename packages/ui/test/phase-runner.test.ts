@@ -115,11 +115,12 @@ describe("bounded package-test phases", () => {
   }, 20_000);
 
   test("bounds each phase separately rather than sharing one budget", async () => {
+    const bounds: readonly { name: string; timeoutMs: number }[] = [
+      { name: "pack", timeoutMs: 400 },
+      { name: "offline install", timeoutMs: 1_500 },
+    ];
     const timings = [];
-    for (const [name, timeoutMs] of [
-      ["pack", 400],
-      ["offline install", 1_500],
-    ] as const) {
+    for (const { name, timeoutMs } of bounds) {
       const startedAt = Date.now();
       const error = await captureFailure({
         command: ["bun", script.hanging, resolve(workspace, `${timeoutMs}.txt`)],

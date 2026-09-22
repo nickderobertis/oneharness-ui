@@ -70,18 +70,18 @@ export async function runPhase(phase: Phase): Promise<PhaseResult> {
     ignore,
   );
   let timedOut = false;
-  let kill: ReturnType<typeof setTimeout> | undefined;
-  const bound = setTimeout(() => {
+  let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
+  const boundTimer = setTimeout(() => {
     timedOut = true;
     child.kill();
-    kill = setTimeout(() => child.kill("SIGKILL"), TERMINATION_GRACE_MS);
+    forceKillTimer = setTimeout(() => child.kill("SIGKILL"), TERMINATION_GRACE_MS);
   }, phase.timeoutMs);
   let exitCode: number;
   try {
     exitCode = await child.exited;
   } finally {
-    clearTimeout(bound);
-    if (kill) clearTimeout(kill);
+    clearTimeout(boundTimer);
+    if (forceKillTimer) clearTimeout(forceKillTimer);
   }
   await withDeadline(drained, OUTPUT_DRAIN_MS);
   if (timedOut || exitCode !== 0) {
