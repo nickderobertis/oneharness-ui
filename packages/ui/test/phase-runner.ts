@@ -67,10 +67,10 @@ export async function runPhase(phase: Phase): Promise<PhaseResult> {
   const child = spawnPhase(phase);
   const stdout: Sink = { dropped: 0, text: "" };
   const stderr: Sink = { dropped: 0, text: "" };
-  const drained = Promise.all([collect(child.stdout, stdout), collect(child.stderr, stderr)]).then(
-    ignore,
-    ignore,
-  );
+  const drained = Promise.allSettled([
+    collect(child.stdout, stdout),
+    collect(child.stderr, stderr),
+  ]);
   let timedOut = false;
   let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
   const boundTimer = setTimeout(() => {
@@ -142,7 +142,7 @@ function captured(sink: Sink): string {
   return `${CAPTURE_DROPPED_PREFIX} ${sink.dropped}]\n${sink.text}`;
 }
 
-async function withDeadline(work: Promise<void>, timeoutMs: number): Promise<void> {
+async function withDeadline(work: Promise<unknown>, timeoutMs: number): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([
@@ -169,8 +169,4 @@ function describeFailure(details: PhaseFailureDetails): string {
     `${details.phase} stderr:`,
     details.stderr,
   ].join("\n");
-}
-
-function ignore(): undefined {
-  return undefined;
 }

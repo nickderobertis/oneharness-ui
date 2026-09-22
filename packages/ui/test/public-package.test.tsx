@@ -255,8 +255,8 @@ for (const text of [
         );
         expect(installedManifest.name).toBe("@oneharness/ui");
         expect(installedManifest.version).toMatch(/^\d+\.\d+\.\d+/);
-        for (const [dependency, range] of installedManifest.dependencyRanges) {
-          expect(`${dependency} is pinned to ${range}`).not.toContain("workspace:");
+        for (const [path, value] of installedManifest.strings) {
+          expect(`${path} is ${value}`).not.toContain("workspace:");
         }
         await runPhase({
           command: ["bun", "run", "verify"],
@@ -272,13 +272,15 @@ for (const text of [
   );
 });
 
-/** Dependency maps a published manifest may pin a range in. */
-const DEPENDENCY_FIELDS = ["dependencies", "optionalDependencies", "peerDependencies"] as const;
-
 type InstalledManifest = {
-  /** Every `<name, range>` pair the manifest pins, across {@link DEPENDENCY_FIELDS}. */
-  readonly dependencyRanges: readonly (readonly [string, string])[];
   readonly name: string;
+  /**
+   * Every string the manifest holds, each with the dotted path it sits at.
+   * Taken from the parsed document rather than from a list of the fields a
+   * manifest is known to use, so a field this test has never heard of is
+   * covered the day the package starts publishing it.
+   */
+  readonly strings: readonly (readonly [string, string])[];
   readonly version: string;
 };
 
@@ -296,19 +298,22 @@ function parseInstalledManifest(source: string): InstalledManifest {
   if (typeof fields.name !== "string" || typeof fields.version !== "string") {
     throw new Error("the installed manifest has no string name and version");
   }
-  const dependencyRanges: [string, string][] = [];
-  for (const field of DEPENDENCY_FIELDS) {
-    const pinned: unknown = fields[field];
-    if (pinned === undefined) continue;
-    if (typeof pinned !== "object" || pinned === null || Array.isArray(pinned)) {
-      throw new Error(`the installed manifest's ${field} is not a JSON object`);
-    }
-    for (const [dependency, range] of Object.entries(pinned)) {
-      if (typeof range !== "string") {
-        throw new Error(`the installed manifest pins ${dependency} to a non-string range`);
-      }
-      dependencyRanges.push([dependency, range]);
+  return { name: fields.name, strings: [...walkStrings(manifest, "")], version: fields.version };
+}
+
+/** Walks parsed JSON of any shape, narrowing at each step rather than trusting the document. */
+function* walkStrings(value: unknown, path: string): Generator<readonly [string, string]> {
+  if (typeof value === "string") {
+    yield [path, value];
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const [index, item] of value.entries()) yield* walkStrings(item, `${path}[${index}]`);
+    return;
+  }
+  if (typeof value === "object" && value !== null) {
+    for (const [key, item] of Object.entries(value)) {
+      yield* walkStrings(item, path === "" ? key : `${path}.${key}`);
     }
   }
-  return { dependencyRanges, name: fields.name, version: fields.version };
 }
