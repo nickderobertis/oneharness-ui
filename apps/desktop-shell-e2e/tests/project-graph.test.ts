@@ -29,7 +29,7 @@ const manifestSchema = z.object({ scripts: z.object({ "test:e2e": z.string() }) 
 
 // Nx runs as a subprocess of this test, so it receives the few ambient values
 // it needs to find its toolchain rather than the whole host environment.
-const forwardedEnvironment = ["HOME", "PATH", "TMPDIR"] as const;
+const forwardedEnvironment: readonly string[] = ["HOME", "PATH", "TMPDIR"];
 
 async function nx(args: string[]): Promise<string> {
   const environment: Record<string, string> = { NX_DAEMON: "false", NX_TUI: "false" };
