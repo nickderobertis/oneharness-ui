@@ -37,6 +37,15 @@ const textDefaultCli = resolve(
   import.meta.dir,
   `fixtures/text-default-cli.${process.platform === "win32" ? "cmd" : "ts"}`,
 );
+const futureRecordCli = resolve(
+  import.meta.dir,
+  `fixtures/future-record-cli.${process.platform === "win32" ? "cmd" : "ts"}`,
+);
+// A structured field a newer oneharness could add to a history record, which
+// nothing in the pinned SDK's schema names.
+const FUTURE_RECORD_FIELD = {
+  provider_trace: { segments: [{ ms: 12, phase: "model" }], upstream_id: "trace-7" },
+};
 const TEST_AUTHORIZATION = "oneharness-ui-integration-authorization";
 
 let historyDir = "";
@@ -47,6 +56,7 @@ const mockKeys = [
   "MOCK_STDOUT",
   "ONEHARNESS_HISTORY_LABELS",
   "ONEHARNESS_NO_CONFIG",
+  "ONEHARNESS_UI_TEST_FUTURE_RECORD_PATCH",
 ];
 
 function fixtureHistoryId(index: number): string {
@@ -247,7 +257,8 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     // Every field the SDK schema names is mapped above, so nothing the packaged
     // CLI writes reaches the "Additional upstream data" disclosure; its history
     // show re-serialises the record and drops the file's extra key before the
-    // bridge reads it.
+    // bridge reads it. A CLI that keeps such a key is covered below, through
+    // the future-record stand-in.
     expect(
       selected.ok && selected.data.kind === "get"
         ? selected.data.conversation.turns[0]?.unknown
@@ -488,6 +499,46 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
   });
   // llmlint: ignore-end[e2e_not_mocked]
   // llmlint: ignore-end[tests_mirror_real_usage]
+
+  test("preserves a record field this SDK does not know as unknown upstream data", async () => {
+    await seed("future-record", '{"result":"Ahead of this SDK","session_id":"native-future"}');
+    process.env.ONEHARNESS_UI_TEST_FUTURE_RECORD_PATCH = JSON.stringify(FUTURE_RECORD_FIELD);
+    const bridge = new BridgeService(
+      { executable: futureRecordCli, historyDir },
+      TEST_AUTHORIZATION,
+    );
+
+    const listed = await bridge.handle({ kind: "list" }, TEST_AUTHORIZATION);
+    const sessionId =
+      listed.ok && listed.data.kind === "list" ? listed.data.conversations[0]?.id : "";
+    const selected = await bridge.handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
+    if (!selected.ok || selected.data.kind !== "get") throw new Error(JSON.stringify(selected));
+
+    // The disclosure carries the future field structured and unchanged, and
+    // carries nothing else, so no mapped field leaks into it.
+    expect(selected.data.conversation.turns[0]?.unknown).toEqual(FUTURE_RECORD_FIELD);
+    expect(selected.data.conversation.turns[0]?.assistant).toBe("Ahead of this SDK");
+  });
+
+  test("refuses a future value in a record field this SDK does know", async () => {
+    await seed("future-status", '{"result":"Ahead of this SDK","session_id":"native-future-2"}');
+    process.env.ONEHARNESS_UI_TEST_FUTURE_RECORD_PATCH = JSON.stringify({
+      status: "future-status",
+    });
+    const bridge = new BridgeService(
+      { executable: futureRecordCli, historyDir },
+      TEST_AUTHORIZATION,
+    );
+
+    const listed = await bridge.handle({ kind: "list" }, TEST_AUTHORIZATION);
+    const sessionId =
+      listed.ok && listed.data.kind === "list" ? listed.data.conversations[0]?.id : "";
+    const selected = await bridge.handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
+
+    // An unrecognised value in a field the schema names is a contract the app
+    // cannot render, not upstream data to preserve.
+    expect(selected).toMatchObject({ ok: false, error: { code: "MALFORMED_HISTORY" } });
+  });
 
   test("pages SDK summaries without loading every conversation detail", async () => {
     const report = await seed(
