@@ -31,7 +31,7 @@ gate:
 
 check-affected:
     @[[ "${NX_BASE:-}" =~ ^[0-9a-f]{40}$ && "${NX_HEAD:-}" =~ ^([0-9a-f]{40}|HEAD)$ ]] || { echo "affected checks: NX_BASE must be a commit SHA and NX_HEAD must be a commit SHA or HEAD" >&2; exit 2; }
-    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "affected checks" "Fix the reported affected-project findings, then rerun the shared gate with the same NX_BASE and NX_HEAD." -- env RUSTFLAGS="-D warnings" bunx nx affected -t format-check lint typecheck test fixture-integration build e2e --base="$NX_BASE" --head="$NX_HEAD" --outputStyle=static
+    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "affected checks" "Fix the reported affected-project findings, then rerun the shared gate with the same NX_BASE and NX_HEAD." -- env RUSTFLAGS="-D warnings" bunx nx affected -t format-check lint typecheck test fixture-integration build --base="$NX_BASE" --head="$NX_HEAD" --outputStyle=static
     @files=(coverage/*/lcov.info); if [ -e "${files[0]}" ]; then ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "affected coverage" "Add user-facing tests for the uncovered authored code, then rerun the affected gate." -- node scripts/check-coverage.mjs "${files[@]}"; fi
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "import boundaries" "Restore the documented package import direction, then rerun 'just lint'." -- node scripts/check-boundaries.mjs
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "shell lint" "Fix the reported shell diagnostics, then rerun 'just lint'." -- uvx --from shellcheck-py==0.11.0.1 shellcheck scripts/*.sh
@@ -58,11 +58,10 @@ typecheck:
 test:
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "tests" "Fix the reported test failure, then rerun 'just test'." -- env RUSTFLAGS="-D warnings" bunx nx run-many -t test fixture-integration --all --outputStyle=static
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "authored coverage" "Add user-facing tests for uncovered authored code, then rerun 'just test'." -- node scripts/check-coverage.mjs coverage/ipc-contract/lcov.info coverage/oneharness-bridge/lcov.info coverage/conversation-ui/lcov.info
-    @ONEHARNESS_QUIET=1 just test-e2e
     @if [ "${ONEHARNESS_QUIET:-}" != "1" ]; then echo "test: ok"; fi
 
 test-e2e:
-    @./scripts/run-quiet.sh "browser journeys" "Inspect the Playwright artifact, fix the user journey, and rerun 'just test-e2e'." -- bunx nx run conversation-ui-e2e:e2e --outputStyle=static
+    @./scripts/run-quiet.sh "browser journeys" "Inspect the Playwright artifact, fix the user journey, and rerun 'just test-e2e'." -- bunx nx run conversation-ui-e2e:test --outputStyle=static
 
 # Pixel capture is intentionally separate from the cross-OS check matrix.
 visual:

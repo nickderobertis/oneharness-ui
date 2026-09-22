@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { maxBridgeResponseBytes } from "@oneharness-ui/ipc-contract";
 import { $, $$, browser, expect } from "@wdio/globals";
 import { validateProviderArgvPath } from "./capabilities.ts";
 import { desktopE2eStageLog, runDesktopStage } from "./stage-log.ts";
@@ -6,8 +7,8 @@ import { type ScrollSnapshot, wheelUntilNextPage } from "./wheel-scroll.ts";
 
 const providerArgv = validateProviderArgvPath(process.env.ONEHARNESS_UI_E2E_PROVIDER_ARGV);
 const legacyHistoryBytes = Number(process.env.ONEHARNESS_UI_E2E_LEGACY_HISTORY_BYTES);
-if (!Number.isSafeInteger(legacyHistoryBytes) || legacyHistoryBytes <= 4 * 1024 * 1024) {
-  throw new Error("native oversized history fixture must exceed the legacy 4 MiB bridge response");
+if (!Number.isSafeInteger(legacyHistoryBytes) || legacyHistoryBytes <= maxBridgeResponseBytes) {
+  throw new Error("native oversized history fixture must exceed the whole-history bridge response");
 }
 
 // Fixture ids are session names and turn ids: a bounded, quote-free alphabet
@@ -43,14 +44,14 @@ const requiredAutomaticPageBoundaries = 2;
 const wheelProgressTimeout = 750;
 
 async function scrollSnapshot(region: ScrollRegion): Promise<ScrollSnapshot> {
-  return await browser.execute((element) => {
-    const scrollRegion = element as HTMLElement;
-    return {
+  return await browser.execute(
+    (scrollRegion: HTMLElement) => ({
       clientHeight: scrollRegion.clientHeight,
       scrollHeight: scrollRegion.scrollHeight,
       scrollTop: scrollRegion.scrollTop,
-    };
-  }, region);
+    }),
+    region,
+  );
 }
 
 async function elementTop(element: ScrollRegion): Promise<number> {
@@ -165,7 +166,7 @@ describe("packaged native desktop journey", () => {
       await expect(await conversation("recoverable-failure")).toBeDisplayed();
       await expect($("aria/Load more conversations")).toBeDisplayed();
       await expect(await conversation("oversized-session-00")).not.toExist();
-      expect(legacyHistoryBytes).toBeGreaterThan(4 * 1024 * 1024);
+      expect(legacyHistoryBytes).toBeGreaterThan(maxBridgeResponseBytes);
     });
 
     await runDesktopStage(desktopE2eStageLog, "journey oversized history pagination", async () => {

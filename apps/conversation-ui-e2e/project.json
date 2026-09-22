@@ -6,7 +6,7 @@
   "tags": ["scope:ui", "type:e2e"],
   "implicitDependencies": ["conversation-ui", "ipc-contract", "oneharness-bridge"],
   "targets": {
-    "e2e": {
+    "test": {
       "cache": true,
       "command": "bun run --cwd apps/conversation-ui-e2e test:e2e",
       "dependsOn": ["conversation-ui:build"],

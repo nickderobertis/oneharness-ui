@@ -11,6 +11,11 @@ export const bridgeRoutes = {
 // parsing it. The desktop drift test keeps the Rust receiver aligned.
 export const maxBridgeStreamFrameBytes = 512 * 1024;
 
+// The native bridge refuses to assemble a response beyond this ceiling, so a
+// history large enough to cross it must arrive paginated. The desktop drift
+// test keeps the Rust sender aligned.
+export const maxBridgeResponseBytes = 4 * 1024 * 1024;
+
 // Literal values let transport callers use the map without widening command
 // names to arbitrary strings.
 export const tauriBridgeCommands = {

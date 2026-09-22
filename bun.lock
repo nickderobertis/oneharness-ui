@@ -89,6 +89,9 @@
     "apps/desktop-shell": {
       "name": "@oneharness-ui/desktop-shell",
       "version": "0.1.0",
+      "dependencies": {
+        "@oneharness-ui/ipc-contract": "workspace:*",
+      },
       "devDependencies": {
         "@oneharness/sdk": "0.14.0",
         "@types/bun": "^1.3.14",

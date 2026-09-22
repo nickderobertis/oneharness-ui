@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, resolve } from "node:path";
+import { maxBridgeResponseBytes } from "@oneharness-ui/ipc-contract";
 import {
   createDesktopFixture,
   deterministicDesktopEnvironment,
@@ -19,6 +20,12 @@ type JsonObject = Record<string, unknown>;
 
 function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parsedIdList(value: string): unknown[] {
+  const parsed: unknown = JSON.parse(value);
+  if (!Array.isArray(parsed)) throw new Error("fixture id environment value is not a JSON array");
+  return parsed;
 }
 
 function requiredString(record: JsonObject, field: string): string {
@@ -92,14 +99,14 @@ describe("native desktop fixture", () => {
       expect(names).toContain("recoverable-failure");
       expect(names).toContain("stopped-tool-session");
       expect(names.filter((name) => name.startsWith("oversized-session-"))).toHaveLength(55);
-      const sessionIds = JSON.parse(fixture.environment.ONEHARNESS_UI_E2E_SESSION_IDS) as unknown[];
+      const sessionIds = parsedIdList(fixture.environment.ONEHARNESS_UI_E2E_SESSION_IDS);
       expect(sessionIds).toHaveLength(58);
       expect(new Set(sessionIds).size).toBe(58);
-      const turnIds = JSON.parse(fixture.environment.ONEHARNESS_UI_E2E_TURN_IDS) as unknown[];
+      const turnIds = parsedIdList(fixture.environment.ONEHARNESS_UI_E2E_TURN_IDS);
       expect(turnIds).toHaveLength(45);
       expect(new Set(turnIds).size).toBe(45);
       expect(Number(fixture.environment.ONEHARNESS_UI_E2E_LEGACY_HISTORY_BYTES)).toBeGreaterThan(
-        4 * 1024 * 1024,
+        maxBridgeResponseBytes,
       );
 
       const stoppedSummary = listed.find(

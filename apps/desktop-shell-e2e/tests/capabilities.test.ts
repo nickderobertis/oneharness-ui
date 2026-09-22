@@ -11,7 +11,11 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
-import { maxBridgeStreamFrameBytes, tauriBridgeCommands } from "@oneharness-ui/ipc-contract";
+import {
+  maxBridgeResponseBytes,
+  maxBridgeStreamFrameBytes,
+  tauriBridgeCommands,
+} from "@oneharness-ui/ipc-contract";
 import {
   createDesktopCapabilities,
   validateDesktopAppBinary,
@@ -29,6 +33,20 @@ describe("native desktop capabilities", () => {
     const nativeLimit = runtime.match(/const MAX_FRAME_BYTES: usize = (\d+) \* (\d+);/u);
     expect(nativeLimit).not.toBeNull();
     expect(Number(nativeLimit?.[1]) * Number(nativeLimit?.[2])).toBe(maxBridgeStreamFrameBytes);
+  });
+
+  test("keeps the native response ceiling aligned with the IPC contract", () => {
+    const runtime = readFileSync(
+      new URL("../../desktop-shell/src/runtime.rs", import.meta.url),
+      "utf8",
+    );
+    const nativeLimit = runtime.match(
+      /const MAX_RESPONSE_BYTES: usize = (\d+) \* (\d+) \* (\d+);/u,
+    );
+    expect(nativeLimit).not.toBeNull();
+    expect(Number(nativeLimit?.[1]) * Number(nativeLimit?.[2]) * Number(nativeLimit?.[3])).toBe(
+      maxBridgeResponseBytes,
+    );
   });
 
   test("keeps native watch command names aligned with the IPC contract", () => {
