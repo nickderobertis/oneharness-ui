@@ -38,20 +38,17 @@ export type PhaseFailureDetails = {
 };
 
 export class PhaseFailure extends Error {
-  readonly exitCode: number | null;
-  readonly phase: string;
-  readonly stderr: string;
-  readonly stdout: string;
-  readonly timedOut: boolean;
+  /**
+   * What the phase was doing and what it produced. {@link PhaseFailureDetails}
+   * declares that shape once and this carries it whole, so a field added there
+   * reaches every reader without being restated here.
+   */
+  readonly details: PhaseFailureDetails;
 
   constructor(details: PhaseFailureDetails) {
     super(describeFailure(details));
     this.name = "PhaseFailure";
-    this.exitCode = details.exitCode;
-    this.phase = details.phase;
-    this.stderr = details.stderr;
-    this.stdout = details.stdout;
-    this.timedOut = details.timedOut;
+    this.details = details;
   }
 }
 

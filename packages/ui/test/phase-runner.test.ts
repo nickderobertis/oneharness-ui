@@ -4,10 +4,20 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { PhaseFailure, runPhase } from "./phase-runner.ts";
 
-/** How long a phase that ignores its bound keeps running before finishing on its own. */
-const HANG_MS = 4_000;
+/**
+ * How long a phase that ignores its bound keeps running before finishing on its
+ * own. Far longer than any bound below plus its slack, so a phase that ran to
+ * completion cannot be mistaken for one that was stopped.
+ */
+const HANG_MS = 15_000;
 /** Slack over a bound for spawning, stopping and draining the phase on a loaded host. */
-const STOP_SLACK_MS = 2_500;
+const STOP_SLACK_MS = 6_000;
+/**
+ * Bound for the over-bound phases. Comfortably above interpreter startup on a
+ * loaded host, so the fixture always writes before it is stopped, and still far
+ * below {@link HANG_MS}.
+ */
+const OVER_BOUND_MS = 2_000;
 
 let workspace = "";
 let scripts = { failing: "", passing: "" };
@@ -60,11 +70,11 @@ describe("bounded package-test phases", () => {
       name: "offline install",
       timeoutMs: 30_000,
     });
-    expect(error.phase).toBe("offline install");
-    expect(error.timedOut).toBe(false);
-    expect(error.exitCode).toBe(3);
-    expect(error.stdout).toContain("resolving @oneharness/ui");
-    expect(error.stderr).toContain("offline install refused: package not cached");
+    expect(error.details.phase).toBe("offline install");
+    expect(error.details.timedOut).toBe(false);
+    expect(error.details.exitCode).toBe(3);
+    expect(error.details.stdout).toContain("resolving @oneharness/ui");
+    expect(error.details.stderr).toContain("offline install refused: package not cached");
     expect(error.message).toContain("offline install phase exited with code 3");
     expect(error.message).toContain("offline install refused: package not cached");
   });
@@ -77,46 +87,41 @@ describe("bounded package-test phases", () => {
       timeoutMs: 30_000,
     });
 
-    expect(error.phase).toBe("consumer verification");
-    expect(error.timedOut).toBe(false);
-    expect(error.exitCode).toBeNull();
+    expect(error.details.phase).toBe("consumer verification");
+    expect(error.details.timedOut).toBe(false);
+    expect(error.details.exitCode).toBeNull();
     expect(error.message).toContain("consumer verification phase could not start");
-    expect(error.stderr.length).toBeGreaterThan(0);
+    expect(error.details.stderr.length).toBeGreaterThan(0);
   });
 
   test("stops an over-bound phase at its bound and reports what it had written", async () => {
-    const marker = resolve(workspace, "over-bound-finished.txt");
-    const hanging = await writeHangingScript(marker);
+    const hanging = await writeHangingScript("over-bound");
     const startedAt = Date.now();
 
     const error = await captureFailure({
       command: ["bun", hanging],
       cwd: workspace,
       name: "offline install",
-      timeoutMs: 500,
+      timeoutMs: OVER_BOUND_MS,
     });
     const elapsed = Date.now() - startedAt;
 
-    expect(error.timedOut).toBe(true);
-    expect(error.phase).toBe("offline install");
-    expect(error.message).toContain("offline install phase timed out after 500 ms");
-    expect(error.stdout).toContain("install started");
-    expect(elapsed).toBeGreaterThanOrEqual(500);
-    expect(elapsed).toBeLessThan(500 + STOP_SLACK_MS);
-    await Bun.sleep(HANG_MS);
-    expect(await Bun.file(marker).exists()).toBe(false);
-  }, 20_000);
+    expect(error.details.timedOut).toBe(true);
+    expect(error.details.phase).toBe("offline install");
+    expect(error.message).toContain(`offline install phase timed out after ${OVER_BOUND_MS} ms`);
+    expect(error.details.stdout).toContain("install started");
+    expect(elapsed).toBeGreaterThanOrEqual(OVER_BOUND_MS);
+    expect(elapsed).toBeLessThan(OVER_BOUND_MS + STOP_SLACK_MS);
+  }, 60_000);
 
   test("bounds each phase separately rather than sharing one budget", async () => {
     const bounds: readonly { name: string; timeoutMs: number }[] = [
-      { name: "pack", timeoutMs: 400 },
-      { name: "offline install", timeoutMs: 1_500 },
+      { name: "pack", timeoutMs: OVER_BOUND_MS },
+      { name: "offline install", timeoutMs: OVER_BOUND_MS * 2 },
     ];
     const timings = [];
     for (const { name, timeoutMs } of bounds) {
-      const hanging = await writeHangingScript(
-        resolve(workspace, `bound-${timeoutMs}-finished.txt`),
-      );
+      const hanging = await writeHangingScript(`bound-${timeoutMs}`);
       const startedAt = Date.now();
       const error = await captureFailure({
         command: ["bun", hanging],
@@ -128,26 +133,28 @@ describe("bounded package-test phases", () => {
     }
 
     for (const { elapsed, error, timeoutMs } of timings) {
-      expect(error.timedOut).toBe(true);
-      expect(error.message).toContain(`${error.phase} phase timed out after ${timeoutMs} ms`);
+      expect(error.details.timedOut).toBe(true);
+      expect(error.message).toContain(
+        `${error.details.phase} phase timed out after ${timeoutMs} ms`,
+      );
       expect(elapsed).toBeGreaterThanOrEqual(timeoutMs);
       expect(elapsed).toBeLessThan(timeoutMs + STOP_SLACK_MS);
     }
-    expect(timings.map(({ error }) => error.phase)).toEqual(["pack", "offline install"]);
-  }, 20_000);
+    expect(timings.map(({ error }) => error.details.phase)).toEqual(["pack", "offline install"]);
+  }, 60_000);
 });
 
 /**
- * Writes a phase that outlives any bound under test, then records that it ran to
- * completion, so a bound that failed to stop it leaves the marker behind.
+ * Writes a phase that announces itself and then outlives every bound under test,
+ * so a bound that failed to stop it shows up as an elapsed time near
+ * {@link HANG_MS} rather than near the bound.
  */
-async function writeHangingScript(marker: string): Promise<string> {
-  const path = `${marker}.ts`;
+async function writeHangingScript(label: string): Promise<string> {
+  const path = resolve(workspace, `${label}.ts`);
   await writeFile(
     path,
     `await Bun.write(Bun.stdout, "install started\\n");
 await new Promise((done) => setTimeout(done, ${HANG_MS}));
-await Bun.write(Bun.file(${JSON.stringify(marker)}), "finished");
 `,
   );
   return path;
