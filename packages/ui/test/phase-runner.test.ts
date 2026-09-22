@@ -10,34 +10,26 @@ const HANG_MS = 4_000;
 const STOP_SLACK_MS = 2_500;
 
 let workspace = "";
-let script = { failing: "", hanging: "", passing: "" };
+let scripts = { failing: "", passing: "" };
 
 beforeAll(async () => {
   workspace = await mkdtemp(resolve(tmpdir(), "oneharness-ui-phase-runner-"));
-  script = {
+  scripts = {
     failing: resolve(workspace, "failing.ts"),
-    hanging: resolve(workspace, "hanging.ts"),
     passing: resolve(workspace, "passing.ts"),
   };
   await Promise.all([
     writeFile(
-      script.passing,
+      scripts.passing,
       `await Bun.write(Bun.stdout, "packed /tmp/oneharness-ui-0.1.0.tgz\\n");
 await Bun.write(Bun.stderr, "resolving offline\\n");
 `,
     ),
     writeFile(
-      script.failing,
+      scripts.failing,
       `await Bun.write(Bun.stdout, "resolving @oneharness/ui\\n");
 await Bun.write(Bun.stderr, "offline install refused: package not cached\\n");
 process.exit(3);
-`,
-    ),
-    writeFile(
-      script.hanging,
-      `await Bun.write(Bun.stdout, "install started\\n");
-await new Promise((done) => setTimeout(done, ${HANG_MS}));
-await Bun.write(Bun.file(process.argv[2]), "finished");
 `,
     ),
   ]);
@@ -50,7 +42,7 @@ afterAll(async () => {
 describe("bounded package-test phases", () => {
   test("returns the output of a phase that finishes inside its bound", async () => {
     const result = await runPhase({
-      command: ["bun", script.passing],
+      command: ["bun", scripts.passing],
       cwd: workspace,
       name: "pack",
       timeoutMs: 30_000,
@@ -63,7 +55,7 @@ describe("bounded package-test phases", () => {
 
   test("names the phase and carries its output when the phase exits non-zero", async () => {
     const error = await captureFailure({
-      command: ["bun", script.failing],
+      command: ["bun", scripts.failing],
       cwd: workspace,
       name: "offline install",
       timeoutMs: 30_000,
@@ -93,11 +85,12 @@ describe("bounded package-test phases", () => {
   });
 
   test("stops an over-bound phase at its bound and reports what it had written", async () => {
-    const marker = resolve(workspace, "hanging-finished.txt");
+    const marker = resolve(workspace, "over-bound-finished.txt");
+    const hanging = await writeHangingScript(marker);
     const startedAt = Date.now();
 
     const error = await captureFailure({
-      command: ["bun", script.hanging, marker],
+      command: ["bun", hanging],
       cwd: workspace,
       name: "offline install",
       timeoutMs: 500,
@@ -121,9 +114,12 @@ describe("bounded package-test phases", () => {
     ];
     const timings = [];
     for (const { name, timeoutMs } of bounds) {
+      const hanging = await writeHangingScript(
+        resolve(workspace, `bound-${timeoutMs}-finished.txt`),
+      );
       const startedAt = Date.now();
       const error = await captureFailure({
-        command: ["bun", script.hanging, resolve(workspace, `${timeoutMs}.txt`)],
+        command: ["bun", hanging],
         cwd: workspace,
         name,
         timeoutMs,
@@ -140,6 +136,22 @@ describe("bounded package-test phases", () => {
     expect(timings.map(({ error }) => error.phase)).toEqual(["pack", "offline install"]);
   }, 20_000);
 });
+
+/**
+ * Writes a phase that outlives any bound under test, then records that it ran to
+ * completion, so a bound that failed to stop it leaves the marker behind.
+ */
+async function writeHangingScript(marker: string): Promise<string> {
+  const path = `${marker}.ts`;
+  await writeFile(
+    path,
+    `await Bun.write(Bun.stdout, "install started\\n");
+await new Promise((done) => setTimeout(done, ${HANG_MS}));
+await Bun.write(Bun.file(${JSON.stringify(marker)}), "finished");
+`,
+  );
+  return path;
+}
 
 async function captureFailure(phase: Parameters<typeof runPhase>[0]): Promise<PhaseFailure> {
   try {
