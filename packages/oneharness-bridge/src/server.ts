@@ -5,6 +5,7 @@ import {
   bridgeResponseSchema,
   bridgeRoutes,
   bridgeStreamFrameSchema,
+  bridgeWebUser,
 } from "@oneharness-ui/ipc-contract";
 import { z } from "zod";
 import { readEnvironment } from "./environment.ts";
@@ -247,7 +248,7 @@ function hasWebAccess(request: Request, expectedToken: string): boolean {
   try {
     const decoded = Buffer.from(header.slice(prefix.length), "base64").toString("utf8");
     const separator = decoded.indexOf(":");
-    if (separator < 0 || decoded.slice(0, separator) !== "oneharness") return false;
+    if (separator < 0 || decoded.slice(0, separator) !== bridgeWebUser) return false;
     const presented = Buffer.from(decoded.slice(separator + 1));
     const expected = Buffer.from(expectedToken);
     return presented.length === expected.length && timingSafeEqual(presented, expected);

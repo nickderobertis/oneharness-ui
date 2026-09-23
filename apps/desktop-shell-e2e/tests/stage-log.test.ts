@@ -11,7 +11,7 @@ describe("native desktop stage diagnostics", () => {
   test("loads through the Node TypeScript runtime used by WebdriverIO", async () => {
     const stageModule = new URL("./stage-log.ts", import.meta.url).href;
     const wdioCliPackage = realpathSync(
-      new URL("../../node_modules/@wdio/cli/package.json", import.meta.url),
+      new URL("../node_modules/@wdio/cli/package.json", import.meta.url),
     );
     // Node's ESM loader rejects native Windows paths such as `D:\...` because it
     // reads the drive letter as a URL scheme, so `--import` needs a file URL.
@@ -42,7 +42,7 @@ describe("native desktop stage diagnostics", () => {
     expect(stdout).toBe(
       resolve(
         fileURLToPath(new URL(".", import.meta.url)),
-        "../../../../test-results/desktop-e2e/stages.log",
+        "../../../test-results/desktop-e2e/stages.log",
       ),
     );
   }, 15_000);

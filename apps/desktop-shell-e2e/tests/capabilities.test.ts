@@ -11,25 +11,71 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
-import { maxBridgeStreamFrameBytes, tauriBridgeCommands } from "@oneharness-ui/ipc-contract";
 import {
+  maxBridgeResponseBytes,
+  maxBridgeStreamFrameBytes,
+  tauriBridgeCommands,
+} from "@oneharness-ui/ipc-contract";
+import {
+  AUTOMATION_PROFILE_ARGUMENT,
   createDesktopCapabilities,
+  FIXTURE_ROOT_PREFIX,
   validateDesktopAppBinary,
   validateProviderArgvPath,
   validateWebView2UserDataFolder,
 } from "./capabilities.ts";
 
+// Reporting the declared value keeps a drift failure readable: the whole
+// runtime source would otherwise be printed as the unmatched haystack.
+function nativeConstant(runtime: string, name: string): string | undefined {
+  return runtime.match(new RegExp(`const ${name}: &str = "([^"]*)";`, "u"))?.[1];
+}
+
 describe("native desktop capabilities", () => {
   // llmlint: ignore-block[e2e_not_mocked, tests_mirror_real_usage] These are logic-free cross-language drift gates, not substitutes for native behavior; runtime.rs's streams_watch_frames_from_the_real_bridge_until_it_is_stopped test drives the packaged sidecar through the real Tauri channel.
   test("keeps the native stream frame ceiling aligned with the IPC contract", () => {
-    const runtime = readFileSync(new URL("../../src/runtime.rs", import.meta.url), "utf8");
+    const runtime = readFileSync(
+      new URL("../../desktop-shell/src/runtime.rs", import.meta.url),
+      "utf8",
+    );
     const nativeLimit = runtime.match(/const MAX_FRAME_BYTES: usize = (\d+) \* (\d+);/u);
     expect(nativeLimit).not.toBeNull();
     expect(Number(nativeLimit?.[1]) * Number(nativeLimit?.[2])).toBe(maxBridgeStreamFrameBytes);
   });
 
+  test("keeps the native response ceiling aligned with the IPC contract", () => {
+    const runtime = readFileSync(
+      new URL("../../desktop-shell/src/runtime.rs", import.meta.url),
+      "utf8",
+    );
+    const nativeLimit = runtime.match(
+      /const MAX_RESPONSE_BYTES: usize = (\d+) \* (\d+) \* (\d+);/u,
+    );
+    expect(nativeLimit).not.toBeNull();
+    expect(Number(nativeLimit?.[1]) * Number(nativeLimit?.[2]) * Number(nativeLimit?.[3])).toBe(
+      maxBridgeResponseBytes,
+    );
+  });
+
+  test("keeps the native automation conventions aligned with the runtime", () => {
+    const runtime = readFileSync(
+      new URL("../../desktop-shell/src/runtime.rs", import.meta.url),
+      "utf8",
+    );
+    const conventions: readonly (readonly [string, string])[] = [
+      ["FIXTURE_ROOT_PREFIX", FIXTURE_ROOT_PREFIX],
+      ["AUTOMATION_PROFILE_ARGUMENT", AUTOMATION_PROFILE_ARGUMENT],
+    ];
+    for (const [name, expected] of conventions) {
+      expect(nativeConstant(runtime, name)).toBe(expected);
+    }
+  });
+
   test("keeps native watch command names aligned with the IPC contract", () => {
-    const runtime = readFileSync(new URL("../../src/runtime.rs", import.meta.url), "utf8");
+    const runtime = readFileSync(
+      new URL("../../desktop-shell/src/runtime.rs", import.meta.url),
+      "utf8",
+    );
     const handler = runtime.match(/tauri::generate_handler!\[([^\]]+)\]/u)?.[1] ?? "";
     for (const command of Object.values(tauriBridgeCommands)) {
       expect(runtime).toContain(`fn ${command}<`);

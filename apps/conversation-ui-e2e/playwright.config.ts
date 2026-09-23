@@ -1,5 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { e2eWebOrigin } from "@oneharness-ui/bridge/test/e2e-configuration.ts";
+import { bridgeWebUser } from "@oneharness-ui/ipc-contract";
 import { defineConfig, devices } from "@playwright/test";
 import { z } from "zod";
 
@@ -16,15 +17,16 @@ export default defineConfig({
   outputDir: "test-results/playwright",
   reporter: [["list"]],
   retries: 0,
-  // llmlint: ignore[browser_journeys_run_against_the_built_app] The journeys predate this branch inside conversation-ui and run against the shipped static export served by the bridge's e2e server; a separate e2e project is a project-graph change tracked as a follow-up.
-  testDir: "./tests/e2e",
+  testDir: "./tests",
   testMatch: "**/*.e2e.ts",
   timeout: 30_000,
   use: {
     baseURL: e2eWebOrigin,
+    // llmlint: ignore-block[secrets_stay_server_side] The journey is the browser client of the bridge's own e2e web server, and this header is how a client presents the per-run loopback credential that server requires; the server still enforces it, and the token is generated for this process rather than shared with anything outside it.
     extraHTTPHeaders: {
-      Authorization: `Basic ${Buffer.from(`oneharness:${webAccessToken}`).toString("base64")}`,
+      Authorization: `Basic ${Buffer.from(`${bridgeWebUser}:${webAccessToken}`).toString("base64")}`,
     },
+    // llmlint: ignore-end[secrets_stay_server_side]
     screenshot: "only-on-failure",
     trace: "retain-on-failure",
   },

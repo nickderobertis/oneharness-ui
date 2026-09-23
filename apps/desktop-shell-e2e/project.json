@@ -1,0 +1,56 @@
+{
+  "name": "desktop-shell-e2e",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/desktop-shell-e2e/tests",
+  "tags": ["scope:desktop", "type:e2e"],
+  "implicitDependencies": ["desktop-shell", "ipc-contract"],
+  "targets": {
+    "desktop-e2e": {
+      "cache": true,
+      "command": "bun scripts/run-desktop-e2e.mjs",
+      "dependsOn": ["desktop-shell:build"],
+      "inputs": [
+        "default",
+        "testRunners",
+        "{workspaceRoot}/justfile",
+        "{workspaceRoot}/scripts/build-native.mjs",
+        "{workspaceRoot}/scripts/run-desktop-e2e.mjs",
+        "{workspaceRoot}/apps/desktop-shell/capabilities/**/*",
+        "{workspaceRoot}/apps/desktop-shell/src/**/*",
+        "{workspaceRoot}/apps/desktop-shell/tauri.conf.json",
+        "{workspaceRoot}/apps/desktop-shell/tests/fixture.ts",
+        {
+          "dependentTasksOutputFiles": "**/*"
+        }
+      ],
+      "outputs": []
+    },
+    "test": {
+      "command": "bun test apps/desktop-shell-e2e/tests",
+      "inputs": [
+        "default",
+        "^production",
+        "testRunners",
+        "{workspaceRoot}/nx.json",
+        "{workspaceRoot}/project.json",
+        "{workspaceRoot}/apps/*/project.json",
+        "{workspaceRoot}/packages/*/project.json",
+        "{workspaceRoot}/scripts/run-desktop-e2e.mjs",
+        "{workspaceRoot}/apps/desktop-shell/src/runtime.rs"
+      ]
+    },
+    "lint": {
+      "command": "bunx biome check --error-on-warnings apps/desktop-shell-e2e"
+    },
+    "format": {
+      "command": "bunx biome format --write apps/desktop-shell-e2e"
+    },
+    "typecheck": {
+      "command": "bunx tsc -p apps/desktop-shell-e2e/tsconfig.json --noEmit"
+    },
+    "format-check": {
+      "command": "bunx biome format apps/desktop-shell-e2e"
+    }
+  }
+}

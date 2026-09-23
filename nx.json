@@ -15,6 +15,11 @@
       "{workspaceRoot}/tsconfig.base.json",
       "{workspaceRoot}/biome.json",
       "{workspaceRoot}/rust-toolchain.toml"
+    ],
+    "testRunners": [
+      "{workspaceRoot}/bunfig.toml",
+      "{workspaceRoot}/scripts/run-quiet.sh",
+      "{workspaceRoot}/scripts/test-rust.sh"
     ]
   },
   "targetDefaults": {
@@ -24,10 +29,19 @@
       "inputs": ["production", "^production"],
       "outputs": ["{projectRoot}/out", "{projectRoot}/dist", "{workspaceRoot}/target"]
     },
-    "test": { "cache": true, "inputs": ["default", "^production"] },
-    "lint": { "cache": true },
-    "typecheck": { "cache": true },
-    "format-check": { "cache": true }
+    "test": {
+      "cache": true,
+      "inputs": ["default", "^production", "testRunners"]
+    },
+    "lint": {
+      "cache": true
+    },
+    "typecheck": {
+      "cache": true
+    },
+    "format-check": {
+      "cache": true
+    }
   },
   "dependencyConstraints": [
     {
