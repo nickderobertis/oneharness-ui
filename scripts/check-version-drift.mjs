@@ -179,21 +179,40 @@ for (const [platform, line] of [
   }
 }
 const engineNames = { chromium: "Chromium", webkit: "WebKit" };
-const documentedEngines = new Intl.ListFormat("en").format(
-  browserEngines.map((engine) => {
-    const name = engineNames[engine];
-    if (!name) {
-      throw new Error(
-        `${engine} has no documented engine name; name it in check-version-drift.mjs and the browser journey documentation`,
-      );
-    }
-    return name;
-  }),
-);
+function documentEngines(engines) {
+  return new Intl.ListFormat("en").format(
+    engines.map((engine) => {
+      const name = engineNames[engine];
+      if (!name) {
+        throw new Error(
+          `${engine} has no documented engine name; name it in check-version-drift.mjs and the browser journey documentation`,
+        );
+      }
+      return name;
+    }),
+  );
+}
+const documentedEngines = documentEngines(browserEngines);
+// The documents state the Windows exception exactly when the projects make one.
+const windowsException =
+  windowsEngines.length === browserEngines.length
+    ? undefined
+    : `${documentEngines(windowsEngines)} alone on Windows`;
 for (const path of ["README.md", "docs/architecture.md"]) {
-  if (!read(path).includes(documentedEngines)) {
+  const documentation = read(path).replace(/\s+/g, " ");
+  if (!documentation.includes(documentedEngines)) {
     throw new Error(
       `${path} must document the ${documentedEngines} browser journeys; update the projects and documentation together`,
+    );
+  }
+  if (windowsException === undefined && documentation.includes("alone on Windows")) {
+    throw new Error(
+      `${path} documents a Windows browser exception that ${browserJourneyConfig} no longer makes; update the projects and documentation together`,
+    );
+  }
+  if (windowsException !== undefined && !documentation.includes(windowsException)) {
+    throw new Error(
+      `${path} must document the browser journeys running in ${windowsException}; update the projects and documentation together`,
     );
   }
 }

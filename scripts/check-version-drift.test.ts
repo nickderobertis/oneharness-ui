@@ -71,10 +71,13 @@ test("accepts a reconciled tree and rejects version, workflow, and browser drift
       ),
       writeFile(
         resolve(root, "README.md"),
-        "oneharness 1.2.3 CLI\n`@oneharness/sdk` package to `1.2.3`\nChromium and WebKit\n",
+        "oneharness 1.2.3 CLI\n`@oneharness/sdk` package to `1.2.3`\nChromium and WebKit, and in Chromium alone\non Windows\n",
       ),
       writeFile(resolve(root, "docs/native-desktop-e2e.md"), "oneharness 1.2.3 CLI\n"),
-      writeFile(resolve(root, "docs/architecture.md"), "run in Chromium and WebKit.\n"),
+      writeFile(
+        resolve(root, "docs/architecture.md"),
+        "run in Chromium and WebKit (Chromium alone on Windows).\n",
+      ),
       writeFile(
         resolve(root, "apps/conversation-ui-e2e/playwright.config.ts"),
         [
@@ -172,6 +175,47 @@ test("accepts a reconciled tree and rejects version, workflow, and browser drift
     expect(documentedBrowserDrift.exitCode).toBe(1);
     expect(documentedBrowserDrift.stderr.toString()).toContain(
       "docs/architecture.md must document the Chromium and WebKit browser journeys",
+    );
+    // The Windows exception is part of the documented matrix, so dropping it
+    // from the documents, or keeping it once the projects drop it, is drift.
+    await writeFile(resolve(root, "docs/architecture.md"), "run in Chromium and WebKit.\n");
+    const windowsDocumentationDrift = Bun.spawnSync([
+      "node",
+      "scripts/check-version-drift.mjs",
+      root,
+    ]);
+    expect(windowsDocumentationDrift.exitCode).toBe(1);
+    expect(windowsDocumentationDrift.stderr.toString()).toContain(
+      "docs/architecture.md must document the browser journeys running in Chromium alone on Windows",
+    );
+    await writeFile(
+      resolve(root, "docs/architecture.md"),
+      "run in Chromium and WebKit (Chromium alone on Windows).\n",
+    );
+    await writeFile(
+      resolve(root, "apps/conversation-ui-e2e/playwright.config.ts"),
+      [
+        "export default defineConfig({",
+        "  projects: [",
+        '    { name: "chromium", use: { ...devices["Desktop Chrome"] } },',
+        '    { name: "webkit", use: { ...devices["Desktop Safari"] } },',
+        "  ],",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    await writeFile(
+      resolve(root, "scripts/bootstrap.sh"),
+      bootstrapWith("chromium webkit", "chromium webkit"),
+    );
+    const staleWindowsDocumentation = Bun.spawnSync([
+      "node",
+      "scripts/check-version-drift.mjs",
+      root,
+    ]);
+    expect(staleWindowsDocumentation.exitCode).toBe(1);
+    expect(staleWindowsDocumentation.stderr.toString()).toContain(
+      "README.md documents a Windows browser exception",
     );
   } finally {
     await rm(root, { force: true, recursive: true });
