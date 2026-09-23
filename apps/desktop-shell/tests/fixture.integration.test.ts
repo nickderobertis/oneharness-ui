@@ -61,6 +61,11 @@ async function invoke(args: string[]): Promise<JsonObject[]> {
   return value;
 }
 
+async function fixtureRoots(): Promise<string[]> {
+  const entries = await readdir(tmpdir());
+  return entries.filter((name) => name.startsWith(FIXTURE_ROOT_PREFIX)).sort();
+}
+
 describe("native desktop fixture", () => {
   test("keeps the fixture root prefix aligned with the native runtime", async () => {
     const runtime = await readFile(
@@ -171,11 +176,27 @@ describe("native desktop fixture", () => {
   });
 
   test("removes temporary history when the real provider process cannot run", async () => {
-    const prefix = "oneharness-ui-desktop-e2e-";
-    const before = (await readdir(tmpdir())).filter((name) => name.startsWith(prefix)).sort();
+    const before = await fixtureRoots();
     await expect(createDesktopFixture(packagedOneHarnessCli)).rejects.toThrow("fixture CLI exited");
-    const after = (await readdir(tmpdir())).filter((name) => name.startsWith(prefix)).sort();
-    expect(after).toEqual(before);
+    expect(await fixtureRoots()).toEqual(before);
+  });
+
+  test("refuses a deterministic provider that is not an executable file", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "oneharness-ui-provider-executable-"));
+    const notExecutable = resolve(root, "provider.txt");
+    try {
+      await writeFile(notExecutable, "", { mode: 0o644 });
+      const before = await fixtureRoots();
+      // The provider is spawned, so an existing path is not enough: a readable
+      // regular file has to be refused here rather than at the spawn, which
+      // would already have created the fixture this asserts was never made.
+      await expect(createDesktopFixture(notExecutable)).rejects.toThrow(
+        `deterministic provider is not an executable file at ${notExecutable}`,
+      );
+      expect(await fixtureRoots()).toEqual(before);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
   });
 
   test("rejects a CLI history path outside the isolated fixture directory", async () => {

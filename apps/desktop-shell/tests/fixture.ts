@@ -458,12 +458,12 @@ export async function createDesktopFixture(
     ["deterministic provider", providerPath],
   ];
   for (const [label, path] of requiredExecutables) {
-    if (!existsSync(path)) {
-      throw new Error(`${label} is missing at ${path}; run just bootstrap`);
+    if (!isExecutableFile(path)) {
+      throw new Error(`${label} is not an executable file at ${path}; run just bootstrap`);
     }
   }
 
-  const root = await mkdtemp(resolve(tmpdir(), "oneharness-ui-desktop-e2e-"));
+  const root = await mkdtemp(resolve(tmpdir(), FIXTURE_ROOT_PREFIX));
   const historyDir = resolve(root, "history");
   const providerArgv = resolve(root, "provider-argv.txt");
   const webview2UserDataDir = resolveFixtureWebView2UserDataDirectory(root, process.platform);
