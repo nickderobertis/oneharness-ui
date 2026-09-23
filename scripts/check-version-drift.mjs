@@ -148,15 +148,26 @@ if (browserEngines.length === 0) {
     `${browserJourneyConfig} must declare at least one browser project; restore its projects list`,
   );
 }
-// Projects declared after the Windows guard run everywhere but Windows, so
-// bootstrap provisions them on every platform except Windows.
-const windowsGuard = 'process.platform === "win32"';
-const windowsGuardAt = declaredProjects.indexOf(windowsGuard);
+// Projects inside the Windows guard's non-Windows branch run everywhere but
+// Windows, so only this exact guard shape is accepted: reversed branches would
+// swap the matrix while the project names stayed the same.
+const windowsGuard = '...(process.platform === "win32" ? [] : [';
+const projectsText = declaredProjects.replace(/\s+/g, " ");
+const windowsGuardAt = projectsText.indexOf(windowsGuard);
+const win32Mentions = projectsText.split("win32").length - 1;
+if (
+  windowsGuardAt === -1
+    ? win32Mentions !== 0
+    : win32Mentions !== 1 || !/\]\),?$/.test(projectsText.trimEnd())
+) {
+  throw new Error(
+    `${browserJourneyConfig} must exclude Windows browser projects with one trailing \`${windowsGuard}...])\` guard; restore that shape`,
+  );
+}
 const windowsEngines = [
-  ...(windowsGuardAt === -1
-    ? declaredProjects
-    : declaredProjects.slice(0, windowsGuardAt)
-  ).matchAll(/name: "(?<engine>[a-z-]+)"/g),
+  ...(windowsGuardAt === -1 ? projectsText : projectsText.slice(0, windowsGuardAt)).matchAll(
+    /name: "(?<engine>[a-z-]+)"/g,
+  ),
 ].map((match) => match.groups.engine);
 if (windowsEngines.length === 0) {
   throw new Error(
@@ -193,7 +204,6 @@ function documentEngines(engines) {
   );
 }
 const documentedEngines = documentEngines(browserEngines);
-// The documents state the Windows exception exactly when the projects make one.
 const windowsException =
   windowsEngines.length === browserEngines.length
     ? undefined

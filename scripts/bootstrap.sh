@@ -34,9 +34,8 @@ install_playwright_browsers() {
 }
 
 # Playwright's WebKit links Linux system libraries that the Tauri prerequisites do not
-# cover; the macOS archive is self-contained. Windows provisions Chromium alone, as the
-# browser journey config runs it there: with WebKit also provisioned, the Windows
-# packaged desktop journey failed its fixture cleanup (EBUSY) in both CI runs.
+# cover; the macOS archive is self-contained. Windows provisions Chromium alone, the
+# one engine the browser journey config runs there.
 case "$(uname -s)" in
   Linux) install_playwright_browsers --with-deps chromium webkit ;;
   MINGW* | MSYS* | CYGWIN*) install_playwright_browsers chromium ;;

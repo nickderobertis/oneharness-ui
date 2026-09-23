@@ -44,9 +44,8 @@ export default defineConfig({
   // The Linux desktop shell renders through WebKitGTK, so every journey also runs in
   // Playwright's WebKit beside Chromium. Both projects share the one build and server
   // above; the packaged WebKitGTK journey stays the authority for the native shell.
-  // Windows runs Chromium alone: no Windows shell renders through WebKit, and with
-  // WebKit provisioned the Windows packaged desktop journey failed its fixture
-  // cleanup (EBUSY) in both CI runs, so bootstrap does not install it there.
+  // Windows runs Chromium alone: no Windows shell renders through WebKit, and
+  // bootstrap does not provision it there beside the packaged WebView2 journey.
   projects: [
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
     ...(process.platform === "win32"
