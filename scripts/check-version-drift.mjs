@@ -148,10 +148,35 @@ if (browserEngines.length === 0) {
     `${browserJourneyConfig} must declare at least one browser project; restore its projects list`,
   );
 }
-if (!read("scripts/bootstrap.sh").includes(`playwright install "$@" ${browserEngines.join(" ")}`)) {
+// Projects declared after the Windows guard run everywhere but Windows, so
+// bootstrap provisions them on every platform except Windows.
+const windowsGuard = 'process.platform === "win32"';
+const windowsGuardAt = declaredProjects.indexOf(windowsGuard);
+const windowsEngines = [
+  ...(windowsGuardAt === -1
+    ? declaredProjects
+    : declaredProjects.slice(0, windowsGuardAt)
+  ).matchAll(/name: "(?<engine>[a-z-]+)"/g),
+].map((match) => match.groups.engine);
+if (windowsEngines.length === 0) {
   throw new Error(
-    `bootstrap.sh must provision exactly ${browserEngines.join(" ")} from ${browserJourneyConfig}; update both files together`,
+    `${browserJourneyConfig} must declare at least one browser project for Windows; restore its projects list`,
   );
+}
+const bootstrap = read("scripts/bootstrap.sh");
+for (const [platform, line] of [
+  ["Linux", `  Linux) install_playwright_browsers --with-deps ${browserEngines.join(" ")} ;;`],
+  [
+    "Windows",
+    `  MINGW* | MSYS* | CYGWIN*) install_playwright_browsers ${windowsEngines.join(" ")} ;;`,
+  ],
+  ["other platforms", `  *) install_playwright_browsers ${browserEngines.join(" ")} ;;`],
+]) {
+  if (!bootstrap.split("\n").includes(line)) {
+    throw new Error(
+      `bootstrap.sh must provision exactly the ${browserJourneyConfig} engines on ${platform} with "${line.trim()}"; update both files together`,
+    );
+  }
 }
 const engineNames = { chromium: "Chromium", webkit: "WebKit" };
 const documentedEngines = new Intl.ListFormat("en").format(

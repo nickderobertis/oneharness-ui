@@ -29,15 +29,18 @@ bun "$ROOT/scripts/build-test-provider.mjs" \
 bun "$ROOT/scripts/build-sidecar.mjs" \
   || fail "sidecar assembly failed; follow the build-sidecar remedy above, then rerun just bootstrap"
 install_playwright_browsers() {
-  bun run --cwd apps/conversation-ui playwright install "$@" chromium webkit >/dev/null \
+  bun run --cwd apps/conversation-ui playwright install "$@" >/dev/null \
     || fail "browser provisioning failed; verify Playwright download access and, on Linux, permission to install WebKit's system libraries, then rerun just bootstrap"
 }
 
 # Playwright's WebKit links Linux system libraries that the Tauri prerequisites do not
-# cover; the macOS and Windows archives are self-contained.
+# cover; the macOS archive is self-contained. Windows provisions Chromium alone, as the
+# browser journey config runs it there: with WebKit also provisioned, the Windows
+# packaged desktop journey failed its fixture cleanup (EBUSY) in both CI runs.
 case "$(uname -s)" in
-  Linux) install_playwright_browsers --with-deps ;;
-  *) install_playwright_browsers ;;
+  Linux) install_playwright_browsers --with-deps chromium webkit ;;
+  MINGW* | MSYS* | CYGWIN*) install_playwright_browsers chromium ;;
+  *) install_playwright_browsers chromium webkit ;;
 esac
 "$ROOT/scripts/setup-screencomp.sh" >/dev/null \
   || fail "screencomp provisioning failed; verify release download access, then rerun just bootstrap"

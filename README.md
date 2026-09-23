@@ -125,7 +125,8 @@ reach the address and obtain that token can use the UI for the lifetime of the
 server; the separate bridge authorization remains only in server memory.
 
 Run the focused browser journeys with `just test-e2e`; every journey runs in both
-Chromium and WebKit from one static export and server. On Linux or Windows, run
+Chromium and WebKit from one static export and server. Windows runs them in
+Chromium alone, and bootstrap provisions only Chromium there. On Linux or Windows, run
 the additional packaged Tauri journey with `just test-desktop-e2e`; it builds
 the platform installer and drives that release application through
 WebdriverIO and the pinned official `tauri-driver`. See

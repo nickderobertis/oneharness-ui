@@ -3,6 +3,17 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
+function bootstrapWith(engines: string, windowsEngines: string): string {
+  return [
+    'case "$(uname -s)" in',
+    `  Linux) install_playwright_browsers --with-deps ${engines} ;;`,
+    `  MINGW* | MSYS* | CYGWIN*) install_playwright_browsers ${windowsEngines} ;;`,
+    `  *) install_playwright_browsers ${engines} ;;`,
+    "esac",
+    "",
+  ].join("\n");
+}
+
 test("accepts a reconciled tree and rejects version, workflow, and browser drift with a remedy", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "oneharness-version-drift-"));
   try {
@@ -70,7 +81,9 @@ test("accepts a reconciled tree and rejects version, workflow, and browser drift
           "export default defineConfig({",
           "  projects: [",
           '    { name: "chromium", use: { ...devices["Desktop Chrome"] } },',
-          '    { name: "webkit", use: { ...devices["Desktop Safari"] } },',
+          '    ...(process.platform === "win32"',
+          "      ? []",
+          '      : [{ name: "webkit", use: { ...devices["Desktop Safari"] } }]),',
           "  ],",
           "});",
           "",
@@ -78,7 +91,7 @@ test("accepts a reconciled tree and rejects version, workflow, and browser drift
       ),
       writeFile(
         resolve(root, "scripts/bootstrap.sh"),
-        'playwright install "$@" chromium webkit >/dev/null\n',
+        bootstrapWith("chromium webkit", "chromium"),
       ),
       writeFile(
         resolve(root, ".github/workflows/check.yml"),
@@ -133,18 +146,26 @@ test("accepts a reconciled tree and rejects version, workflow, and browser drift
     );
     // A browser project the journeys run but bootstrap never provisions would
     // leave the second engine missing on a clean clone.
-    await writeFile(
-      resolve(root, "scripts/bootstrap.sh"),
-      'playwright install "$@" chromium >/dev/null\n',
-    );
+    await writeFile(resolve(root, "scripts/bootstrap.sh"), bootstrapWith("chromium", "chromium"));
     const browserDrift = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
     expect(browserDrift.exitCode).toBe(1);
     expect(browserDrift.stderr.toString()).toContain(
-      "bootstrap.sh must provision exactly chromium webkit",
+      'engines on Linux with "Linux) install_playwright_browsers --with-deps chromium webkit ;;"',
+    );
+    // Windows runs only the projects before the guard, so provisioning WebKit
+    // there is drift too.
+    await writeFile(
+      resolve(root, "scripts/bootstrap.sh"),
+      bootstrapWith("chromium webkit", "chromium webkit"),
+    );
+    const windowsBrowserDrift = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
+    expect(windowsBrowserDrift.exitCode).toBe(1);
+    expect(windowsBrowserDrift.stderr.toString()).toContain(
+      'engines on Windows with "MINGW* | MSYS* | CYGWIN*) install_playwright_browsers chromium ;;"',
     );
     await writeFile(
       resolve(root, "scripts/bootstrap.sh"),
-      'playwright install "$@" chromium webkit >/dev/null\n',
+      bootstrapWith("chromium webkit", "chromium"),
     );
     await writeFile(resolve(root, "docs/architecture.md"), "run in Chromium.\n");
     const documentedBrowserDrift = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
