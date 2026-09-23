@@ -127,3 +127,48 @@ for (const [path, ...expectedValues] of sdkDocumentation) {
     }
   }
 }
+
+// The browser journey projects are the one source for which engines this
+// repository supports: bootstrap provisions exactly them, and the documentation
+// names exactly them.
+const browserJourneyConfig = "apps/conversation-ui-e2e/playwright.config.ts";
+const declaredProjects = /\n {2}projects: \[\n(?<projects>.*?)\n {2}\],\n/s.exec(
+  read(browserJourneyConfig),
+)?.groups?.projects;
+if (declaredProjects === undefined) {
+  throw new Error(
+    `${browserJourneyConfig} must list its browser projects one per line; restore that list and rerun just check`,
+  );
+}
+const browserEngines = [...declaredProjects.matchAll(/name: "(?<engine>[a-z-]+)"/g)].map(
+  (match) => match.groups.engine,
+);
+if (browserEngines.length === 0) {
+  throw new Error(
+    `${browserJourneyConfig} must declare at least one browser project; restore its projects list`,
+  );
+}
+if (!read("scripts/bootstrap.sh").includes(`playwright install "$@" ${browserEngines.join(" ")}`)) {
+  throw new Error(
+    `bootstrap.sh must provision exactly ${browserEngines.join(" ")} from ${browserJourneyConfig}; update both files together`,
+  );
+}
+const engineNames = { chromium: "Chromium", webkit: "WebKit" };
+const documentedEngines = new Intl.ListFormat("en").format(
+  browserEngines.map((engine) => {
+    const name = engineNames[engine];
+    if (!name) {
+      throw new Error(
+        `${engine} has no documented engine name; name it in check-version-drift.mjs and the browser journey documentation`,
+      );
+    }
+    return name;
+  }),
+);
+for (const path of ["README.md", "docs/architecture.md"]) {
+  if (!read(path).includes(documentedEngines)) {
+    throw new Error(
+      `${path} must document the ${documentedEngines} browser journeys; update the projects and documentation together`,
+    );
+  }
+}

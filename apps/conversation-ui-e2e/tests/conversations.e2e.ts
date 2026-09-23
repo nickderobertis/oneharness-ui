@@ -1,5 +1,6 @@
 import { basename } from "node:path";
 import { e2eProject } from "@oneharness-ui/bridge/test/e2e-configuration.ts";
+import { seedE2eHistory } from "@oneharness-ui/bridge/test/e2e-history.ts";
 import {
   bridgeResponseSchema,
   conversationLabelMaxLength,
@@ -8,6 +9,13 @@ import {
 import { expect, type Page, test } from "@playwright/test";
 
 const e2eProjectHeading = new RegExp(`${basename(e2eProject)}$`);
+
+// Continuing a conversation appends a record to the fixture history, so each
+// engine of this target starts from the baseline the server seeded rather than
+// from whatever the previous engine left behind.
+test.beforeAll(async () => {
+  await seedE2eHistory();
+});
 
 async function expectTheme(page: Page, selected: string, next: string, resolved: "dark" | "light") {
   await expect(

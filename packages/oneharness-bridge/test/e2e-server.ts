@@ -1,10 +1,9 @@
 import { existsSync } from "node:fs";
-import { mkdir, rm } from "node:fs/promises";
 import { isAbsolute, resolve } from "node:path";
-import { OneHarness } from "@oneharness/sdk";
 import { z } from "zod";
 import { startWebServer } from "../src/server.ts";
 import { e2eProject, e2eWebPort } from "./e2e-configuration.ts";
+import { e2eHistoryDir, e2eProviderBin, seedE2eHistory } from "./e2e-history.ts";
 
 const repository = resolve(import.meta.dir, "../../..");
 const webAccessToken = z
@@ -22,102 +21,22 @@ if (
 ) {
   throw new Error("ONEHARNESS_UI_TEST_CLI_BIN must be an existing absolute executable path");
 }
-const historyDir = resolve(repository, ".cache/e2e-history");
 const visualProject = "/tmp/oneharness-ui-visual-project";
 const visualMode =
   z.enum(["true"]).optional().parse(process.env.ONEHARNESS_UI_TEST_VISUAL) === "true";
-await mkdir(visualMode ? visualProject : e2eProject, {
-  recursive: true,
-});
 const provider = visualMode
   ? resolve(repository, "packages/oneharness-bridge/test/fixtures/visual-provider.sh")
-  : resolve(
-      repository,
-      `target/oneharness-ui-test/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
-    );
+  : e2eProviderBin;
 
 if (cliOverride) process.env.ONEHARNESS_BIN = cliOverride;
-await rm(historyDir, { force: true, recursive: true });
-await mkdir(historyDir, { recursive: true });
 delete process.env.ONEHARNESS_HISTORY_LABELS;
-const sdk = new OneHarness();
-
-async function seed({
-  exit = 0,
-  name,
-  prompt,
-  stderr = "",
-  stdout,
-}: {
-  exit?: number;
-  name: string;
-  prompt: string;
-  stderr?: string;
-  stdout: string;
-}) {
-  const result = await sdk.run({
-    bins: { "claude-code": provider },
-    env: { MOCK_EXIT: String(exit), MOCK_STDERR: stderr, MOCK_STDOUT: stdout },
-    events: true,
-    harnesses: ["claude-code"],
-    history: true,
-    historyDir,
-    historyName: name,
-    mode: "bypass",
-    prompt,
-    cwd: visualMode ? visualProject : e2eProject,
-  });
-  if (visualMode) {
-    await Bun.sleep(1_100);
-  }
-  return result;
-}
-
-await seed({
-  name: "tool-session",
-  prompt: "Inspect the tool boundary",
-  stdout: [
-    '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"pwd"}}]}}',
-    '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"/workspace/product"}]}}',
-    '{"type":"result","result":"Tool inspection complete","session_id":"e2e-native-tool","usage":{"input_tokens":0,"output_tokens":5}}',
-  ].join("\n"),
-});
-await seed({
-  name: "plain-session",
-  prompt: "Answer without reasoning",
-  stdout: '{"result":"A concise answer","session_id":"e2e-native-plain"}',
-});
-await seed({
-  name: "markdown-session",
-  prompt:
-    "Render **safely** <img src=x onerror=alert('unsafe')><script>globalThis.injected=true</script>",
-  stdout: JSON.stringify({
-    result: "**Highlighted code**\n\n```ts\nconst answer = 42;\n```",
-    session_id: "e2e-native-markdown",
-  }),
-});
-await seed({
-  name: "json-session",
-  prompt: "Return structured data",
-  stdout: JSON.stringify({
-    result: '{"status":"ready","items":[1,2]}',
-    session_id: "e2e-native-json",
-  }),
-});
-await seed({
-  name: "ineligible-session",
-  prompt: "This provider omitted its session handle",
-  stdout: '{"result":"No continuation handle"}',
-});
-await seed({
-  exit: 1,
-  name: "failed-session",
-  prompt: "The provider will fail",
-  stderr: "rate limit exceeded",
-  stdout: '{"result":"","session_id":"e2e-native-failure"}',
+await seedE2eHistory({
+  cwd: visualMode ? visualProject : e2eProject,
+  provider,
+  ...(visualMode ? { settleMs: 1_100 } : {}),
 });
 
-process.env.ONEHARNESS_UI_HISTORY_DIR = historyDir;
+process.env.ONEHARNESS_UI_HISTORY_DIR = e2eHistoryDir;
 process.env.ONEHARNESS_UI_PROVIDER_BIN = provider;
 process.env.ONEHARNESS_UI_PROVIDER_HARNESS = "claude-code";
 process.env.MOCK_EXIT = "0";

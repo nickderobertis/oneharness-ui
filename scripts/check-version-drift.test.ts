@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
-test("accepts reconciled versions and rejects workflow drift with a remedy", async () => {
+test("accepts a reconciled tree and rejects version, workflow, and browser drift with a remedy", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "oneharness-version-drift-"));
   try {
     await Promise.all([
@@ -60,9 +60,26 @@ test("accepts reconciled versions and rejects workflow drift with a remedy", asy
       ),
       writeFile(
         resolve(root, "README.md"),
-        "oneharness 1.2.3 CLI\n`@oneharness/sdk` package to `1.2.3`\n",
+        "oneharness 1.2.3 CLI\n`@oneharness/sdk` package to `1.2.3`\nChromium and WebKit\n",
       ),
       writeFile(resolve(root, "docs/native-desktop-e2e.md"), "oneharness 1.2.3 CLI\n"),
+      writeFile(resolve(root, "docs/architecture.md"), "run in Chromium and WebKit.\n"),
+      writeFile(
+        resolve(root, "apps/conversation-ui-e2e/playwright.config.ts"),
+        [
+          "export default defineConfig({",
+          "  projects: [",
+          '    { name: "chromium", use: { ...devices["Desktop Chrome"] } },',
+          '    { name: "webkit", use: { ...devices["Desktop Safari"] } },',
+          "  ],",
+          "});",
+          "",
+        ].join("\n"),
+      ),
+      writeFile(
+        resolve(root, "scripts/bootstrap.sh"),
+        'playwright install "$@" chromium webkit >/dev/null\n',
+      ),
       writeFile(
         resolve(root, ".github/workflows/check.yml"),
         [
@@ -102,6 +119,39 @@ test("accepts reconciled versions and rejects workflow drift with a remedy", asy
     const invalid = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
     expect(invalid.exitCode).toBe(1);
     expect(invalid.stderr.toString()).toContain("update both files together");
+    await writeFile(
+      resolve(root, ".github/workflows/check.yml"),
+      [
+        "uses: actions/setup-node@example",
+        "node-version: 22.1.0",
+        "uses: oven-sh/setup-bun@example",
+        "bun-version: 1.2.3",
+        "uses: astral-sh/setup-uv@example",
+        "version: 0.1.2",
+        "run: cargo install just --locked --version 1.2.3",
+      ].join("\n"),
+    );
+    // A browser project the journeys run but bootstrap never provisions would
+    // leave the second engine missing on a clean clone.
+    await writeFile(
+      resolve(root, "scripts/bootstrap.sh"),
+      'playwright install "$@" chromium >/dev/null\n',
+    );
+    const browserDrift = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
+    expect(browserDrift.exitCode).toBe(1);
+    expect(browserDrift.stderr.toString()).toContain(
+      "bootstrap.sh must provision exactly chromium webkit",
+    );
+    await writeFile(
+      resolve(root, "scripts/bootstrap.sh"),
+      'playwright install "$@" chromium webkit >/dev/null\n',
+    );
+    await writeFile(resolve(root, "docs/architecture.md"), "run in Chromium.\n");
+    const documentedBrowserDrift = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
+    expect(documentedBrowserDrift.exitCode).toBe(1);
+    expect(documentedBrowserDrift.stderr.toString()).toContain(
+      "docs/architecture.md must document the Chromium and WebKit browser journeys",
+    );
   } finally {
     await rm(root, { force: true, recursive: true });
   }
