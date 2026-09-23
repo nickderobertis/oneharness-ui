@@ -4,6 +4,7 @@ import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from "node:path";
+import { setTimeout as sleep } from "node:timers/promises";
 import { HistoryLineSchema, HistoryRecordSchema, OneHarness } from "@oneharness/sdk";
 import { maxBridgeResponseBytes } from "@oneharness-ui/ipc-contract";
 
@@ -74,12 +75,74 @@ export const fixtureProvider = resolve(
 // The native runtime recognises its automation fixtures by this prefix.
 // fixture.integration.test.ts reconciles this copy with runtime.rs.
 export const FIXTURE_ROOT_PREFIX = "oneharness-ui-desktop-e2e-";
-const FIXTURE_REMOVAL_OPTIONS: Readonly<RmOptions> = {
+export const FIXTURE_REMOVAL_OPTIONS: Readonly<RmOptions> = {
   force: true,
-  maxRetries: 30,
   recursive: true,
-  retryDelay: 250,
 };
+// Windows refuses a deletion while WebView2 still holds a handle inside the
+// profile it has just released, and the pinned Bun honours none of the retry
+// options Node's remover accepts, so the fixture owns the schedule itself: 30
+// waits, each one 250 ms step longer than the last, bounding a single removal
+// to the same 116.25 seconds as before.
+const FIXTURE_REMOVAL_ATTEMPTS = 31;
+const FIXTURE_REMOVAL_STEP_MS = 250;
+// The removal failures this fixture retries. Windows reports a handle it has
+// not released yet as a busy or denied deletion, a walk that races an entry
+// back into a directory reports a non-empty one, and an exhausted descriptor
+// table reports the two limits. Any other failure is a real defect and is
+// surfaced at once. fixture.integration.test.ts drives every code listed here.
+export const TRANSIENT_REMOVAL_CODES: ReadonlySet<string> = new Set([
+  "EBUSY",
+  "EMFILE",
+  "ENFILE",
+  "ENOTEMPTY",
+  "EPERM",
+]);
+
+function isTransientRemovalError(error: unknown): boolean {
+  if (typeof error !== "object" || error === null || !("code" in error)) return false;
+  const { code } = error;
+  return typeof code === "string" && TRANSIENT_REMOVAL_CODES.has(code);
+}
+
+async function removeFixturePath(path: string): Promise<void> {
+  await rm(path, FIXTURE_REMOVAL_OPTIONS);
+}
+
+export type FixtureRemovalHooks = {
+  delay?: (milliseconds: number) => Promise<void>;
+  remove?: (path: string) => Promise<void>;
+};
+
+async function removeFixtureTree(
+  path: string,
+  { delay = sleep, remove = removeFixturePath }: FixtureRemovalHooks,
+): Promise<void> {
+  for (let attempt = 1; attempt < FIXTURE_REMOVAL_ATTEMPTS; attempt += 1) {
+    try {
+      await remove(path);
+      return;
+    } catch (error) {
+      if (!isTransientRemovalError(error)) throw error;
+      await delay(attempt * FIXTURE_REMOVAL_STEP_MS);
+    }
+  }
+  // The last attempt is deliberately outside the loop: once the bound is spent
+  // its failure is the one the caller sees, transient or not.
+  await remove(path);
+}
+
+/// The cleanup a desktop fixture hands back, removing every directory it owns.
+/// The hooks are the seam its integration test drives, so the Windows schedule
+/// stays observable from a POSIX host without waiting out the bound.
+export function createFixtureCleanup(
+  paths: readonly string[],
+  hooks: FixtureRemovalHooks = {},
+): () => Promise<void> {
+  return async () => {
+    await Promise.all(paths.map(async (path) => await removeFixtureTree(path, hooks)));
+  };
+}
 
 type SeedOptions = {
   exit?: number;
@@ -487,19 +550,13 @@ export async function createDesktopFixture(
   const providerArgv = resolve(root, "provider-argv.txt");
   const webview2UserDataDir = resolveFixtureWebView2UserDataDirectory(root, process.platform);
   const webview2Root = dirname(webview2UserDataDir);
-  const cleanup = async (): Promise<void> => {
-    // WebView2 can retain its profile handles briefly after deleteSession has
-    // returned. fs.rm only retries transient filesystem errors, with this
-    // linear backoff bounded to 116.25 seconds if every attempt is needed.
-    if (process.platform === "win32") {
-      await Promise.all([
-        rm(root, FIXTURE_REMOVAL_OPTIONS),
-        rm(webview2Root, FIXTURE_REMOVAL_OPTIONS),
-      ]);
-    } else {
-      await rm(root, FIXTURE_REMOVAL_OPTIONS);
-    }
-  };
+  // Windows keeps the WebView2 profile outside the fixture root, so cleanup
+  // owns both trees there and the root alone everywhere else. WebView2 can
+  // retain a profile handle briefly after deleteSession has returned, which the
+  // bounded retries above absorb.
+  const cleanup = createFixtureCleanup(
+    process.platform === "win32" ? [root, webview2Root] : [root],
+  );
   try {
     await Promise.all([
       mkdir(webview2UserDataDir, { recursive: true }),
