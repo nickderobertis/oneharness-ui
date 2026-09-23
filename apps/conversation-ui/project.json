@@ -11,12 +11,14 @@
       "outputs": ["{projectRoot}/out"]
     },
     "test": {
-      "command": "bun test --preload ./apps/conversation-ui/test/setup.ts --coverage --coverage-dir coverage/conversation-ui apps/conversation-ui/src apps/conversation-ui/test",
-      "outputs": ["{workspaceRoot}/coverage/conversation-ui"]
-    },
-    "e2e": {
-      "command": "bun run --cwd apps/conversation-ui test:e2e",
-      "dependsOn": ["build"]
+      "command": "bun test --preload @oneharness-ui/browser-test-env/src/preload.ts --coverage --coverage-dir coverage/conversation-ui apps/conversation-ui/src apps/conversation-ui/test",
+      "outputs": ["{workspaceRoot}/coverage/conversation-ui"],
+      "inputs": [
+        "default",
+        "^production",
+        "testRunners",
+        "{workspaceRoot}/packages/browser-test-env/src/preload.ts"
+      ]
     },
     "lint": {
       "executor": "nx:run-commands",
@@ -28,8 +30,14 @@
         "parallel": false
       }
     },
-    "format": { "command": "bunx biome format --write apps/conversation-ui" },
-    "typecheck": { "command": "bunx tsc -p apps/conversation-ui/tsconfig.json --noEmit" },
-    "format-check": { "command": "bunx biome format apps/conversation-ui" }
+    "format": {
+      "command": "bunx biome format --write apps/conversation-ui"
+    },
+    "typecheck": {
+      "command": "bunx tsc -p apps/conversation-ui/tsconfig.json --noEmit"
+    },
+    "format-check": {
+      "command": "bunx biome format apps/conversation-ui"
+    }
   }
 }

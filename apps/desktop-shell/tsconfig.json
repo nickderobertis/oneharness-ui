@@ -1,7 +1,7 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["@types/bun", "@wdio/globals/types", "@wdio/mocha-framework"]
+    "types": ["@types/bun"]
   },
-  "include": ["tests/**/*.ts", "wdio.conf.ts"]
+  "include": ["tests/**/*.ts"]
 }

@@ -5,12 +5,12 @@ import { resolve } from "node:path";
 import {
   createDesktopFixture,
   deterministicDesktopEnvironment,
-} from "../apps/desktop-shell/tests/e2e/fixture.ts";
+} from "../apps/desktop-shell/tests/fixture.ts";
 import {
   desktopE2eStageLog,
   recordDesktopStage,
   runDesktopStage,
-} from "../apps/desktop-shell/tests/e2e/stage-log.ts";
+} from "../apps/desktop-shell-e2e/tests/stage-log.ts";
 
 const root = resolve(import.meta.dir, "..");
 const artifacts = resolve(root, "test-results/desktop-e2e");
@@ -160,7 +160,7 @@ async function main() {
   try {
     await runDesktopStage(desktopE2eStageLog, "webdriver native journey", () =>
       run(
-        ["bun", "run", "--cwd", "apps/desktop-shell", "test:e2e"],
+        ["bun", "run", "--cwd", "apps/desktop-shell-e2e", "test:e2e"],
         deterministicDesktopEnvironment({
           ...fixture.environment,
           APPIMAGE_EXTRACT_AND_RUN: extractAndRun ? "1" : undefined,

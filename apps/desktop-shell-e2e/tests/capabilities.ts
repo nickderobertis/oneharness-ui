@@ -11,8 +11,10 @@ type DesktopTauriCapabilities = Omit<TauriCapabilities, "tauri:options"> & {
   "tauri:options": TauriOptions;
 };
 
-const FIXTURE_ROOT_PREFIX = "oneharness-ui-desktop-e2e-";
-const AUTOMATION_PROFILE_ARGUMENT = "--oneharness-webdriver-profile=";
+// Both values are the native runtime's own conventions, restated here for
+// the driver side. capabilities.test.ts reconciles them with runtime.rs.
+export const FIXTURE_ROOT_PREFIX = "oneharness-ui-desktop-e2e-";
+export const AUTOMATION_PROFILE_ARGUMENT = "--oneharness-webdriver-profile=";
 
 function validateFixtureEntry(
   input: string | undefined,

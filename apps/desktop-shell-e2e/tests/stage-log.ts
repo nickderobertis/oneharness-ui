@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 export const desktopE2eArtifacts = resolve(
   fileURLToPath(new URL(".", import.meta.url)),
-  "../../../../test-results/desktop-e2e",
+  "../../../test-results/desktop-e2e",
 );
 export const desktopE2eStageLog = resolve(desktopE2eArtifacts, "stages.log");
 

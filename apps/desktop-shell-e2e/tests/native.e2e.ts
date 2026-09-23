@@ -1,33 +1,33 @@
 import { readFile } from "node:fs/promises";
+import { maxBridgeResponseBytes } from "@oneharness-ui/ipc-contract";
 import { $, $$, browser, expect } from "@wdio/globals";
 import { validateProviderArgvPath } from "./capabilities.ts";
 import { desktopE2eStageLog, runDesktopStage } from "./stage-log.ts";
 import { type ScrollSnapshot, wheelUntilNextPage } from "./wheel-scroll.ts";
 
-// llmlint: ignore-block[browser_journeys_run_against_the_built_app] This journey and its helpers predate this branch inside desktop-shell and already drives the built artifact: scripts/run-desktop-e2e.mjs packages the deb and tauri-driver launches the installed binary. Moving it to a separate e2e project whose test target depends on the app build is a project-graph change tracked as a follow-up.
 const providerArgv = validateProviderArgvPath(process.env.ONEHARNESS_UI_E2E_PROVIDER_ARGV);
 const legacyHistoryBytes = Number(process.env.ONEHARNESS_UI_E2E_LEGACY_HISTORY_BYTES);
-if (!Number.isSafeInteger(legacyHistoryBytes) || legacyHistoryBytes <= 4 * 1024 * 1024) {
-  throw new Error("native oversized history fixture must exceed the legacy 4 MiB bridge response");
+if (!Number.isSafeInteger(legacyHistoryBytes) || legacyHistoryBytes <= maxBridgeResponseBytes) {
+  throw new Error("native oversized history fixture must exceed the whole-history bridge response");
 }
 
 // Fixture ids are session names and turn ids: a bounded, quote-free alphabet
 // that can sit inside a selector string unescaped.
 const fixtureIdPattern = /^[A-Za-z0-9._-]{1,200}$/;
 
+function isFixtureId(item: unknown): item is string {
+  return typeof item === "string" && fixtureIdPattern.test(item);
+}
+
 function expectedIds(name: string): string[] {
   const value = process.env[name];
   if (!value) throw new Error(`${name} is required for the native pagination journey`);
   const parsed: unknown = JSON.parse(value);
-  if (
-    !Array.isArray(parsed) ||
-    parsed.length === 0 ||
-    parsed.some((item) => typeof item !== "string" || !fixtureIdPattern.test(item)) ||
-    new Set(parsed).size !== parsed.length
-  ) {
+  const items: readonly unknown[] = Array.isArray(parsed) ? parsed : [];
+  if (items.length === 0 || !items.every(isFixtureId) || new Set(items).size !== items.length) {
     throw new Error(`${name} must contain a non-empty JSON array of unique fixture ids`);
   }
-  return parsed as string[];
+  return [...items];
 }
 
 const expectedSessionIds = expectedIds("ONEHARNESS_UI_E2E_SESSION_IDS");
@@ -37,6 +37,7 @@ if (!firstExpectedTurnId) throw new Error("native turn fixture must contain a fi
 
 type ScrollRegion = ReturnType<typeof $>;
 
+const maxProviderArgvBytes = 64 * 1024;
 const maxWheelInputsPerPage = 20;
 const pageAppendTimeout = 20_000;
 const paginationPollInterval = 250;
@@ -44,14 +45,14 @@ const requiredAutomaticPageBoundaries = 2;
 const wheelProgressTimeout = 750;
 
 async function scrollSnapshot(region: ScrollRegion): Promise<ScrollSnapshot> {
-  return await browser.execute((element) => {
-    const scrollRegion = element as HTMLElement;
-    return {
+  return await browser.execute(
+    (scrollRegion: HTMLElement) => ({
       clientHeight: scrollRegion.clientHeight,
       scrollHeight: scrollRegion.scrollHeight,
       scrollTop: scrollRegion.scrollTop,
-    };
-  }, region);
+    }),
+    region,
+  );
 }
 
 async function elementTop(element: ScrollRegion): Promise<number> {
@@ -143,9 +144,15 @@ async function expectExactResume(sessionId: string): Promise<void> {
   await browser.waitUntil(
     async () => {
       try {
-        const args = (await readFile(providerArgv, "utf8")).split("\0");
+        const recorded = await readFile(providerArgv, "utf8");
+        // The provider writes this file, so its size and shape are bounded
+        // here before the journey reads a session id back out of it.
+        if (recorded.length > maxProviderArgvBytes) {
+          throw new Error(`recorded provider argv exceeded ${maxProviderArgvBytes} bytes`);
+        }
+        const args = recorded.split("\0");
         const resume = args.indexOf("--resume");
-        return resume >= 0 && args[resume + 1] === sessionId;
+        return resume >= 0 && resume + 1 < args.length && args[resume + 1] === sessionId;
       } catch {
         return false;
       }
@@ -166,7 +173,7 @@ describe("packaged native desktop journey", () => {
       await expect(await conversation("recoverable-failure")).toBeDisplayed();
       await expect($("aria/Load more conversations")).toBeDisplayed();
       await expect(await conversation("oversized-session-00")).not.toExist();
-      expect(legacyHistoryBytes).toBeGreaterThan(4 * 1024 * 1024);
+      expect(legacyHistoryBytes).toBeGreaterThan(maxBridgeResponseBytes);
     });
 
     await runDesktopStage(desktopE2eStageLog, "journey oversized history pagination", async () => {
@@ -247,4 +254,3 @@ describe("packaged native desktop journey", () => {
     });
   });
 });
-// llmlint: ignore-end[browser_journeys_run_against_the_built_app]
