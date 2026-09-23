@@ -50,7 +50,7 @@ selection; every other discovered setting remains available.
 - `apps/conversation-ui`: static UI, imports feature public surfaces only.
 - `apps/desktop-shell`: Tauri capability and packaging, no contracts.
 - `apps/conversation-ui-e2e`: browser journeys against the built static export,
-  run in Chromium and WebKit.
+  run in Chromium and WebKit (Chromium alone on Windows).
 - `apps/desktop-shell-e2e`: native journeys against the packaged desktop build.
 
 Nx owns the project graph and delegates targets to Bun, Biome, Next, and Cargo.
