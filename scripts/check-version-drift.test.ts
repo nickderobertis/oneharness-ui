@@ -176,12 +176,33 @@ test("accepts a reconciled tree and rejects version, workflow, and browser drift
     expect(documentedBrowserDrift.stderr.toString()).toContain(
       "docs/architecture.md must document the Chromium and WebKit browser journeys",
     );
-    // Reversed guard branches would run WebKit only on Windows while every
-    // project name stayed the same, so only the exact guard shape is accepted.
     await writeFile(
       resolve(root, "docs/architecture.md"),
       "run in Chromium and WebKit (Chromium alone on Windows).\n",
     );
+    // A project named webkit on a Chrome device would run Chromium twice while
+    // bootstrap and the documents still claimed WebKit.
+    await writeFile(
+      resolve(root, "apps/conversation-ui-e2e/playwright.config.ts"),
+      [
+        "export default defineConfig({",
+        "  projects: [",
+        '    { name: "chromium", use: { ...devices["Desktop Chrome"] } },',
+        '    ...(process.platform === "win32"',
+        "      ? []",
+        '      : [{ name: "webkit", use: { ...devices["Desktop Chrome"] } }]),',
+        "  ],",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    const deviceDrift = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
+    expect(deviceDrift.exitCode).toBe(1);
+    expect(deviceDrift.stderr.toString()).toContain(
+      'must declare the webkit project once as { name: "webkit", use: { ...devices["Desktop Safari"] } }',
+    );
+    // Reversed guard branches would run WebKit only on Windows while every
+    // project name stayed the same, so only the exact guard shape is accepted.
     await writeFile(
       resolve(root, "apps/conversation-ui-e2e/playwright.config.ts"),
       [

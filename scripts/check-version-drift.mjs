@@ -140,6 +140,12 @@ if (declaredProjects === undefined) {
     `${browserJourneyConfig} must list its browser projects one per line; restore that list and rerun just check`,
   );
 }
+// Playwright picks the engine from each project's device, so the name only
+// stands for the engine while it is paired with that engine's device.
+const knownEngines = {
+  chromium: { device: "Desktop Chrome", name: "Chromium" },
+  webkit: { device: "Desktop Safari", name: "WebKit" },
+};
 const browserEngines = [...declaredProjects.matchAll(/name: "(?<engine>[a-z-]+)"/g)].map(
   (match) => match.groups.engine,
 );
@@ -147,6 +153,25 @@ if (browserEngines.length === 0) {
   throw new Error(
     `${browserJourneyConfig} must declare at least one browser project; restore its projects list`,
   );
+}
+const pairedDevices = [
+  ...declaredProjects.matchAll(
+    /\{ name: "(?<engine>[a-z-]+)", use: \{ \.\.\.devices\["(?<device>[^"\n]+)"\] \} \}/g,
+  ),
+];
+for (const engine of browserEngines) {
+  const known = knownEngines[engine];
+  if (!known) {
+    throw new Error(
+      `${engine} is not a known browser engine; name it and its device in check-version-drift.mjs and the browser journey documentation`,
+    );
+  }
+  const paired = pairedDevices.filter((match) => match.groups.engine === engine);
+  if (paired.length !== 1 || paired[0].groups.device !== known.device) {
+    throw new Error(
+      `${browserJourneyConfig} must declare the ${engine} project once as { name: "${engine}", use: { ...devices["${known.device}"] } }; restore that project`,
+    );
+  }
 }
 // Projects inside the Windows guard's non-Windows branch run everywhere but
 // Windows, so only this exact guard shape is accepted: reversed branches would
@@ -189,19 +214,8 @@ for (const [platform, line] of [
     );
   }
 }
-const engineNames = { chromium: "Chromium", webkit: "WebKit" };
 function documentEngines(engines) {
-  return new Intl.ListFormat("en").format(
-    engines.map((engine) => {
-      const name = engineNames[engine];
-      if (!name) {
-        throw new Error(
-          `${engine} has no documented engine name; name it in check-version-drift.mjs and the browser journey documentation`,
-        );
-      }
-      return name;
-    }),
-  );
+  return new Intl.ListFormat("en").format(engines.map((engine) => knownEngines[engine].name));
 }
 const documentedEngines = documentEngines(browserEngines);
 const windowsException =
