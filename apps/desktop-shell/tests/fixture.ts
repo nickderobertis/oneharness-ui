@@ -3,7 +3,7 @@ import { accessSync, constants, existsSync, realpathSync, statSync } from "node:
 import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from "node:path";
 import { HistoryLineSchema, HistoryRecordSchema, OneHarness } from "@oneharness/sdk";
 import { maxBridgeResponseBytes } from "@oneharness-ui/ipc-contract";
 
@@ -11,10 +11,29 @@ const repository = resolve(import.meta.dir, "../../..");
 
 // The override names a program this fixture runs, so existence alone is not
 // enough: a directory or an unexecutable file would fail far from here.
-function isExecutableFile(path: string): boolean {
+// Windows has no execute permission bit, so accessSync(X_OK) succeeds there for
+// any readable file: PATHEXT is what decides whether a path names a program.
+// It arrives from the environment, so entries that are not dot-extensions are
+// dropped rather than trusted.
+const windowsExecutableExtensions: readonly string[] = (
+  process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD"
+)
+  .split(";")
+  .flatMap((entry) => {
+    const extension = entry.trim().toLowerCase();
+    return /^\.[a-z0-9]{1,16}$/.test(extension) ? [extension] : [];
+  });
+
+// The platform is a parameter so both branches are reachable from any host:
+// the extension rule cannot be exercised on POSIX otherwise, and the mode rule
+// cannot be exercised on Windows at all.
+export function isExecutableFile(path: string, platform: NodeJS.Platform): boolean {
   if (path.length === 0 || path.length > 4096 || !isAbsolute(path)) return false;
   try {
     if (!statSync(path).isFile()) return false;
+    if (platform === "win32") {
+      return windowsExecutableExtensions.includes(extname(path).toLowerCase());
+    }
     accessSync(path, constants.X_OK);
     return true;
   } catch {
@@ -44,7 +63,7 @@ export const packagedOneHarnessCli = resolve(
   `oneharness${executableSuffix}`,
 );
 const cliOverride = process.env.ONEHARNESS_UI_TEST_CLI_BIN;
-if (cliOverride !== undefined && !isExecutableFile(cliOverride)) {
+if (cliOverride !== undefined && !isExecutableFile(cliOverride, process.platform)) {
   throw new Error("ONEHARNESS_UI_TEST_CLI_BIN must be an existing absolute executable path");
 }
 export const fixtureOneHarnessCli = cliOverride ?? packagedOneHarnessCli;
@@ -458,7 +477,7 @@ export async function createDesktopFixture(
     ["deterministic provider", providerPath],
   ];
   for (const [label, path] of requiredExecutables) {
-    if (!isExecutableFile(path)) {
+    if (!isExecutableFile(path, process.platform)) {
       throw new Error(`${label} is not an executable file at ${path}; run just bootstrap`);
     }
   }
