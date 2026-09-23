@@ -6,7 +6,7 @@
   "scripts": {
     "build": "next build",
     "dev": "next dev --turbopack",
-    "test": "bun test --preload ../../packages/ui/test/setup.ts --coverage src test",
+    "test": "bun test --preload @oneharness-ui/browser-test-env/src/preload.ts --coverage src test",
     "typecheck": "tsc --noEmit",
     "lint": "biome check src tests next.config.ts visual.playwright.config.ts",
     "format:check": "biome format src tests next.config.ts visual.playwright.config.ts"
@@ -50,6 +50,7 @@
   },
   "devDependencies": {
     "@oneharness-ui/bridge": "workspace:*",
+    "@oneharness-ui/browser-test-env": "workspace:*",
     "@playwright/test": "1.61.1",
     "@testing-library/dom": "^10.4.1",
     "@testing-library/react": "^16.3.2",

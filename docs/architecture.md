@@ -44,6 +44,7 @@ selection; every other discovered setting remains available.
 
 ## Monorepo direction
 
+- `packages/browser-test-env`: the browser preload every DOM test suite loads.
 - `packages/ipc-contract`: shared application protocol, no product imports.
 - `packages/oneharness-bridge`: local privilege/SDK boundary.
 - `apps/conversation-ui`: static UI, imports feature public surfaces only.

@@ -27,7 +27,7 @@
   "scripts": {
     "build": "tsdown --fail-on-warn && bun run build:css",
     "build:css": "bun ./scripts/build-css.ts",
-    "test": "bun test --preload ./test/setup.ts test",
+    "test": "bun test --preload @oneharness-ui/browser-test-env/src/preload.ts test",
     "typecheck": "tsc --noEmit"
   },
   "peerDependencies": {
@@ -55,12 +55,11 @@
     "tw-animate-css": ">=1.3.0 <2"
   },
   "devDependencies": {
-    "@happy-dom/global-registrator": "^20.11.1",
+    "@oneharness-ui/browser-test-env": "workspace:*",
     "@testing-library/react": "^16.3.2",
     "@testing-library/user-event": "^14.6.1",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
-    "happy-dom": "^20.11.1",
     "tsdown": "^0.22.14",
     "typescript": "6.0.3"
   }

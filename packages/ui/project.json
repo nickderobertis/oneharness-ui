@@ -11,10 +11,15 @@
       "outputs": ["{projectRoot}/dist"]
     },
     "test": {
-      "command": "bun test --preload ./packages/ui/test/setup.ts --coverage --coverage-dir coverage/ui packages/ui/test",
+      "command": "bun test --preload @oneharness-ui/browser-test-env/src/preload.ts --coverage --coverage-dir coverage/ui packages/ui/test",
       "dependsOn": ["build"],
       "outputs": ["{workspaceRoot}/coverage/ui"],
-      "inputs": ["default", "^production", "testRunners"]
+      "inputs": [
+        "default",
+        "^production",
+        "testRunners",
+        "{workspaceRoot}/packages/browser-test-env/src/preload.ts"
+      ]
     },
     "lint": {
       "executor": "nx:run-commands",
