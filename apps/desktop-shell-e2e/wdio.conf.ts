@@ -5,13 +5,13 @@ import {
   createDesktopCapabilities,
   validateDesktopAppBinary,
   validateWebView2UserDataFolder,
-} from "./tests/e2e/capabilities.ts";
-import { desktopE2eStageLog, recordDesktopStage } from "./tests/e2e/stage-log.ts";
+} from "./tests/capabilities.ts";
+import { desktopE2eStageLog, recordDesktopStage } from "./tests/stage-log.ts";
 
 const repository = resolve(fileURLToPath(new URL(".", import.meta.url)), "../..");
 const artifacts = resolve(repository, "test-results/desktop-e2e");
 const tauriLauncherService = fileURLToPath(
-  new URL("./tests/e2e/tauri-launcher-service.ts", import.meta.url),
+  new URL("./tests/tauri-launcher-service.ts", import.meta.url),
 );
 const appBinary = validateDesktopAppBinary(process.env.ONEHARNESS_UI_E2E_APP_BINARY, repository);
 const webview2UserDataFolder = validateWebView2UserDataFolder(
@@ -84,7 +84,7 @@ export const config: WebdriverIO.Config = {
       },
     ],
   ],
-  specs: [startupOnly ? "./tests/e2e/native-startup.e2e.ts" : "./tests/e2e/native.e2e.ts"],
+  specs: [startupOnly ? "./tests/native-startup.e2e.ts" : "./tests/native.e2e.ts"],
   tsConfigPath: "./tsconfig.json",
   waitforTimeout: 20_000,
 };

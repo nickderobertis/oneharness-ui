@@ -80,7 +80,10 @@ const rootManifest = readJson("package.json");
 const typescriptVersion = rootManifest.devDependencies?.typescript;
 const typescriptManifests = [
   ["apps/conversation-ui/package.json", readJson("apps/conversation-ui/package.json")],
+  ["apps/conversation-ui-e2e/package.json", readJson("apps/conversation-ui-e2e/package.json")],
   ["apps/desktop-shell/package.json", desktopManifest],
+  ["apps/desktop-shell-e2e/package.json", readJson("apps/desktop-shell-e2e/package.json")],
+  ["packages/browser-test-env/package.json", readJson("packages/browser-test-env/package.json")],
   ["packages/ipc-contract/package.json", readJson("packages/ipc-contract/package.json")],
   ["packages/oneharness-bridge/package.json", bridgeManifest],
   ["packages/ui/package.json", readJson("packages/ui/package.json")],

@@ -1,11 +1,45 @@
-import { existsSync, realpathSync } from "node:fs";
+import type { RmOptions } from "node:fs";
+import { accessSync, constants, existsSync, realpathSync, statSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { basename, dirname, isAbsolute, relative, resolve, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, relative, resolve, sep } from "node:path";
 import { HistoryLineSchema, HistoryRecordSchema, OneHarness } from "@oneharness/sdk";
+import { maxBridgeResponseBytes } from "@oneharness-ui/ipc-contract";
 
-const repository = resolve(import.meta.dir, "../../../..");
+const repository = resolve(import.meta.dir, "../../..");
+
+// The override names a program this fixture runs, so existence alone is not
+// enough: a directory or an unexecutable file would fail far from here.
+// Windows has no execute permission bit, so accessSync(X_OK) succeeds there for
+// any readable file: PATHEXT is what decides whether a path names a program.
+// It arrives from the environment, so entries that are not dot-extensions are
+// dropped rather than trusted.
+const windowsExecutableExtensions: readonly string[] = (
+  process.env.PATHEXT ?? ".COM;.EXE;.BAT;.CMD"
+)
+  .split(";")
+  .flatMap((entry) => {
+    const extension = entry.trim().toLowerCase();
+    return /^\.[a-z0-9]{1,16}$/.test(extension) ? [extension] : [];
+  });
+
+// The platform is a parameter so both branches are reachable from any host:
+// the extension rule cannot be exercised on POSIX otherwise, and the mode rule
+// cannot be exercised on Windows at all.
+export function isExecutableFile(path: string, platform: NodeJS.Platform): boolean {
+  if (path.length === 0 || path.length > 4096 || !isAbsolute(path)) return false;
+  try {
+    if (!statSync(path).isFile()) return false;
+    if (platform === "win32") {
+      return windowsExecutableExtensions.includes(extname(path).toLowerCase());
+    }
+    accessSync(path, constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
 const executableSuffix = process.platform === "win32" ? ".exe" : "";
 const platformPackages: Readonly<Record<string, string>> = {
   "darwin-arm64": "@oneharness/cli-darwin-arm64",
@@ -29,13 +63,7 @@ export const packagedOneHarnessCli = resolve(
   `oneharness${executableSuffix}`,
 );
 const cliOverride = process.env.ONEHARNESS_UI_TEST_CLI_BIN;
-if (
-  cliOverride !== undefined &&
-  (cliOverride.length === 0 ||
-    cliOverride.length > 4096 ||
-    !isAbsolute(cliOverride) ||
-    !existsSync(cliOverride))
-) {
+if (cliOverride !== undefined && !isExecutableFile(cliOverride, process.platform)) {
   throw new Error("ONEHARNESS_UI_TEST_CLI_BIN must be an existing absolute executable path");
 }
 export const fixtureOneHarnessCli = cliOverride ?? packagedOneHarnessCli;
@@ -43,13 +71,15 @@ export const fixtureProvider = resolve(
   repository,
   `target/oneharness-ui-test/oneharness-mock-harness${executableSuffix}`,
 );
-const FIXTURE_ROOT_PREFIX = "oneharness-ui-desktop-e2e-";
-const FIXTURE_REMOVAL_OPTIONS = {
+// The native runtime recognises its automation fixtures by this prefix.
+// fixture.integration.test.ts reconciles this copy with runtime.rs.
+export const FIXTURE_ROOT_PREFIX = "oneharness-ui-desktop-e2e-";
+const FIXTURE_REMOVAL_OPTIONS: Readonly<RmOptions> = {
   force: true,
   maxRetries: 30,
   recursive: true,
   retryDelay: 250,
-} as const;
+};
 
 type SeedOptions = {
   exit?: number;
@@ -61,13 +91,13 @@ type SeedOptions = {
 
 const OVERSIZED_HISTORY_SESSION_COUNT = 55;
 const PAGINATED_TURN_COUNT = 45;
-const LEGACY_BRIDGE_RESPONSE_LIMIT_BYTES = 4 * 1024 * 1024;
 
 function isJsonObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-const INHERITED_ENVIRONMENT_KEYS = [
+const MAX_INHERITED_ENVIRONMENT_BYTES = 32 * 1024;
+const INHERITED_ENVIRONMENT_KEYS: readonly string[] = [
   "APPDATA",
   "AR",
   "CARGO_HOME",
@@ -116,7 +146,7 @@ const INHERITED_ENVIRONMENT_KEYS = [
   "http_proxy",
   "https_proxy",
   "no_proxy",
-] as const;
+];
 
 export function deterministicDesktopEnvironment(
   overrides: Readonly<Record<string, string | undefined>>,
@@ -124,7 +154,11 @@ export function deterministicDesktopEnvironment(
   const environment: Record<string, string> = {};
   for (const key of INHERITED_ENVIRONMENT_KEYS) {
     const value = process.env[key];
-    if (typeof value === "string") environment[key] = value;
+    // The allowlist decides which host values reach the subprocess; this bound
+    // decides how much, so an oversized inherited value cannot be handed on.
+    if (typeof value === "string" && value.length <= MAX_INHERITED_ENVIRONMENT_BYTES) {
+      environment[key] = value;
+    }
   }
   for (const [key, value] of Object.entries(overrides)) {
     if (typeof value === "string") environment[key] = value;
@@ -339,7 +373,7 @@ async function seedOversizedHistory(
   const bytes = Buffer.byteLength(
     JSON.stringify({ data: { conversations: summaries, kind: "list" }, ok: true }),
   );
-  if (bytes <= LEGACY_BRIDGE_RESPONSE_LIMIT_BYTES) {
+  if (bytes <= maxBridgeResponseBytes) {
     throw new Error(`oversized fixture legacy response was only ${bytes} bytes`);
   }
   return { bytes, sessionIds };
@@ -435,19 +469,20 @@ export async function recordWebView2ProfileDiagnostics(
 export async function createDesktopFixture(
   providerPath = fixtureProvider,
 ): Promise<DesktopFixture> {
-  for (const [label, path] of [
+  const requiredExecutables: readonly (readonly [string, string])[] = [
     [
       cliOverride ? "configured oneharness test CLI" : "@oneharness/sdk packaged CLI",
       fixtureOneHarnessCli,
     ],
     ["deterministic provider", providerPath],
-  ] as const) {
-    if (!existsSync(path)) {
-      throw new Error(`${label} is missing at ${path}; run just bootstrap`);
+  ];
+  for (const [label, path] of requiredExecutables) {
+    if (!isExecutableFile(path, process.platform)) {
+      throw new Error(`${label} is not an executable file at ${path}; run just bootstrap`);
     }
   }
 
-  const root = await mkdtemp(resolve(tmpdir(), "oneharness-ui-desktop-e2e-"));
+  const root = await mkdtemp(resolve(tmpdir(), FIXTURE_ROOT_PREFIX));
   const historyDir = resolve(root, "history");
   const providerArgv = resolve(root, "provider-argv.txt");
   const webview2UserDataDir = resolveFixtureWebView2UserDataDirectory(root, process.platform);

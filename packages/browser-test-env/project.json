@@ -1,0 +1,17 @@
+{
+  "name": "browser-test-env",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/browser-test-env/src",
+  "tags": ["scope:shared", "type:test-env"],
+  "implicitDependencies": [],
+  "namedInputs": { "production": [] },
+  "targets": {
+    "lint": {
+      "command": "bunx biome check --error-on-warnings packages/browser-test-env"
+    },
+    "format": { "command": "bunx biome format --write packages/browser-test-env" },
+    "typecheck": { "command": "bunx tsc -p packages/browser-test-env/tsconfig.json --noEmit" },
+    "format-check": { "command": "bunx biome format packages/browser-test-env" }
+  }
+}

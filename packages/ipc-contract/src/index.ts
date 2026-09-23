@@ -7,9 +7,18 @@ export const bridgeRoutes = {
   watch: "/watch",
 } as const;
 
+// The local web transport authenticates with this fixed user name and a
+// per-process token, so the server and any client agree on it here.
+export const bridgeWebUser = "oneharness";
+
 // Both local transports reject a single frame above this ceiling before
 // parsing it. The desktop drift test keeps the Rust receiver aligned.
 export const maxBridgeStreamFrameBytes = 512 * 1024;
+
+// The native bridge refuses to assemble a response beyond this ceiling, so a
+// history large enough to cross it must arrive paginated. The desktop drift
+// test keeps the Rust sender aligned.
+export const maxBridgeResponseBytes = 4 * 1024 * 1024;
 
 // Literal values let transport callers use the map without widening command
 // names to arbitrary strings.

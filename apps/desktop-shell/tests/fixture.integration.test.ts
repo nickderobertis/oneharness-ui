@@ -3,22 +3,31 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, resolve } from "node:path";
+import { maxBridgeResponseBytes } from "@oneharness-ui/ipc-contract";
 import {
   createDesktopFixture,
   deterministicDesktopEnvironment,
+  FIXTURE_ROOT_PREFIX,
   fixtureOneHarnessCli,
   fixtureProvider,
+  isExecutableFile,
   packagedOneHarnessCli,
   recordWebView2ProfileDiagnostics,
   validateFixtureHistoryFile,
 } from "./fixture.ts";
 
-const repository = resolve(import.meta.dir, "../../../..");
+const repository = resolve(import.meta.dir, "../../..");
 
 type JsonObject = Record<string, unknown>;
 
 function isJsonObject(value: unknown): value is JsonObject {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parsedIdList(value: string): unknown[] {
+  const parsed: unknown = JSON.parse(value);
+  if (!Array.isArray(parsed)) throw new Error("fixture id environment value is not a JSON array");
+  return parsed;
 }
 
 function requiredString(record: JsonObject, field: string): string {
@@ -53,8 +62,23 @@ async function invoke(args: string[]): Promise<JsonObject[]> {
   return value;
 }
 
+async function fixtureRoots(): Promise<string[]> {
+  const entries = await readdir(tmpdir());
+  return entries.filter((name) => name.startsWith(FIXTURE_ROOT_PREFIX)).sort();
+}
+
 describe("native desktop fixture", () => {
-  // llmlint: ignore[expensive_tests_stay_behind_their_own_edge] desktop-shell has one test target today; splitting it is a separate project-graph change.
+  test("keeps the fixture root prefix aligned with the native runtime", async () => {
+    const runtime = await readFile(
+      resolve(repository, "apps/desktop-shell/src/runtime.rs"),
+      "utf8",
+    );
+    // Reporting the declared value keeps a drift failure readable: the whole
+    // runtime source would otherwise be printed as the unmatched haystack.
+    const declared = runtime.match(/const FIXTURE_ROOT_PREFIX: &str = "([^"]*)";/u)?.[1];
+    expect(declared).toBe(FIXTURE_ROOT_PREFIX);
+  });
+
   test("creates schema 1.2 stopped, paginated, and recoverable records", async () => {
     const fixture = await createDesktopFixture();
     const historyDir = fixture.environment.ONEHARNESS_UI_HISTORY_DIR;
@@ -93,14 +117,14 @@ describe("native desktop fixture", () => {
       expect(names).toContain("recoverable-failure");
       expect(names).toContain("stopped-tool-session");
       expect(names.filter((name) => name.startsWith("oversized-session-"))).toHaveLength(55);
-      const sessionIds = JSON.parse(fixture.environment.ONEHARNESS_UI_E2E_SESSION_IDS) as unknown[];
+      const sessionIds = parsedIdList(fixture.environment.ONEHARNESS_UI_E2E_SESSION_IDS);
       expect(sessionIds).toHaveLength(58);
       expect(new Set(sessionIds).size).toBe(58);
-      const turnIds = JSON.parse(fixture.environment.ONEHARNESS_UI_E2E_TURN_IDS) as unknown[];
+      const turnIds = parsedIdList(fixture.environment.ONEHARNESS_UI_E2E_TURN_IDS);
       expect(turnIds).toHaveLength(45);
       expect(new Set(turnIds).size).toBe(45);
       expect(Number(fixture.environment.ONEHARNESS_UI_E2E_LEGACY_HISTORY_BYTES)).toBeGreaterThan(
-        4 * 1024 * 1024,
+        maxBridgeResponseBytes,
       );
 
       const stoppedSummary = listed.find(
@@ -153,11 +177,57 @@ describe("native desktop fixture", () => {
   });
 
   test("removes temporary history when the real provider process cannot run", async () => {
-    const prefix = "oneharness-ui-desktop-e2e-";
-    const before = (await readdir(tmpdir())).filter((name) => name.startsWith(prefix)).sort();
+    const before = await fixtureRoots();
     await expect(createDesktopFixture(packagedOneHarnessCli)).rejects.toThrow("fixture CLI exited");
-    const after = (await readdir(tmpdir())).filter((name) => name.startsWith(prefix)).sort();
-    expect(after).toEqual(before);
+    expect(await fixtureRoots()).toEqual(before);
+  });
+
+  test("reads the execute bit on POSIX and the extension on Windows", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "oneharness-ui-executable-"));
+    try {
+      const program = resolve(root, "provider.exe");
+      const document = resolve(root, "provider.txt");
+      await Promise.all([
+        writeFile(program, "", { mode: 0o644 }),
+        writeFile(document, "", { mode: 0o755 }),
+      ]);
+
+      // Windows has no execute bit, so only the extension can decide there.
+      // This half runs on every host, which is what makes the Windows rule
+      // reachable from a POSIX one.
+      expect(isExecutableFile(program, "win32")).toBe(true);
+      expect(isExecutableFile(document, "win32")).toBe(false);
+      expect(isExecutableFile(resolve(root, "missing.exe"), "win32")).toBe(false);
+      expect(isExecutableFile(root, "win32")).toBe(false);
+
+      // The mode rule is the host filesystem's, so it is only observable where
+      // modes exist; on Windows every readable file answers X_OK.
+      if (process.platform !== "win32") {
+        expect(isExecutableFile(document, "linux")).toBe(true);
+        expect(isExecutableFile(program, "linux")).toBe(false);
+        expect(isExecutableFile(root, "linux")).toBe(false);
+      }
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  test("refuses a deterministic provider that is not an executable file", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "oneharness-ui-provider-executable-"));
+    const notExecutable = resolve(root, "provider.txt");
+    try {
+      await writeFile(notExecutable, "", { mode: 0o644 });
+      const before = await fixtureRoots();
+      // The provider is spawned, so an existing path is not enough: a readable
+      // regular file has to be refused here rather than at the spawn, which
+      // would already have created the fixture this asserts was never made.
+      await expect(createDesktopFixture(notExecutable)).rejects.toThrow(
+        `deterministic provider is not an executable file at ${notExecutable}`,
+      );
+      expect(await fixtureRoots()).toEqual(before);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
   });
 
   test("rejects a CLI history path outside the isolated fixture directory", async () => {

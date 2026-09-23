@@ -1,0 +1,41 @@
+{
+  "name": "conversation-ui-e2e",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "sourceRoot": "apps/conversation-ui-e2e/tests",
+  "tags": ["scope:ui", "type:e2e"],
+  "implicitDependencies": ["conversation-ui", "ipc-contract", "oneharness-bridge"],
+  "targets": {
+    "test": {
+      "cache": true,
+      "command": "bun run --cwd apps/conversation-ui-e2e test:e2e",
+      "dependsOn": ["conversation-ui:build"],
+      "inputs": [
+        "default",
+        "testRunners",
+        {
+          "dependentTasksOutputFiles": "**/*"
+        },
+        "{workspaceRoot}/packages/ipc-contract/src/**/*",
+        "{workspaceRoot}/packages/oneharness-bridge/src/**/*",
+        "{workspaceRoot}/packages/oneharness-bridge/test/e2e-configuration.ts",
+        "{workspaceRoot}/packages/oneharness-bridge/test/e2e-server.ts",
+        "{workspaceRoot}/packages/oneharness-bridge/test/history-fixture.ts",
+        "{workspaceRoot}/packages/oneharness-bridge/test/fixtures/**/*"
+      ],
+      "outputs": []
+    },
+    "lint": {
+      "command": "bunx biome check --error-on-warnings apps/conversation-ui-e2e"
+    },
+    "format": {
+      "command": "bunx biome format --write apps/conversation-ui-e2e"
+    },
+    "typecheck": {
+      "command": "bunx tsc -p apps/conversation-ui-e2e/tsconfig.json --noEmit"
+    },
+    "format-check": {
+      "command": "bunx biome format apps/conversation-ui-e2e"
+    }
+  }
+}
