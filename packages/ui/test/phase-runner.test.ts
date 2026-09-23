@@ -7,12 +7,14 @@ import {
   MAX_CAPTURED_CHARS,
   PhaseFailure,
   runPhase,
+  TERMINATION_GRACE_MS,
 } from "./phase-runner.ts";
 
 /**
  * How long a phase that ignores its bound keeps running before finishing on its
- * own. Far longer than any bound below plus its slack, so a phase that ran to
- * completion cannot be mistaken for one that was stopped.
+ * own. Far longer than any bound below plus the grace an ignored stop spends and
+ * its slack, so a phase that ran to completion cannot be mistaken for one that
+ * was stopped.
  */
 const HANG_MS = 15_000;
 /** Slack over a bound for spawning, stopping and draining the phase on a loaded host. */
@@ -157,6 +159,28 @@ describe("bounded package-test phases", () => {
     expect(elapsed).toBeLessThan(OVER_BOUND_MS + STOP_SLACK_MS);
   }, 60_000);
 
+  test("kills an over-bound phase that ignores the polite stop", async () => {
+    const hanging = await writeHangingScript("ignores-termination", { ignoresTermination: true });
+    const startedAt = Date.now();
+
+    const error = await captureFailure({
+      command: ["bun", hanging],
+      cwd: workspace,
+      name: "offline install",
+      timeoutMs: OVER_BOUND_MS,
+    });
+    const elapsed = Date.now() - startedAt;
+
+    expect(error.details.timedOut).toBe(true);
+    expect(error.details.phase).toBe("offline install");
+    expect(error.message).toContain(`offline install phase timed out after ${OVER_BOUND_MS} ms`);
+    expect(error.details.stdout).toContain("install started");
+    // Outliving the grace is what says the polite stop was refused; finishing
+    // inside the slack after it is what says the force kill is what ended it.
+    expect(elapsed).toBeGreaterThanOrEqual(OVER_BOUND_MS + TERMINATION_GRACE_MS);
+    expect(elapsed).toBeLessThan(OVER_BOUND_MS + TERMINATION_GRACE_MS + STOP_SLACK_MS);
+  }, 60_000);
+
   test("bounds each phase separately rather than sharing one budget", async () => {
     const bounds: readonly { name: string; timeoutMs: number }[] = [
       { name: "pack", timeoutMs: OVER_BOUND_MS },
@@ -190,13 +214,19 @@ describe("bounded package-test phases", () => {
 /**
  * Writes a phase that announces itself and then outlives every bound under test,
  * so a bound that failed to stop it shows up as an elapsed time near
- * {@link HANG_MS} rather than near the bound.
+ * {@link HANG_MS} rather than near the bound. An installer wedged on a lock is
+ * the phase this stands in for, and `ignoresTermination` makes it the kind that
+ * survives the polite stop, so only the force kill can end it.
  */
-async function writeHangingScript(label: string): Promise<string> {
+async function writeHangingScript(
+  label: string,
+  options: { readonly ignoresTermination?: boolean } = {},
+): Promise<string> {
   const path = resolve(workspace, `${label}.ts`);
+  const refuseStop = options.ignoresTermination ? 'process.on("SIGTERM", () => undefined);\n' : "";
   await writeFile(
     path,
-    `await Bun.write(Bun.stdout, "install started\\n");
+    `${refuseStop}await Bun.write(Bun.stdout, "install started\\n");
 await new Promise((done) => setTimeout(done, ${HANG_MS}));
 `,
   );

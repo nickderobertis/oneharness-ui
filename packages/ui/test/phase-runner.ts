@@ -9,7 +9,7 @@
  */
 
 /** Grace between the polite stop of an over-bound phase and killing it outright. */
-const TERMINATION_GRACE_MS = 2_000;
+export const TERMINATION_GRACE_MS = 2_000;
 /** Bound on draining output a stopped phase left behind in its pipes. */
 const OUTPUT_DRAIN_MS = 2_000;
 /**
