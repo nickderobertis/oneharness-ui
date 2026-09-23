@@ -17,6 +17,13 @@ test.beforeAll(async () => {
   await seedE2eHistory();
 });
 
+// WebKit on macOS follows Safari's default of moving Tab focus only between form
+// fields; a Safari user reaches buttons with Option+Tab, so the journey presses
+// the key that user would.
+function focusNextKey(browserName: string): string {
+  return browserName === "webkit" && process.platform === "darwin" ? "Alt+Tab" : "Tab";
+}
+
 async function expectTheme(page: Page, selected: string, next: string, resolved: "dark" | "light") {
   await expect(
     page.getByRole("button", { name: `Theme: ${selected}. Switch to ${next}` }),
@@ -45,7 +52,10 @@ test("follows the OS theme and persists an explicit accessible theme choice", as
   await expectTheme(page, "dark", "system", "dark");
 });
 
-test("lists, selects, restores a deep link, and expands tool details", async ({ page }) => {
+test("lists, selects, restores a deep link, and expands tool details", async ({
+  browserName,
+  page,
+}) => {
   await page.goto("/");
   await expect(page.getByRole("navigation", { name: "Conversation history" })).toBeVisible();
   await page.getByRole("button", { name: /tool-session/i }).click();
@@ -56,7 +66,7 @@ test("lists, selects, restores a deep link, and expands tool details", async ({ 
   await expect(timelineItems).not.toHaveCount(0);
   await expect(timeline.getByRole("list", { name: "Timeline legend" })).toContainText("Turns");
   const timelineItem = timelineItems.first();
-  await page.keyboard.press("Tab");
+  await page.keyboard.press(focusNextKey(browserName));
   const expandTimeline = timeline.getByRole("button", { name: "Expand timeline" });
   await expect(expandTimeline).toBeFocused();
   await expandTimeline.click();
