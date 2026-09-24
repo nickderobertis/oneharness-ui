@@ -74,7 +74,9 @@ export async function runPhase(phase: Phase): Promise<PhaseResult> {
   const boundTimer = setTimeout(() => {
     timedOut = true;
     child.kill();
-    forceKillTimer = setTimeout(() => child.kill("SIGKILL"), TERMINATION_GRACE_MS);
+    // On Windows the first kill ends the process, so this fallback cannot run there.
+    // Bind the subprocess method directly to keep coverage independent of that platform behavior.
+    forceKillTimer = setTimeout(child.kill.bind(child, "SIGKILL"), TERMINATION_GRACE_MS);
   }, phase.timeoutMs);
   let exitCode: number;
   try {
