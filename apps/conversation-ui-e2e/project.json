@@ -19,6 +19,7 @@
         "{workspaceRoot}/packages/ipc-contract/src/**/*",
         "{workspaceRoot}/packages/oneharness-bridge/src/**/*",
         "{workspaceRoot}/packages/oneharness-bridge/test/e2e-configuration.ts",
+        "{workspaceRoot}/packages/oneharness-bridge/test/e2e-history.ts",
         "{workspaceRoot}/packages/oneharness-bridge/test/e2e-server.ts",
         "{workspaceRoot}/packages/oneharness-bridge/test/history-fixture.ts",
         "{workspaceRoot}/packages/oneharness-bridge/test/fixtures/**/*"

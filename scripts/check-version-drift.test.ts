@@ -3,7 +3,18 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
-test("accepts reconciled versions and rejects workflow drift with a remedy", async () => {
+function bootstrapWith(engines: string, windowsEngines: string): string {
+  return [
+    'case "$(uname -s)" in',
+    `  Linux) install_playwright_browsers --with-deps ${engines} ;;`,
+    `  MINGW* | MSYS* | CYGWIN*) install_playwright_browsers ${windowsEngines} ;;`,
+    `  *) install_playwright_browsers ${engines} ;;`,
+    "esac",
+    "",
+  ].join("\n");
+}
+
+test("accepts a reconciled tree and rejects version, workflow, and browser drift with a remedy", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "oneharness-version-drift-"));
   try {
     await Promise.all([
@@ -60,9 +71,31 @@ test("accepts reconciled versions and rejects workflow drift with a remedy", asy
       ),
       writeFile(
         resolve(root, "README.md"),
-        "oneharness 1.2.3 CLI\n`@oneharness/sdk` package to `1.2.3`\n",
+        "oneharness 1.2.3 CLI\n`@oneharness/sdk` package to `1.2.3`\nChromium and WebKit, and in Chromium alone\non Windows\n",
       ),
       writeFile(resolve(root, "docs/native-desktop-e2e.md"), "oneharness 1.2.3 CLI\n"),
+      writeFile(
+        resolve(root, "docs/architecture.md"),
+        "run in Chromium and WebKit (Chromium alone on Windows).\n",
+      ),
+      writeFile(
+        resolve(root, "apps/conversation-ui-e2e/playwright.config.ts"),
+        [
+          "export default defineConfig({",
+          "  projects: [",
+          '    { name: "chromium", use: { ...devices["Desktop Chrome"] } },',
+          '    ...(process.platform === "win32"',
+          "      ? []",
+          '      : [{ name: "webkit", use: { ...devices["Desktop Safari"] } }]),',
+          "  ],",
+          "});",
+          "",
+        ].join("\n"),
+      ),
+      writeFile(
+        resolve(root, "scripts/bootstrap.sh"),
+        bootstrapWith("chromium webkit", "chromium"),
+      ),
       writeFile(
         resolve(root, ".github/workflows/check.yml"),
         [
@@ -79,6 +112,43 @@ test("accepts reconciled versions and rejects workflow drift with a remedy", asy
 
     const valid = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
     expect(valid.exitCode).toBe(0);
+    // A project added through a spread still runs in Playwright and must not
+    // escape the provisioning and documentation comparison.
+    await writeFile(
+      resolve(root, "apps/conversation-ui-e2e/playwright.config.ts"),
+      [
+        'const extraProjects = [{ name: "firefox", use: { ...devices["Desktop Firefox"] } }];',
+        "export default defineConfig({",
+        "  projects: [",
+        '    { name: "chromium", use: { ...devices["Desktop Chrome"] } },',
+        "    ...extraProjects,",
+        '    ...(process.platform === "win32"',
+        "      ? []",
+        '      : [{ name: "webkit", use: { ...devices["Desktop Safari"] } }]),',
+        "  ],",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    const spreadProjectDrift = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
+    expect(spreadProjectDrift.exitCode).toBe(1);
+    expect(spreadProjectDrift.stderr.toString()).toContain(
+      "must list only audited browser projects",
+    );
+    await writeFile(
+      resolve(root, "apps/conversation-ui-e2e/playwright.config.ts"),
+      [
+        "export default defineConfig({",
+        "  projects: [",
+        '    { name: "chromium", use: { ...devices["Desktop Chrome"] } },',
+        '    ...(process.platform === "win32"',
+        "      ? []",
+        '      : [{ name: "webkit", use: { ...devices["Desktop Safari"] } }]),',
+        "  ],",
+        "});",
+        "",
+      ].join("\n"),
+    );
     await writeFile(resolve(root, "docs/native-desktop-e2e.md"), "oneharness 1.2.2 CLI\n");
     const documentationDrift = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
     expect(documentationDrift.exitCode).toBe(1);
@@ -102,7 +172,149 @@ test("accepts reconciled versions and rejects workflow drift with a remedy", asy
     const invalid = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
     expect(invalid.exitCode).toBe(1);
     expect(invalid.stderr.toString()).toContain("update both files together");
+    await writeFile(
+      resolve(root, ".github/workflows/check.yml"),
+      [
+        "uses: actions/setup-node@example",
+        "node-version: 22.1.0",
+        "uses: oven-sh/setup-bun@example",
+        "bun-version: 1.2.3",
+        "uses: astral-sh/setup-uv@example",
+        "version: 0.1.2",
+        "run: cargo install just --locked --version 1.2.3",
+      ].join("\n"),
+    );
+    // A browser project the journeys run but bootstrap never provisions would
+    // leave the second engine missing on a clean clone.
+    await writeFile(resolve(root, "scripts/bootstrap.sh"), bootstrapWith("chromium", "chromium"));
+    const browserDrift = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
+    expect(browserDrift.exitCode).toBe(1);
+    expect(browserDrift.stderr.toString()).toContain(
+      'engines on Linux with "Linux) install_playwright_browsers --with-deps chromium webkit ;;"',
+    );
+    // Windows runs only the projects before the guard, so provisioning WebKit
+    // there is drift too.
+    await writeFile(
+      resolve(root, "scripts/bootstrap.sh"),
+      bootstrapWith("chromium webkit", "chromium webkit"),
+    );
+    const windowsBrowserDrift = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
+    expect(windowsBrowserDrift.exitCode).toBe(1);
+    expect(windowsBrowserDrift.stderr.toString()).toContain(
+      'engines on Windows with "MINGW* | MSYS* | CYGWIN*) install_playwright_browsers chromium ;;"',
+    );
+    await writeFile(
+      resolve(root, "scripts/bootstrap.sh"),
+      bootstrapWith("chromium webkit", "chromium"),
+    );
+    await writeFile(resolve(root, "docs/architecture.md"), "run in Chromium.\n");
+    const documentedBrowserDrift = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
+    expect(documentedBrowserDrift.exitCode).toBe(1);
+    expect(documentedBrowserDrift.stderr.toString()).toContain(
+      "docs/architecture.md must document the Chromium and WebKit browser journeys",
+    );
+    await writeFile(
+      resolve(root, "docs/architecture.md"),
+      "run in Chromium and WebKit (Chromium alone on Windows).\n",
+    );
+    // A project named webkit on a Chrome device would run Chromium twice while
+    // bootstrap and the documents still claimed WebKit.
+    await writeFile(
+      resolve(root, "apps/conversation-ui-e2e/playwright.config.ts"),
+      [
+        "export default defineConfig({",
+        "  projects: [",
+        '    { name: "chromium", use: { ...devices["Desktop Chrome"] } },',
+        '    ...(process.platform === "win32"',
+        "      ? []",
+        '      : [{ name: "webkit", use: { ...devices["Desktop Chrome"] } }]),',
+        "  ],",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    const deviceDrift = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
+    expect(deviceDrift.exitCode).toBe(1);
+    expect(deviceDrift.stderr.toString()).toContain(
+      'must declare the webkit project once as { name: "webkit", use: { ...devices["Desktop Safari"] } }',
+    );
+    // Reversed guard branches would run WebKit only on Windows while every
+    // project name stayed the same, so only the exact guard shape is accepted.
+    await writeFile(
+      resolve(root, "apps/conversation-ui-e2e/playwright.config.ts"),
+      [
+        "export default defineConfig({",
+        "  projects: [",
+        '    { name: "chromium", use: { ...devices["Desktop Chrome"] } },',
+        '    ...(process.platform === "win32"',
+        '      ? [{ name: "webkit", use: { ...devices["Desktop Safari"] } }]',
+        "      : []),",
+        "  ],",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    const reversedWindowsGuard = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
+    expect(reversedWindowsGuard.exitCode).toBe(1);
+    expect(reversedWindowsGuard.stderr.toString()).toContain(
+      "must exclude Windows browser projects with one trailing",
+    );
+    await writeFile(
+      resolve(root, "apps/conversation-ui-e2e/playwright.config.ts"),
+      [
+        "export default defineConfig({",
+        "  projects: [",
+        '    { name: "chromium", use: { ...devices["Desktop Chrome"] } },',
+        '    ...(process.platform === "win32"',
+        "      ? []",
+        '      : [{ name: "webkit", use: { ...devices["Desktop Safari"] } }]),',
+        "  ],",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    // The Windows exception is part of the documented matrix, so dropping it
+    // from the documents, or keeping it once the projects drop it, is drift.
+    await writeFile(resolve(root, "docs/architecture.md"), "run in Chromium and WebKit.\n");
+    const windowsDocumentationDrift = Bun.spawnSync([
+      "node",
+      "scripts/check-version-drift.mjs",
+      root,
+    ]);
+    expect(windowsDocumentationDrift.exitCode).toBe(1);
+    expect(windowsDocumentationDrift.stderr.toString()).toContain(
+      "docs/architecture.md must document the browser journeys running in Chromium alone on Windows",
+    );
+    await writeFile(
+      resolve(root, "docs/architecture.md"),
+      "run in Chromium and WebKit (Chromium alone on Windows).\n",
+    );
+    await writeFile(
+      resolve(root, "apps/conversation-ui-e2e/playwright.config.ts"),
+      [
+        "export default defineConfig({",
+        "  projects: [",
+        '    { name: "chromium", use: { ...devices["Desktop Chrome"] } },',
+        '    { name: "webkit", use: { ...devices["Desktop Safari"] } },',
+        "  ],",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    await writeFile(
+      resolve(root, "scripts/bootstrap.sh"),
+      bootstrapWith("chromium webkit", "chromium webkit"),
+    );
+    const staleWindowsDocumentation = Bun.spawnSync([
+      "node",
+      "scripts/check-version-drift.mjs",
+      root,
+    ]);
+    expect(staleWindowsDocumentation.exitCode).toBe(1);
+    expect(staleWindowsDocumentation.stderr.toString()).toContain(
+      "README.md documents a Windows browser exception",
+    );
   } finally {
     await rm(root, { force: true, recursive: true });
   }
-});
+}, 15_000);

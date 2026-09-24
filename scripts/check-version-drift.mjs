@@ -127,3 +127,134 @@ for (const [path, ...expectedValues] of sdkDocumentation) {
     }
   }
 }
+
+// The browser journey projects are the one source for which engines this
+// repository supports: bootstrap provisions exactly them, and the documentation
+// names exactly them.
+const browserJourneyConfig = "apps/conversation-ui-e2e/playwright.config.ts";
+const declaredProjects = /\n {2}projects: \[\n(?<projects>.*?)\n {2}\],\n/s.exec(
+  read(browserJourneyConfig),
+)?.groups?.projects;
+if (declaredProjects === undefined) {
+  throw new Error(
+    `${browserJourneyConfig} must list its browser projects one per line; restore that list and rerun just check`,
+  );
+}
+// Playwright picks the engine from each project's device, so the name only
+// stands for the engine while it is paired with that engine's device.
+const knownEngines = {
+  chromium: { device: "Desktop Chrome", name: "Chromium" },
+  webkit: { device: "Desktop Safari", name: "WebKit" },
+};
+const browserEngines = [...declaredProjects.matchAll(/name: "(?<engine>[a-z-]+)"/g)].map(
+  (match) => match.groups.engine,
+);
+if (browserEngines.length === 0) {
+  throw new Error(
+    `${browserJourneyConfig} must declare at least one browser project; restore its projects list`,
+  );
+}
+const projectDeclaration =
+  /\{ name: "(?<engine>[a-z-]+)", use: \{ \.\.\.devices\["(?<device>[^"\n]+)"\] \} \}/g;
+const pairedDevices = [...declaredProjects.matchAll(projectDeclaration)];
+for (const engine of browserEngines) {
+  const known = knownEngines[engine];
+  if (!known) {
+    throw new Error(
+      `${engine} is not a known browser engine; name it and its device in check-version-drift.mjs and the browser journey documentation`,
+    );
+  }
+  const paired = pairedDevices.filter((match) => match.groups.engine === engine);
+  if (paired.length !== 1 || paired[0].groups.device !== known.device) {
+    throw new Error(
+      `${browserJourneyConfig} must declare the ${engine} project once as { name: "${engine}", use: { ...devices["${known.device}"] } }; restore that project`,
+    );
+  }
+}
+// Projects inside the Windows guard's non-Windows branch run everywhere but
+// Windows, so only this exact guard shape is accepted: reversed branches would
+// swap the matrix while the project names stayed the same.
+const windowsGuard = '...(process.platform === "win32" ? [] : [';
+const projectsText = declaredProjects.replace(/\s+/g, " ");
+const windowsGuardAt = projectsText.indexOf(windowsGuard);
+const win32Mentions = projectsText.split("win32").length - 1;
+if (
+  windowsGuardAt === -1
+    ? win32Mentions !== 0
+    : win32Mentions !== 1 || !/\]\),?$/.test(projectsText.trimEnd())
+) {
+  throw new Error(
+    `${browserJourneyConfig} must exclude Windows browser projects with one trailing \`${windowsGuard}...])\` guard; restore that shape`,
+  );
+}
+const windowsEngines = [
+  ...(windowsGuardAt === -1 ? projectsText : projectsText.slice(0, windowsGuardAt)).matchAll(
+    /name: "(?<engine>[a-z-]+)"/g,
+  ),
+].map((match) => match.groups.engine);
+if (windowsEngines.length === 0) {
+  throw new Error(
+    `${browserJourneyConfig} must declare at least one browser project for Windows; restore its projects list`,
+  );
+}
+// Account for the whole projects expression. Otherwise a variable or spread
+// can add a running project without appearing in the engine/device matches.
+const projectSkeleton = declaredProjects
+  .replace(projectDeclaration, "PROJECT")
+  .replace(/\s+/g, " ")
+  .trim();
+const windowsProjectSkeleton = windowsEngines.map(() => "PROJECT,").join(" ");
+const guardedProjectSkeleton = browserEngines
+  .slice(windowsEngines.length)
+  .map(() => "PROJECT")
+  .join(", ");
+const expectedProjectSkeleton =
+  windowsGuardAt === -1
+    ? windowsProjectSkeleton
+    : `${windowsProjectSkeleton} ...(process.platform === "win32" ? [] : [${guardedProjectSkeleton}]),`;
+if (projectSkeleton !== expectedProjectSkeleton) {
+  throw new Error(
+    `${browserJourneyConfig} must list only audited browser projects in its projects array; update the drift check, bootstrap, and documentation for a new project`,
+  );
+}
+const bootstrap = read("scripts/bootstrap.sh");
+for (const [platform, line] of [
+  ["Linux", `  Linux) install_playwright_browsers --with-deps ${browserEngines.join(" ")} ;;`],
+  [
+    "Windows",
+    `  MINGW* | MSYS* | CYGWIN*) install_playwright_browsers ${windowsEngines.join(" ")} ;;`,
+  ],
+  ["other platforms", `  *) install_playwright_browsers ${browserEngines.join(" ")} ;;`],
+]) {
+  if (!bootstrap.split("\n").includes(line)) {
+    throw new Error(
+      `bootstrap.sh must provision exactly the ${browserJourneyConfig} engines on ${platform} with "${line.trim()}"; update both files together`,
+    );
+  }
+}
+function documentEngines(engines) {
+  return new Intl.ListFormat("en").format(engines.map((engine) => knownEngines[engine].name));
+}
+const documentedEngines = documentEngines(browserEngines);
+const windowsException =
+  windowsEngines.length === browserEngines.length
+    ? undefined
+    : `${documentEngines(windowsEngines)} alone on Windows`;
+for (const path of ["README.md", "docs/architecture.md"]) {
+  const documentation = read(path).replace(/\s+/g, " ");
+  if (!documentation.includes(documentedEngines)) {
+    throw new Error(
+      `${path} must document the ${documentedEngines} browser journeys; update the projects and documentation together`,
+    );
+  }
+  if (windowsException === undefined && documentation.includes("alone on Windows")) {
+    throw new Error(
+      `${path} documents a Windows browser exception that ${browserJourneyConfig} no longer makes; update the projects and documentation together`,
+    );
+  }
+  if (windowsException !== undefined && !documentation.includes(windowsException)) {
+    throw new Error(
+      `${path} must document the browser journeys running in ${windowsException}; update the projects and documentation together`,
+    );
+  }
+}

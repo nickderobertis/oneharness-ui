@@ -1,5 +1,6 @@
 import { basename } from "node:path";
 import { e2eProject } from "@oneharness-ui/bridge/test/e2e-configuration.ts";
+import { seedE2eHistory } from "@oneharness-ui/bridge/test/e2e-history.ts";
 import {
   bridgeResponseSchema,
   conversationLabelMaxLength,
@@ -8,6 +9,20 @@ import {
 import { expect, type Page, test } from "@playwright/test";
 
 const e2eProjectHeading = new RegExp(`${basename(e2eProject)}$`);
+
+// Continuing a conversation appends a record to the fixture history, so each
+// engine of this target starts from the baseline the server seeded rather than
+// from whatever the previous engine left behind.
+test.beforeAll(async () => {
+  await seedE2eHistory();
+});
+
+// WebKit on macOS follows Safari's default of moving Tab focus only between form
+// fields; a Safari user reaches buttons with Option+Tab, so the journey presses
+// the key that user would.
+function focusNextKey(browserName: string): string {
+  return browserName === "webkit" && process.platform === "darwin" ? "Alt+Tab" : "Tab";
+}
 
 async function expectTheme(page: Page, selected: string, next: string, resolved: "dark" | "light") {
   await expect(
@@ -37,7 +52,10 @@ test("follows the OS theme and persists an explicit accessible theme choice", as
   await expectTheme(page, "dark", "system", "dark");
 });
 
-test("lists, selects, restores a deep link, and expands tool details", async ({ page }) => {
+test("lists, selects, restores a deep link, and expands tool details", async ({
+  browserName,
+  page,
+}) => {
   await page.goto("/");
   await expect(page.getByRole("navigation", { name: "Conversation history" })).toBeVisible();
   await page.getByRole("button", { name: /tool-session/i }).click();
@@ -48,7 +66,7 @@ test("lists, selects, restores a deep link, and expands tool details", async ({ 
   await expect(timelineItems).not.toHaveCount(0);
   await expect(timeline.getByRole("list", { name: "Timeline legend" })).toContainText("Turns");
   const timelineItem = timelineItems.first();
-  await page.keyboard.press("Tab");
+  await page.keyboard.press(focusNextKey(browserName));
   const expandTimeline = timeline.getByRole("button", { name: "Expand timeline" });
   await expect(expandTimeline).toBeFocused();
   await expandTimeline.click();

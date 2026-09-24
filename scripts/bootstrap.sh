@@ -28,8 +28,19 @@ bun "$ROOT/scripts/build-test-provider.mjs" \
   || fail "deterministic provider build failed; follow the build-test-provider remedy above, then rerun just bootstrap"
 bun "$ROOT/scripts/build-sidecar.mjs" \
   || fail "sidecar assembly failed; follow the build-sidecar remedy above, then rerun just bootstrap"
-bun run --cwd apps/conversation-ui playwright install chromium >/dev/null \
-  || fail "Chromium provisioning failed; verify Playwright download access, then rerun just bootstrap"
+install_playwright_browsers() {
+  bun run --cwd apps/conversation-ui playwright install "$@" >/dev/null \
+    || fail "browser provisioning failed; verify Playwright download access and, on Linux, permission to install WebKit's system libraries, then rerun just bootstrap"
+}
+
+# Playwright's WebKit links Linux system libraries that the Tauri prerequisites do not
+# cover; the macOS archive is self-contained. Windows provisions Chromium alone, the
+# one engine the browser journey config runs there.
+case "$(uname -s)" in
+  Linux) install_playwright_browsers --with-deps chromium webkit ;;
+  MINGW* | MSYS* | CYGWIN*) install_playwright_browsers chromium ;;
+  *) install_playwright_browsers chromium webkit ;;
+esac
 "$ROOT/scripts/setup-screencomp.sh" >/dev/null \
   || fail "screencomp provisioning failed; verify release download access, then rerun just bootstrap"
 uvx --from actionlint-py==1.7.12.24 actionlint --version >/dev/null \
