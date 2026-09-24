@@ -8,9 +8,7 @@
  * and fails with its phase name and the output it produced.
  */
 
-/** Grace between the polite stop of an over-bound phase and killing it outright. */
 export const TERMINATION_GRACE_MS = 2_000;
-/** Bound on draining output a stopped phase left behind in its pipes. */
 const OUTPUT_DRAIN_MS = 2_000;
 /**
  * Bound on the characters kept per stream. A phase's output is untrusted CLI
@@ -61,7 +59,7 @@ export class PhaseFailure extends Error {
  * Runs one phase to completion under its own bound.
  *
  * Resolves with the phase output when it exits cleanly; otherwise throws a
- * {@link PhaseFailure} naming the phase and carrying everything it wrote.
+ * {@link PhaseFailure} naming the phase and carrying its captured output.
  */
 export async function runPhase(phase: Phase): Promise<PhaseResult> {
   const child = spawnPhase(phase);
@@ -119,17 +117,14 @@ function spawnPhase(phase: Phase) {
   }
 }
 
-/** The tail a phase wrote, plus what was dropped to stay inside {@link MAX_CAPTURED_CHARS}. */
 type Sink = { dropped: number; text: string };
 
-/** Accumulates decoded output as it arrives so a stopped phase still reports what it wrote. */
 async function collect(stream: ReadableStream<Uint8Array>, sink: Sink): Promise<void> {
   const decoder = new TextDecoder();
   for await (const chunk of stream) append(sink, decoder.decode(chunk, { stream: true }));
   append(sink, decoder.decode());
 }
 
-/** Keeps the newest {@link MAX_CAPTURED_CHARS} characters and counts the rest as dropped. */
 function append(sink: Sink, text: string): void {
   sink.text += text;
   if (sink.text.length <= MAX_CAPTURED_CHARS) return;

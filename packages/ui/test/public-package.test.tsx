@@ -272,7 +272,7 @@ for (const text of [
   );
 });
 
-type InstalledManifest = {
+type InstalledManifestProjection = {
   readonly name: string;
   /**
    * Every string the manifest holds, each with the dotted path it sits at.
@@ -289,7 +289,7 @@ type InstalledManifest = {
  * reads anything out of it. It is a file produced by a subprocess, so its shape
  * is asserted here rather than assumed by the reader.
  */
-function parseInstalledManifest(source: string): InstalledManifest {
+function parseInstalledManifest(source: string): InstalledManifestProjection {
   const manifest: unknown = JSON.parse(source);
   if (typeof manifest !== "object" || manifest === null || Array.isArray(manifest)) {
     throw new Error("the installed manifest is not a JSON object");
@@ -301,7 +301,6 @@ function parseInstalledManifest(source: string): InstalledManifest {
   return { name: fields.name, strings: [...walkStrings(manifest, "")], version: fields.version };
 }
 
-/** Walks parsed JSON of any shape, narrowing at each step rather than trusting the document. */
 function* walkStrings(value: unknown, path: string): Generator<readonly [string, string]> {
   if (typeof value === "string") {
     yield [path, value];

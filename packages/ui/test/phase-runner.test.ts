@@ -26,9 +26,7 @@ const STOP_SLACK_MS = 6_000;
  */
 const OVER_BOUND_MS = 2_000;
 
-/** Announced first by the flooding fixture, so it is the part the cap must drop. */
 const FLOOD_HEAD = "flood head marker";
-/** Announced last by the flooding fixture, so it is the part the cap must keep. */
 const FLOOD_TAIL = "flood tail marker";
 /**
  * Exactly what the flooding fixture writes, so the test asserts the reported
@@ -211,13 +209,6 @@ describe("bounded package-test phases", () => {
   }, 60_000);
 });
 
-/**
- * Writes a phase that announces itself and then outlives every bound under test,
- * so a bound that failed to stop it shows up as an elapsed time near
- * {@link HANG_MS} rather than near the bound. An installer wedged on a lock is
- * the phase this stands in for, and `ignoresTermination` makes it the kind that
- * survives the polite stop, so only the force kill can end it.
- */
 async function writeHangingScript(
   label: string,
   options: { readonly ignoresTermination?: boolean } = {},
