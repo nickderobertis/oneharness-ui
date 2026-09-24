@@ -3,7 +3,12 @@ import { isAbsolute, resolve } from "node:path";
 import { z } from "zod";
 import { startWebServer } from "../src/server.ts";
 import { e2eProject, e2eWebPort } from "./e2e-configuration.ts";
-import { e2eHistoryDir, e2eProviderBin, seedE2eHistory } from "./e2e-history.ts";
+import {
+  e2eHistoryDir,
+  e2eProviderBin,
+  e2eProviderHarness,
+  seedE2eHistory,
+} from "./e2e-history.ts";
 
 const repository = resolve(import.meta.dir, "../../..");
 const webAccessToken = z
@@ -38,7 +43,7 @@ await seedE2eHistory({
 
 process.env.ONEHARNESS_UI_HISTORY_DIR = e2eHistoryDir;
 process.env.ONEHARNESS_UI_PROVIDER_BIN = provider;
-process.env.ONEHARNESS_UI_PROVIDER_HARNESS = "claude-code";
+process.env.ONEHARNESS_UI_PROVIDER_HARNESS = e2eProviderHarness;
 process.env.MOCK_EXIT = "0";
 process.env.MOCK_STDERR = "";
 process.env.MOCK_STDOUT =

@@ -10,6 +10,8 @@ import { e2eProject } from "./e2e-configuration.ts";
 const repository = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 export const e2eHistoryDir = resolve(repository, ".cache/e2e-history");
+// The seeded records and the server's continuations run through one harness.
+export const e2eProviderHarness = "claude-code";
 export const e2eProviderBin = resolve(
   repository,
   `target/oneharness-ui-test/oneharness-mock-harness${process.platform === "win32" ? ".exe" : ""}`,
@@ -47,10 +49,11 @@ export async function seedE2eHistory({
     stdout: string;
   }) {
     const result = await sdk.run({
-      bins: { "claude-code": provider },
+      bins: { [e2eProviderHarness]: provider },
+      // llmlint: ignore[contracts_have_one_source_or_a_drift_gate] oneharness-mock-harness.rs is the one source of these keys; this call runs that compiled executable, which rejects malformed values, and every journey asserts the output it records, so a renamed key fails the suite rather than drifting silently.
       env: { MOCK_EXIT: String(exit), MOCK_STDERR: stderr, MOCK_STDOUT: stdout },
       events: true,
-      harnesses: ["claude-code"],
+      harnesses: [e2eProviderHarness],
       history: true,
       historyDir: e2eHistoryDir,
       historyName: name,
