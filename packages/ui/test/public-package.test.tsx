@@ -12,6 +12,14 @@ import {
 } from "@oneharness/ui";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { runPhase } from "./phase-runner.ts";
+
+/** Per-phase bounds, so host load on one step cannot be reported as an opaque whole-test timeout. */
+const PACK_TIMEOUT_MS = 60_000;
+const INSTALL_TIMEOUT_MS = 120_000;
+const VERIFY_TIMEOUT_MS = 60_000;
+/** Outer backstop over every phase bound; a phase that overruns reports first, naming itself. */
+const PACKAGE_TEST_TIMEOUT_MS = PACK_TIMEOUT_MS + INSTALL_TIMEOUT_MS + VERIFY_TIMEOUT_MS + 30_000;
 
 describe("@oneharness/ui public package", () => {
   test("renders and drives public components through the built package entry", async () => {
@@ -75,44 +83,45 @@ describe("@oneharness/ui public package", () => {
     expect(css).toContain(".hljs-keyword");
   });
 
-  test("packs and resolves from a fresh external consumer", async () => {
-    const temporaryRoot = await mkdtemp(resolve(tmpdir(), "oneharness-ui-consumer-"));
-    try {
-      const packageRoot = resolve(import.meta.dir, "..");
-      const packed = Bun.spawnSync(
-        ["bun", "pm", "pack", "--quiet", "--destination", temporaryRoot],
-        {
+  test(
+    "packs and resolves from a fresh external consumer",
+    async () => {
+      const temporaryRoot = await mkdtemp(resolve(tmpdir(), "oneharness-ui-consumer-"));
+      try {
+        const packageRoot = resolve(import.meta.dir, "..");
+        const packed = await runPhase({
+          command: ["bun", "pm", "pack", "--quiet", "--destination", temporaryRoot],
           cwd: packageRoot,
-        },
-      );
-      expect(packed.exitCode).toBe(0);
-      const tarballPath = packed.stdout.toString().trim();
-      if (
-        !isAbsolute(tarballPath) ||
-        dirname(tarballPath) !== temporaryRoot ||
-        basename(tarballPath).length > 255 ||
-        !basename(tarballPath).endsWith(".tgz")
-      ) {
-        throw new Error("bun pm pack returned an invalid package filename");
-      }
-      const tarball = tarballPath;
-      const consumerRoot = resolve(temporaryRoot, "consumer");
-      await mkdir(consumerRoot);
-      await writeFile(
-        resolve(consumerRoot, "package.json"),
-        `${JSON.stringify({
-          dependencies: {
-            "@oneharness/ui": `file:${tarball}`,
-          },
-          private: true,
-          scripts: {
-            verify: "bun verify.ts",
-          },
-        })}\n`,
-      );
-      await writeFile(
-        resolve(consumerRoot, "verify.ts"),
-        `import { createElement } from "react";
+          name: "pack",
+          timeoutMs: PACK_TIMEOUT_MS,
+        });
+        const tarballPath = packed.stdout.trim();
+        if (
+          !isAbsolute(tarballPath) ||
+          dirname(tarballPath) !== temporaryRoot ||
+          basename(tarballPath).length > 255 ||
+          !basename(tarballPath).endsWith(".tgz")
+        ) {
+          throw new Error("bun pm pack returned an invalid package filename");
+        }
+        const tarball = tarballPath;
+        const consumerRoot = resolve(temporaryRoot, "consumer");
+        await mkdir(consumerRoot);
+        await writeFile(
+          resolve(consumerRoot, "package.json"),
+          `${JSON.stringify({
+            dependencies: {
+              "@oneharness/ui": `file:${tarball}`,
+            },
+            private: true,
+            scripts: {
+              verify: "bun verify.ts",
+            },
+          })}\n`,
+        );
+        await writeFile(
+          resolve(consumerRoot, "verify.ts"),
+          `import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import {
   ConversationList,
@@ -228,20 +237,82 @@ for (const text of [
   "Judge",
   "https://example.test/judge.png",
 ]) {
-  if (!html.includes(text)) process.exit(1);
+  if (!html.includes(text)) {
+    console.error(\`the consumer markup is missing \${text}\`);
+    process.exit(1);
+  }
 }
 `,
-      );
-      const install = Bun.spawnSync(["bun", "install", "--offline"], { cwd: consumerRoot });
-      expect(install.exitCode).toBe(0);
-      const installedManifest: unknown = JSON.parse(
-        await readFile(resolve(consumerRoot, "node_modules/@oneharness/ui/package.json"), "utf8"),
-      );
-      expect(JSON.stringify(installedManifest)).not.toContain("workspace:");
-      const verify = Bun.spawnSync(["bun", "run", "verify"], { cwd: consumerRoot });
-      expect(verify.exitCode).toBe(0);
-    } finally {
-      await rm(temporaryRoot, { force: true, recursive: true });
-    }
-  }, 90_000);
+        );
+        await runPhase({
+          command: ["bun", "install", "--offline"],
+          cwd: consumerRoot,
+          name: "offline install",
+          timeoutMs: INSTALL_TIMEOUT_MS,
+        });
+        const installedManifest = parseInstalledManifest(
+          await readFile(resolve(consumerRoot, "node_modules/@oneharness/ui/package.json"), "utf8"),
+        );
+        expect(installedManifest.name).toBe("@oneharness/ui");
+        expect(installedManifest.version).toMatch(/^\d+\.\d+\.\d+/);
+        for (const [path, value] of installedManifest.strings) {
+          expect(`${path} is ${value}`).not.toContain("workspace:");
+        }
+        await runPhase({
+          command: ["bun", "run", "verify"],
+          cwd: consumerRoot,
+          name: "consumer verification",
+          timeoutMs: VERIFY_TIMEOUT_MS,
+        });
+      } finally {
+        await rm(temporaryRoot, { force: true, recursive: true });
+      }
+    },
+    PACKAGE_TEST_TIMEOUT_MS,
+  );
 });
+
+type InstalledManifestProjection = {
+  readonly name: string;
+  /**
+   * Every string the manifest holds, each with the dotted path it sits at.
+   * Taken from the parsed document rather than from a list of the fields a
+   * manifest is known to use, so a field this test has never heard of is
+   * covered the day the package starts publishing it.
+   */
+  readonly strings: readonly (readonly [string, string])[];
+  readonly version: string;
+};
+
+/**
+ * Validates the manifest the install wrote into the consumer before the test
+ * reads anything out of it. It is a file produced by a subprocess, so its shape
+ * is asserted here rather than assumed by the reader.
+ */
+function parseInstalledManifest(source: string): InstalledManifestProjection {
+  const manifest: unknown = JSON.parse(source);
+  if (typeof manifest !== "object" || manifest === null || Array.isArray(manifest)) {
+    throw new Error("the installed manifest is not a JSON object");
+  }
+  const fields: Record<string, unknown> = manifest;
+  if (typeof fields.name !== "string" || typeof fields.version !== "string") {
+    throw new Error("the installed manifest has no string name and version");
+  }
+  return { name: fields.name, strings: [...walkStrings(manifest, "")], version: fields.version };
+}
+
+function* walkStrings(value: unknown, path: string): Generator<readonly [string, string]> {
+  if (typeof value === "string") {
+    yield [path, value];
+    return;
+  }
+  if (Array.isArray(value)) {
+    for (const [index, item] of value.entries()) yield* walkStrings(item, `${path}[${index}]`);
+    return;
+  }
+  if (typeof value === "object" && value !== null) {
+    for (const [key, item] of Object.entries(value)) {
+      yield* walkStrings(item, path === "" ? key : `${path}.${key}`);
+    }
+  }
+}
