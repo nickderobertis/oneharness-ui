@@ -112,6 +112,43 @@ test("accepts a reconciled tree and rejects version, workflow, and browser drift
 
     const valid = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
     expect(valid.exitCode).toBe(0);
+    // A project added through a spread still runs in Playwright and must not
+    // escape the provisioning and documentation comparison.
+    await writeFile(
+      resolve(root, "apps/conversation-ui-e2e/playwright.config.ts"),
+      [
+        'const extraProjects = [{ name: "firefox", use: { ...devices["Desktop Firefox"] } }];',
+        "export default defineConfig({",
+        "  projects: [",
+        '    { name: "chromium", use: { ...devices["Desktop Chrome"] } },',
+        "    ...extraProjects,",
+        '    ...(process.platform === "win32"',
+        "      ? []",
+        '      : [{ name: "webkit", use: { ...devices["Desktop Safari"] } }]),',
+        "  ],",
+        "});",
+        "",
+      ].join("\n"),
+    );
+    const spreadProjectDrift = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
+    expect(spreadProjectDrift.exitCode).toBe(1);
+    expect(spreadProjectDrift.stderr.toString()).toContain(
+      "must list only audited browser projects",
+    );
+    await writeFile(
+      resolve(root, "apps/conversation-ui-e2e/playwright.config.ts"),
+      [
+        "export default defineConfig({",
+        "  projects: [",
+        '    { name: "chromium", use: { ...devices["Desktop Chrome"] } },',
+        '    ...(process.platform === "win32"',
+        "      ? []",
+        '      : [{ name: "webkit", use: { ...devices["Desktop Safari"] } }]),',
+        "  ],",
+        "});",
+        "",
+      ].join("\n"),
+    );
     await writeFile(resolve(root, "docs/native-desktop-e2e.md"), "oneharness 1.2.2 CLI\n");
     const documentationDrift = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
     expect(documentationDrift.exitCode).toBe(1);
@@ -280,4 +317,4 @@ test("accepts a reconciled tree and rejects version, workflow, and browser drift
   } finally {
     await rm(root, { force: true, recursive: true });
   }
-});
+}, 15_000);

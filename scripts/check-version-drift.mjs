@@ -154,11 +154,9 @@ if (browserEngines.length === 0) {
     `${browserJourneyConfig} must declare at least one browser project; restore its projects list`,
   );
 }
-const pairedDevices = [
-  ...declaredProjects.matchAll(
-    /\{ name: "(?<engine>[a-z-]+)", use: \{ \.\.\.devices\["(?<device>[^"\n]+)"\] \} \}/g,
-  ),
-];
+const projectDeclaration =
+  /\{ name: "(?<engine>[a-z-]+)", use: \{ \.\.\.devices\["(?<device>[^"\n]+)"\] \} \}/g;
+const pairedDevices = [...declaredProjects.matchAll(projectDeclaration)];
 for (const engine of browserEngines) {
   const known = knownEngines[engine];
   if (!known) {
@@ -197,6 +195,26 @@ const windowsEngines = [
 if (windowsEngines.length === 0) {
   throw new Error(
     `${browserJourneyConfig} must declare at least one browser project for Windows; restore its projects list`,
+  );
+}
+// Account for the whole projects expression. Otherwise a variable or spread
+// can add a running project without appearing in the engine/device matches.
+const projectSkeleton = declaredProjects
+  .replace(projectDeclaration, "PROJECT")
+  .replace(/\s+/g, " ")
+  .trim();
+const windowsProjectSkeleton = windowsEngines.map(() => "PROJECT,").join(" ");
+const guardedProjectSkeleton = browserEngines
+  .slice(windowsEngines.length)
+  .map(() => "PROJECT")
+  .join(", ");
+const expectedProjectSkeleton =
+  windowsGuardAt === -1
+    ? windowsProjectSkeleton
+    : `${windowsProjectSkeleton} ...(process.platform === "win32" ? [] : [${guardedProjectSkeleton}]),`;
+if (projectSkeleton !== expectedProjectSkeleton) {
+  throw new Error(
+    `${browserJourneyConfig} must list only audited browser projects in its projects array; update the drift check, bootstrap, and documentation for a new project`,
   );
 }
 const bootstrap = read("scripts/bootstrap.sh");
