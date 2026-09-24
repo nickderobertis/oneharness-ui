@@ -173,9 +173,11 @@ describe("bounded package-test phases", () => {
     expect(error.details.phase).toBe("offline install");
     expect(error.message).toContain(`offline install phase timed out after ${OVER_BOUND_MS} ms`);
     expect(error.details.stdout).toContain("install started");
-    // Outliving the grace is what says the polite stop was refused; finishing
-    // inside the slack after it is what says the force kill is what ended it.
-    expect(elapsed).toBeGreaterThanOrEqual(OVER_BOUND_MS + TERMINATION_GRACE_MS);
+    // Windows terminates the process on the first kill even with a SIGTERM
+    // handler. POSIX platforms can refuse that stop and reach the force kill.
+    const minimumElapsed =
+      process.platform === "win32" ? OVER_BOUND_MS : OVER_BOUND_MS + TERMINATION_GRACE_MS;
+    expect(elapsed).toBeGreaterThanOrEqual(minimumElapsed);
     expect(elapsed).toBeLessThan(OVER_BOUND_MS + TERMINATION_GRACE_MS + STOP_SLACK_MS);
   }, 60_000);
 
