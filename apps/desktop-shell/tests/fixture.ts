@@ -531,6 +531,7 @@ export async function recordWebView2ProfileDiagnostics(
 
 export async function createDesktopFixture(
   providerPath = fixtureProvider,
+  removalHooks: FixtureRemovalHooks = {},
 ): Promise<DesktopFixture> {
   const requiredExecutables: readonly (readonly [string, string])[] = [
     [
@@ -556,6 +557,7 @@ export async function createDesktopFixture(
   // bounded retries above absorb.
   const cleanup = createFixtureCleanup(
     process.platform === "win32" ? [root, webview2Root] : [root],
+    removalHooks,
   );
   try {
     await Promise.all([

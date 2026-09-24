@@ -6,7 +6,6 @@ import { basename, dirname, resolve } from "node:path";
 import { maxBridgeResponseBytes } from "@oneharness-ui/ipc-contract";
 import {
   createDesktopFixture,
-  createFixtureCleanup,
   deterministicDesktopEnvironment,
   FIXTURE_REMOVAL_OPTIONS,
   FIXTURE_ROOT_PREFIX,
@@ -74,6 +73,16 @@ function removalError(code: string, message: string): NodeJS.ErrnoException {
   const error: NodeJS.ErrnoException = new Error(message);
   error.code = code;
   return error;
+}
+
+async function removeFixturePaths(
+  fixture: Awaited<ReturnType<typeof createDesktopFixture>>,
+): Promise<void> {
+  const root = dirname(fixture.environment.ONEHARNESS_UI_HISTORY_DIR);
+  const webView2Root = dirname(fixture.environment.ONEHARNESS_UI_E2E_WEBVIEW2_USER_DATA_DIR);
+  await Promise.all(
+    [...new Set([root, webView2Root])].map(async (path) => await rm(path, FIXTURE_REMOVAL_OPTIONS)),
+  );
 }
 
 describe("native desktop fixture", () => {
@@ -191,59 +200,65 @@ describe("native desktop fixture", () => {
     expect(await fixtureRoots()).toEqual(before);
   });
 
-  // llmlint: ignore-block[e2e_not_mocked, tests_mirror_real_usage] No POSIX host can raise the Windows FileBusy this loop answers, and its 116.25 second bound cannot be waited out, so issue #73's remedy is this injected seam; the packaged-record test above still removes a real fixture tree through the same entry point with its default hooks.
+  // llmlint: ignore-block[e2e_not_mocked, tests_mirror_real_usage, expensive_tests_stay_behind_their_own_edge] POSIX cannot produce WebView2's FileBusy error, so injected removers drive the real fixture cleanup. The desktop fixture-integration target inherits the desktop app's conversation-ui dependency.
   test("retries a fixture directory that Windows still reports as busy", async () => {
     const removed: string[] = [];
     const waited: number[] = [];
     let busyAttempts = 3;
-    // The Windows journey deletes the fixture root and the WebView2 profile
-    // that lives outside it, and only the profile is still held.
-    const cleanup = createFixtureCleanup(["/fixture-root", "/fixture-webview2"], {
+    let root: string;
+    const fixture = await createDesktopFixture(fixtureProvider, {
       delay: async (milliseconds) => {
         waited.push(milliseconds);
       },
       remove: async (path) => {
-        if (path === "/fixture-webview2" && busyAttempts > 0) {
+        if (path === root && busyAttempts > 0) {
           busyAttempts -= 1;
           throw removalError("EBUSY", "EBUSY: resource busy or locked, rmdir");
         }
+        await rm(path, FIXTURE_REMOVAL_OPTIONS);
         removed.push(path);
       },
     });
+    root = dirname(fixture.environment.ONEHARNESS_UI_HISTORY_DIR);
 
-    await cleanup();
+    await fixture.cleanup();
 
-    expect(removed.sort()).toEqual(["/fixture-root", "/fixture-webview2"]);
+    expect(removed).toContain(root);
+    expect(existsSync(root)).toBe(false);
     expect(waited).toEqual([250, 500, 750]);
   });
 
   test("surfaces the final busy failure once the removal bound is spent", async () => {
     const waited: number[] = [];
     let attempts = 0;
-    const cleanup = createFixtureCleanup(["/fixture-webview2"], {
+    let root: string;
+    const fixture = await createDesktopFixture(fixtureProvider, {
       delay: async (milliseconds) => {
         waited.push(milliseconds);
       },
-      remove: async () => {
+      remove: async (path) => {
+        if (path !== root) {
+          await rm(path, FIXTURE_REMOVAL_OPTIONS);
+          return;
+        }
         attempts += 1;
         throw removalError("EBUSY", `EBUSY: resource busy or locked, attempt ${attempts}`);
       },
     });
+    root = dirname(fixture.environment.ONEHARNESS_UI_HISTORY_DIR);
 
-    await expect(cleanup()).rejects.toThrow("attempt 31");
+    try {
+      await expect(fixture.cleanup()).rejects.toThrow("attempt 31");
+    } finally {
+      await removeFixturePaths(fixture);
+    }
 
-    // One removal plus thirty retries, waiting one 250 ms step longer each
-    // time: the same 116.25 second bound the filesystem remover applied before
-    // this fixture owned the loop.
     expect(attempts).toBe(31);
     expect(waited).toEqual(Array.from({ length: 30 }, (_, index) => (index + 1) * 250));
     expect(waited.reduce((total, milliseconds) => total + milliseconds, 0)).toBe(116_250);
   });
 
   test("retries every removal failure the fixture treats as transient", async () => {
-    // The fixture owns this set, so the drift gate for it is here, and it
-    // reconciles both ways: this list has to name every code the fixture
-    // retries, and the loop below then drives each of those codes for real.
     expect([...TRANSIENT_REMOVAL_CODES].sort()).toEqual([
       "EBUSY",
       "EMFILE",
@@ -254,41 +269,59 @@ describe("native desktop fixture", () => {
     for (const code of TRANSIENT_REMOVAL_CODES) {
       const waited: number[] = [];
       let attempts = 0;
-      const cleanup = createFixtureCleanup(["/fixture-webview2"], {
+      let root: string;
+      const fixture = await createDesktopFixture(fixtureProvider, {
         delay: async (milliseconds) => {
           waited.push(milliseconds);
         },
-        remove: async () => {
+        remove: async (path) => {
+          if (path !== root) {
+            await rm(path, FIXTURE_REMOVAL_OPTIONS);
+            return;
+          }
           attempts += 1;
           if (attempts === 1) throw removalError(code, `${code}: the profile is still held`);
+          await rm(path, FIXTURE_REMOVAL_OPTIONS);
         },
       });
+      root = dirname(fixture.environment.ONEHARNESS_UI_HISTORY_DIR);
 
-      await cleanup();
+      await fixture.cleanup();
 
       expect([code, attempts, waited]).toEqual([code, 2, [250]]);
     }
-  });
+  }, 30_000);
 
   test("refuses to retry a removal failure that is not transient", async () => {
     const waited: number[] = [];
     let attempts = 0;
-    const cleanup = createFixtureCleanup(["/fixture-root"], {
+    let root: string;
+    const fixture = await createDesktopFixture(fixtureProvider, {
       delay: async (milliseconds) => {
         waited.push(milliseconds);
       },
-      remove: async () => {
+      remove: async (path) => {
+        if (path !== root) {
+          await rm(path, FIXTURE_REMOVAL_OPTIONS);
+          return;
+        }
         attempts += 1;
         throw removalError("EACCES", "EACCES: permission denied, rmdir");
       },
     });
+    root = dirname(fixture.environment.ONEHARNESS_UI_HISTORY_DIR);
 
-    await expect(cleanup()).rejects.toThrow("permission denied");
+    try {
+      await expect(fixture.cleanup()).rejects.toThrow("permission denied");
+    } finally {
+      await removeFixturePaths(fixture);
+    }
 
     expect(attempts).toBe(1);
     expect(waited).toEqual([]);
   });
 
+  // llmlint: ignore[tests_assert_real_behavior] This checks the static fs.rm option contract; the tests above exercise cleanup outcomes through the fixture entry point.
   test("keeps the removal bound in the fixture rather than the filesystem remover", async () => {
     expect(Object.keys(FIXTURE_REMOVAL_OPTIONS).sort()).toEqual(["force", "recursive"]);
     // The pinned Bun ignores the remover's own retry options on Windows, so the
@@ -301,7 +334,7 @@ describe("native desktop fixture", () => {
       .filter((line) => /maxRetries|retryDelay/u.test(line));
     expect(delegated).toEqual([]);
   });
-  // llmlint: ignore-end[e2e_not_mocked, tests_mirror_real_usage]
+  // llmlint: ignore-end[e2e_not_mocked, tests_mirror_real_usage, expensive_tests_stay_behind_their_own_edge]
 
   test("reads the execute bit on POSIX and the extension on Windows", async () => {
     const root = await mkdtemp(resolve(tmpdir(), "oneharness-ui-executable-"));
