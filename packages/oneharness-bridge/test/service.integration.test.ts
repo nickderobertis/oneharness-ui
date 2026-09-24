@@ -11,6 +11,7 @@ import {
   type RunReport,
 } from "@oneharness/sdk";
 import { BridgeService, MAX_CONVERSATION_PAGE_BYTES } from "../src/service.ts";
+import { FUTURE_RECORD_PATCH_ENV } from "./fixtures/future-record-contract.ts";
 import { readFixtureHistoryRecord } from "./history-fixture.ts";
 
 const repository = resolve(import.meta.dir, "../../..");
@@ -37,6 +38,15 @@ const textDefaultCli = resolve(
   import.meta.dir,
   `fixtures/text-default-cli.${process.platform === "win32" ? "cmd" : "ts"}`,
 );
+const futureRecordCli = resolve(
+  import.meta.dir,
+  `fixtures/future-record-cli.${process.platform === "win32" ? "cmd" : "ts"}`,
+);
+// A structured field a newer oneharness could add to a history record, which
+// nothing in the pinned SDK's schema names.
+const FUTURE_RECORD_FIELD = {
+  provider_trace: { segments: [{ ms: 12, phase: "model" }], upstream_id: "trace-7" },
+};
 const TEST_AUTHORIZATION = "oneharness-ui-integration-authorization";
 
 let historyDir = "";
@@ -47,6 +57,7 @@ const mockKeys = [
   "MOCK_STDOUT",
   "ONEHARNESS_HISTORY_LABELS",
   "ONEHARNESS_NO_CONFIG",
+  FUTURE_RECORD_PATCH_ENV,
 ];
 
 function fixtureHistoryId(index: number): string {
@@ -247,7 +258,8 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     // Every field the SDK schema names is mapped above, so nothing the packaged
     // CLI writes reaches the "Additional upstream data" disclosure; its history
     // show re-serialises the record and drops the file's extra key before the
-    // bridge reads it.
+    // bridge reads it. A CLI that keeps such a key is covered below, through
+    // the future-record stand-in.
     expect(
       selected.ok && selected.data.kind === "get"
         ? selected.data.conversation.turns[0]?.unknown
@@ -485,6 +497,48 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       data: { conversation: { turns: [{ assistant: "Listed" }] } },
       ok: true,
     });
+  });
+  // llmlint: ignore-end[e2e_not_mocked]
+  // llmlint: ignore-end[tests_mirror_real_usage]
+
+  // llmlint: ignore-block[e2e_not_mocked] The layer under test is the bridge, and it is real here: the stand-in is an upstream oneharness release no published CLI reaches yet, and it forwards every call — including the `history show` whose records it then patches — to the packaged CLI, so the SDK, its schemas, and the history store all stay real.
+  // llmlint: ignore-block[tests_mirror_real_usage] Every case in this service-boundary suite enters at `BridgeService.handle`, which is where a per-test stand-in executable can be selected at all; the transports that wrap it are driven separately, by server.integration.test.ts over HTTP and by the conversation-ui e2e suite, whose conversation selection reaches this same `get` through the real UI.
+  test("preserves a record field this SDK does not know as unknown upstream data", async () => {
+    await seed("future-record", '{"result":"Ahead of this SDK","session_id":"native-future"}');
+    process.env[FUTURE_RECORD_PATCH_ENV] = JSON.stringify(FUTURE_RECORD_FIELD);
+    const bridge = new BridgeService(
+      { executable: futureRecordCli, historyDir },
+      TEST_AUTHORIZATION,
+    );
+
+    const listed = await bridge.handle({ kind: "list" }, TEST_AUTHORIZATION);
+    const sessionId =
+      listed.ok && listed.data.kind === "list" ? listed.data.conversations[0]?.id : "";
+    const selected = await bridge.handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
+    if (!selected.ok || selected.data.kind !== "get") throw new Error(JSON.stringify(selected));
+
+    // The disclosure carries the future field structured and unchanged, and
+    // carries nothing else, so no mapped field leaks into it.
+    expect(selected.data.conversation.turns[0]?.unknown).toEqual(FUTURE_RECORD_FIELD);
+    expect(selected.data.conversation.turns[0]?.assistant).toBe("Ahead of this SDK");
+  });
+
+  test("refuses a future value in a record field this SDK does know", async () => {
+    await seed("future-status", '{"result":"Ahead of this SDK","session_id":"native-future-2"}');
+    process.env[FUTURE_RECORD_PATCH_ENV] = JSON.stringify({ status: "future-status" });
+    const bridge = new BridgeService(
+      { executable: futureRecordCli, historyDir },
+      TEST_AUTHORIZATION,
+    );
+
+    const listed = await bridge.handle({ kind: "list" }, TEST_AUTHORIZATION);
+    const sessionId =
+      listed.ok && listed.data.kind === "list" ? listed.data.conversations[0]?.id : "";
+    const selected = await bridge.handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
+
+    // An unrecognised value in a field the schema names is a contract the app
+    // cannot render, not upstream data to preserve.
+    expect(selected).toMatchObject({ ok: false, error: { code: "MALFORMED_HISTORY" } });
   });
   // llmlint: ignore-end[e2e_not_mocked]
   // llmlint: ignore-end[tests_mirror_real_usage]
