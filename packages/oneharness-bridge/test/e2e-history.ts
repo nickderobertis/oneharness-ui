@@ -50,7 +50,7 @@ export async function seedE2eHistory({
   }) {
     const result = await sdk.run({
       bins: { [e2eProviderHarness]: provider },
-      // llmlint: ignore[contracts_have_one_source_or_a_drift_gate] oneharness-mock-harness.rs is the one source of these keys; this call runs that compiled executable, which rejects malformed values, and every journey asserts the output it records, so a renamed key fails the suite rather than drifting silently.
+      // llmlint: ignore[contracts_have_one_source_or_a_drift_gate] oneharness-mock-harness.rs owns these keys, and the journeys assert its recorded output, so a renamed key fails them.
       env: { MOCK_EXIT: String(exit), MOCK_STDERR: stderr, MOCK_STDOUT: stdout },
       events: true,
       harnesses: [e2eProviderHarness],
