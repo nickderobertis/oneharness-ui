@@ -5,8 +5,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 readonly ROOT
 readonly UPSTREAM_REPOSITORY="https://github.com/nickderobertis/oneharness.git"
 # llmlint: ignore-block[contracts_have_one_source_or_a_drift_gate] scripts/check-version-drift.mjs fails unless this version matches the bridge's @oneharness/sdk pin. This script checks the built revision reports that version.
-readonly UPSTREAM_REVISION="b610356dc4089dcb0bf342b154a3539e115295a3"
-readonly UPSTREAM_VERSION="0.14.0"
+readonly UPSTREAM_REVISION="b54ae162cc5a83cc96f15dd98dfd89de3a27fc20"
+readonly UPSTREAM_VERSION="0.19.0"
 # llmlint: ignore-end[contracts_have_one_source_or_a_drift_gate]
 readonly OUTPUT_ROOT="$ROOT/target/oneharness-ui-upstream"
 
