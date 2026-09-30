@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -48,7 +49,7 @@ const futureRecordCli = resolve(
 const FUTURE_RECORD_FIELD = {
   provider_trace: { segments: [{ ms: 12, phase: "model" }], upstream_id: "trace-7" },
 };
-const TEST_AUTHORIZATION = "oneharness-ui-integration-authorization";
+const TEST_AUTHORIZATION = randomUUID();
 
 let historyDir = "";
 const originalMockEnvironment = new Map<string, string | undefined>();
