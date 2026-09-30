@@ -179,6 +179,7 @@ describe("web UI over the real HTTP, SDK, CLI, provider, and history boundary", 
     await reader.cancel();
   }, 60_000);
 
+  // llmlint: ignore[expensive_tests_stay_behind_their_own_edge] This tests the bridge itself, whose only graph edge is ipc-contract (which it exercises); dependents never trigger it, so no unrelated change runs it.
   test("keeps a running session's watch moving with blank keep-alive lines while it is quiet", async () => {
     const historyDir = resolve(fixtureRoot, "history");
     await mkdir(historyDir);

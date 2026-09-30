@@ -322,6 +322,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     expect(Object.hasOwn(tools?.[1] ?? {}, "timingSource")).toBe(false);
   });
 
+  // llmlint: ignore[expensive_tests_stay_behind_their_own_edge] This tests the bridge itself, whose only graph edge is ipc-contract (which it exercises); dependents never trigger it, so no unrelated change runs it.
   test("presents the agent's messages and reasoning as narration, never as tool calls", async () => {
     const report = await seed(
       "narrated-session",
@@ -374,6 +375,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     ).toBe(false);
   });
 
+  // llmlint: ignore[expensive_tests_stay_behind_their_own_edge] This tests the bridge itself, whose only graph edge is ipc-contract (which it exercises); dependents never trigger it, so no unrelated change runs it.
   test("shows a session whose first run is still going as running, with its events so far", async () => {
     const controller = new AbortController();
     // A real streamed run, held by the provider after its first events, so the
@@ -492,6 +494,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     }
   });
 
+  // llmlint: ignore[expensive_tests_stay_behind_their_own_edge] This tests the bridge itself, whose only graph edge is ipc-contract (which it exercises); dependents never trigger it, so no unrelated change runs it.
   test("still refuses a session that is neither readable nor running", async () => {
     await seed("present-session", '{"result":"Here","session_id":"present"}');
     const result = await service().handle(
