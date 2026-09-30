@@ -18,6 +18,7 @@ const RELEASE_TIMEOUT: Duration = Duration::from_secs(120);
 #[derive(Clone, Copy)]
 enum MockEnvironment {
     Exit,
+    ReleaseFile,
     Stderr,
     Stdout,
     StdoutAfterRelease,
@@ -27,6 +28,7 @@ impl MockEnvironment {
     fn name(self) -> &'static str {
         match self {
             Self::Exit => "MOCK_EXIT",
+            Self::ReleaseFile => "MOCK_RELEASE_FILE",
             Self::Stderr => "MOCK_STDERR",
             Self::Stdout => "MOCK_STDOUT",
             Self::StdoutAfterRelease => "MOCK_STDOUT_AFTER_RELEASE",
@@ -36,6 +38,7 @@ impl MockEnvironment {
     fn limit(self) -> usize {
         match self {
             Self::Exit => 3,
+            Self::ReleaseFile => 4096,
             Self::Stderr | Self::Stdout | Self::StdoutAfterRelease => MAX_STREAM_BYTES,
         }
     }
@@ -140,35 +143,40 @@ fn validate_argv_file(input: &Path) -> io::Result<PathBuf> {
     Ok(file)
 }
 
-/// Accept only a bounded absolute path to a file named `provider-release`, so
-/// the hold seam can only ever wait on a file a test created for that purpose.
-fn validate_release_file(input: &Path) -> io::Result<PathBuf> {
-    if !input.is_absolute()
-        || input.as_os_str().len() > 4096
-        || input.file_name().and_then(|name| name.to_str()) != Some(RELEASE_FILE_NAME)
-    {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "MOCK_RELEASE_FILE must be a bounded absolute path to a provider-release file",
-        ));
-    }
-    Ok(input.to_path_buf())
-}
+/// The file a test creates to let a held run finish. Only a bounded absolute
+/// path to a file named `provider-release` is accepted, so the hold seam can
+/// only ever wait on a file a test created for that purpose.
+struct ReleaseFile(PathBuf);
 
-/// Keep the run in flight until the test releases it, so oneharness has written
-/// the events so far but not the run's closing record.
-fn wait_for_release(file: &Path) -> io::Result<()> {
-    let started = Instant::now();
-    while !file.exists() {
-        if started.elapsed() > RELEASE_TIMEOUT {
+impl ReleaseFile {
+    fn from_environment(value: String) -> io::Result<Self> {
+        let path = PathBuf::from(value);
+        if !path.is_absolute()
+            || path.file_name().and_then(|name| name.to_str()) != Some(RELEASE_FILE_NAME)
+        {
             return Err(io::Error::new(
-                io::ErrorKind::TimedOut,
-                "MOCK_RELEASE_FILE was not created within the fixture's hold limit",
+                io::ErrorKind::InvalidInput,
+                "MOCK_RELEASE_FILE must be an absolute path to a provider-release file",
             ));
         }
-        std::thread::sleep(RELEASE_POLL);
+        Ok(Self(path))
     }
-    Ok(())
+
+    /// Keep the run in flight until the test releases it, so oneharness has
+    /// written the events so far but not the run's closing record.
+    fn wait(&self) -> io::Result<()> {
+        let started = Instant::now();
+        while !self.0.exists() {
+            if started.elapsed() > RELEASE_TIMEOUT {
+                return Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    "MOCK_RELEASE_FILE was not created within the fixture's hold limit",
+                ));
+            }
+            std::thread::sleep(RELEASE_POLL);
+        }
+        Ok(())
+    }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -185,8 +193,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|| "{\"result\":\"mock ok\"}".to_string());
     write!(std::io::stdout(), "{stdout}")?;
     std::io::stdout().flush()?;
-    if let Some(path) = std::env::var_os("MOCK_RELEASE_FILE") {
-        wait_for_release(&validate_release_file(Path::new(&path))?)?;
+    if let Some(path) = optional_environment(MockEnvironment::ReleaseFile)? {
+        ReleaseFile::from_environment(path)?.wait()?;
         if let Some(rest) = optional_environment(MockEnvironment::StdoutAfterRelease)? {
             write!(std::io::stdout(), "{rest}")?;
             std::io::stdout().flush()?;

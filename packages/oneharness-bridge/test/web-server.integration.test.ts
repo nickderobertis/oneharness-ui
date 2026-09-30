@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, resolve } from "node:path";
 import { OneHarness } from "@oneharness/sdk";
+import { bridgeResponseSchema } from "@oneharness-ui/ipc-contract";
 import { startWebServer, WATCH_KEEPALIVE_MS } from "../src/server.ts";
 import { startHeldRun } from "./history-fixture.ts";
 
@@ -215,10 +216,13 @@ describe("web UI over the real HTTP, SDK, CLI, provider, and history boundary", 
         });
       let sessionId = "";
       for (const deadline = Date.now() + 20_000; !sessionId && Date.now() < deadline; ) {
-        const listed = (await (await post("/invoke", { kind: "list" })).json()) as {
-          data?: { conversations?: Array<{ id: string; running?: boolean }> };
-        };
-        sessionId = listed.data?.conversations?.find(({ running }) => running)?.id ?? "";
+        const listed = bridgeResponseSchema.parse(
+          await (await post("/invoke", { kind: "list" })).json(),
+        );
+        sessionId =
+          listed.ok && listed.data.kind === "list"
+            ? (listed.data.conversations.find(({ running }) => running)?.id ?? "")
+            : "";
         if (!sessionId) await Bun.sleep(50);
       }
       expect(sessionId).not.toBe("");

@@ -809,21 +809,23 @@ describe("ConversationShell", () => {
     window.history.replaceState(null, "", "/?session=session-live");
     let live: WatchStream | undefined;
     let settled = false;
-    const running = {
+    const running: ConversationSummary = {
       ...summary,
       id: "session-live",
       name: "live-session",
-      running: true as const,
+      running: true,
     };
-    const finished = {
+    const [firstTurn] = conversation.turns;
+    if (!firstTurn) throw new Error("the fixture conversation has a turn");
+    const finished: Conversation = {
       ...conversation,
       id: "session-live",
       name: "live-session",
       state: "completed",
       turns: [
         {
-          ...conversation.turns[0],
-          agentEvents: [{ index: 0, kind: "message" as const, text: "Looking at the redirect." }],
+          ...firstTurn,
+          agentEvents: [{ index: 0, kind: "message", text: "Looking at the redirect." }],
           assistant: "Redirect fixed.",
           id: "session-live-0",
           tools: [],

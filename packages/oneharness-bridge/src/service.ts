@@ -15,8 +15,7 @@ import {
   RunReportSchema,
 } from "@oneharness/sdk";
 import {
-  type AgentEventKind,
-  agentEventKinds,
+  agentEventKindSchema,
   type BridgeRequest,
   type BridgeResponse,
   type BridgeStreamFrame,
@@ -218,17 +217,14 @@ function toHistoryActionToolEvent(event: HistoryActionEvent): ConversationToolEv
   };
 }
 
-function isAgentEventKind(kind: string): kind is AgentEventKind {
-  return (agentEventKinds as readonly string[]).includes(kind);
-}
-
 // oneharness records the agent's own text and reasoning as `message` and
 // `reasoning` events beside its tool activity. They are narration, never tool
 // calls, so they leave the tool list; every other kind, including one a later
 // oneharness adds, is still presented as a tool event.
 function toAgentEvent(event: HistoryActionEvent): ConversationAgentEvent | undefined {
-  if (!isAgentEventKind(event.kind)) return undefined;
-  return { index: event.index, kind: event.kind, text: reportedText(event.output) ?? "" };
+  const kind = agentEventKindSchema.safeParse(event.kind);
+  if (!kind.success) return undefined;
+  return { index: event.index, kind: kind.data, text: reportedText(event.output) ?? "" };
 }
 
 function splitEvents(events: readonly HistoryActionEvent[]): {

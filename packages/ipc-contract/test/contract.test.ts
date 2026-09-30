@@ -5,6 +5,7 @@ import {
   bridgeResponseSchema,
   bridgeRoutes,
   bridgeStreamFrameSchema,
+  type ConversationTurn,
   conversationTurnSchema,
   toolEventSchema,
   usageSchema,
@@ -161,11 +162,11 @@ describe("IPC validation", () => {
     };
     expect(conversationTurnSchema.parse(turn)).toEqual(turn);
     expect(Object.hasOwn(conversationTurnSchema.parse(turn), "agentEvents")).toBe(false);
-    const narrated = {
+    const narrated: ConversationTurn = {
       ...turn,
       agentEvents: [
-        { index: 0, kind: "reasoning" as const, text: "Plan first." },
-        { index: 1, kind: "message" as const, text: "Looking now." },
+        { index: 0, kind: "reasoning", text: "Plan first." },
+        { index: 1, kind: "message", text: "Looking now." },
       ],
     };
     expect(conversationTurnSchema.parse(narrated)).toEqual(narrated);

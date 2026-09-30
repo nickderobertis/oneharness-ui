@@ -1,7 +1,7 @@
 import { mkdir, rm } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { OneHarness } from "@oneharness/sdk";
+import { OneHarness, type RunOptions } from "@oneharness/sdk";
 import { e2eProject } from "./e2e-configuration.ts";
 import { type HeldRun, startHeldRun } from "./history-fixture.ts";
 
@@ -113,7 +113,7 @@ export async function seedE2eHistory({
   });
 }
 
-function providerRun(name: string, prompt: string, env: Record<string, string>) {
+function providerRun(name: string, prompt: string, env: Record<string, string>): RunOptions {
   return {
     bins: { [e2eProviderHarness]: e2eProviderBin },
     cwd: e2eProject,
@@ -123,7 +123,7 @@ function providerRun(name: string, prompt: string, env: Record<string, string>) 
     history: true,
     historyDir: e2eHistoryDir,
     historyName: name,
-    mode: "bypass" as const,
+    mode: "bypass",
     prompt,
   };
 }

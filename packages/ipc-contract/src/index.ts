@@ -87,10 +87,10 @@ export const toolEventSchema = z.object({
 // The agent's own text and reasoning, recorded as finished items between its
 // tool calls. They are narration rather than tool activity, so they travel
 // apart from `tools`; `index` is the run-wide position shared with tool events.
-export const agentEventKinds = ["message", "reasoning"] as const;
+export const agentEventKindSchema = z.enum(["message", "reasoning"]);
 export const agentEventSchema = z.object({
   index: z.number().int().nonnegative(),
-  kind: z.enum(agentEventKinds),
+  kind: agentEventKindSchema,
   text: z.string(),
 });
 
@@ -234,7 +234,6 @@ export const bridgeStreamFrameSchema = z.discriminatedUnion("kind", [
   z.object({ error: bridgeErrorSchema, kind: z.literal("error") }),
 ]);
 
-export type AgentEventKind = (typeof agentEventKinds)[number];
 export type ConversationAgentEvent = z.infer<typeof agentEventSchema>;
 export type BridgeRequest = z.infer<typeof bridgeRequestSchema>;
 export type BridgeStreamFrame = z.infer<typeof bridgeStreamFrameSchema>;
