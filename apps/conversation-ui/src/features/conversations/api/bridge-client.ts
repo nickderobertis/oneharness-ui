@@ -143,8 +143,9 @@ async function watchHttp(
         if (new TextEncoder().encode(line).byteLength > maxBridgeStreamFrameBytes) {
           throw new Error("Local bridge sent an oversized live frame");
         }
-        // A blank line is the bridge's keep-alive between frames, not a frame.
-        if (line.trim() !== "") onFrame(bridgeStreamFrameSchema.parse(JSON.parse(line)));
+        // An empty line is the bridge's keep-alive between frames, not a frame;
+        // anything else, whitespace included, must parse as a contract frame.
+        if (line !== "") onFrame(bridgeStreamFrameSchema.parse(JSON.parse(line)));
         buffered = buffered.slice(newline + 1);
         newline = buffered.indexOf("\n");
       }

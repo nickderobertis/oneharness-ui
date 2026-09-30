@@ -130,6 +130,8 @@ describe("validated bridge client", () => {
     const requests: string[] = [];
     let body: readonly string[] = [
       `${JSON.stringify(OPENED_FRAME)}\n`,
+      // The bridge's keep-alive: an empty line between frames.
+      "\n",
       `${JSON.stringify({
         kind: "tool-event",
         tool: { index: 0, kind: "tool_call", name: "Bash" },
@@ -153,6 +155,15 @@ describe("validated bridge client", () => {
 
     // Anything the sidecar could not have produced stops the stream.
     body = ['{"kind":"future-frame"}\n'];
+    await expect(
+      watchBridge(
+        { kind: "watch", sessionId: "session-1" },
+        () => {},
+        new AbortController().signal,
+      ),
+    ).rejects.toThrow();
+    // Only the exact empty keep-alive is exempt; other blank lines are not frames.
+    body = [`${JSON.stringify(OPENED_FRAME)}\n`, " \t\n"];
     await expect(
       watchBridge(
         { kind: "watch", sessionId: "session-1" },
