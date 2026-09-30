@@ -1,6 +1,10 @@
 import { basename } from "node:path";
 import { e2eProject } from "@oneharness-ui/bridge/test/e2e-configuration.ts";
-import { seedE2eHistory } from "@oneharness-ui/bridge/test/e2e-history.ts";
+import {
+  seedE2eHistory,
+  seedNarratedE2eSession,
+  startInFlightE2eSession,
+} from "@oneharness-ui/bridge/test/e2e-history.ts";
 import {
   bridgeResponseSchema,
   conversationLabelMaxLength,
@@ -249,4 +253,79 @@ test("marks ineligible sessions and recovers from a recorded provider failure", 
     timeout: 15_000,
   });
   await expect(page.getByText("Completed", { exact: true }).last()).toBeVisible();
+});
+
+test("shows the agent's messages and reasoning apart from its tool calls", async ({ page }) => {
+  await seedNarratedE2eSession();
+  await page.goto("/");
+  await page.getByRole("button", { name: /narrated-session/i }).click();
+  await expect(page.getByRole("heading", { name: "narrated-session" })).toBeFocused();
+
+  const activity = page.getByRole("region", { name: "Agent activity" });
+  const message = activity.getByRole("group", { name: "Agent message" });
+  await expect(message).toContainText("I will look at the workspace first.");
+  await expect(message.getByText("workspace", { exact: true })).toHaveJSProperty(
+    "tagName",
+    "STRONG",
+  );
+  const reasoning = activity.getByRole("button", { name: "Reasoning" });
+  await expect(page.getByText("Check the working directory before answering.")).toBeHidden();
+  await reasoning.click();
+  await expect(activity.getByText("Check the working directory before answering.")).toBeVisible();
+
+  // Tool activity is still presented as before, and holds nothing but tools.
+  const tools = page.getByRole("region", { name: "Tool calls" });
+  await expect(tools.getByRole("button")).toHaveCount(1);
+  await tools.getByRole("button", { name: "Bash tool details" }).click();
+  await expect(page.getByLabel("Bash tool output")).toHaveText("/workspace/product");
+  await expect(tools).not.toContainText("I will look at the workspace first.");
+  await expect(tools).not.toContainText("Check the working directory before answering.");
+  await expect(activity.getByRole("button", { name: "Bash tool details" })).toHaveCount(0);
+  await expect(page.getByText("Narrated inspection complete")).toBeVisible();
+});
+
+test("shows a session whose run is still going as running, with its events so far", async ({
+  page,
+}) => {
+  const live = await startInFlightE2eSession();
+  try {
+    await page.goto("/");
+    const row = page.getByRole("button", { name: "Open conversation live-session" });
+    await expect(async () => {
+      await page.getByRole("button", { name: "Refresh conversations" }).click();
+      await expect(row).toContainText("Running", { timeout: 1_000 });
+    }).toPass({ timeout: 20_000 });
+    await row.click();
+    await expect(page.getByRole("heading", { name: "live-session" })).toBeFocused();
+    const main = page.getByRole("main");
+    await expect(main.getByText("Running", { exact: true })).toBeVisible();
+
+    const activity = page.getByRole("region", { name: "Agent activity" });
+    await expect(activity.getByRole("group", { name: "Agent message" })).toContainText(
+      "Inspecting the workspace now.",
+    );
+    await activity.getByRole("button", { name: "Reasoning" }).click();
+    await expect(activity.getByText("Plan the inspection.")).toBeVisible();
+    await expect(
+      page.getByRole("region", { name: "Tool calls" }).getByRole("button", {
+        name: "Bash tool details",
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Still running. Its final answer appears when the run finishes."),
+    ).toBeVisible();
+    await expect(page.getByRole("textbox", { name: "Continue this session" })).toHaveCount(0);
+
+    // When the run closes, the same view settles into the finished turn.
+    await live.release();
+    await expect(page.getByText("Live inspection finished")).toBeVisible({ timeout: 15_000 });
+    await expect(main.getByText("Completed", { exact: true })).toBeVisible();
+    await expect(page.getByText("Inspect while I watch")).toBeVisible();
+    await expect(activity.getByRole("group", { name: "Agent message" })).toContainText(
+      "Inspecting the workspace now.",
+    );
+    await expect(row).not.toContainText("Running");
+  } finally {
+    await live.release();
+  }
 });

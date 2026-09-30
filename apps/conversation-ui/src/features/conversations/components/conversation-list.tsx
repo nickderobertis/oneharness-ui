@@ -30,6 +30,7 @@ import {
 import { useInfiniteScroll } from "../hooks/use-infinite-scroll";
 import { useLabelEditor } from "../hooks/use-label-editor";
 import type { ConversationSummary } from "../presentational-types";
+import { StatusBadge } from "./status-badge";
 
 export function ConversationList({
   actions,
@@ -195,8 +196,9 @@ export function ConversationList({
                       type="button"
                       variant="ghost"
                     >
-                      <span className="flex min-w-0 items-center justify-between">
+                      <span className="flex min-w-0 items-center justify-between gap-2">
                         <strong className="truncate text-[13px]">{conversation.name}</strong>
+                        {conversation.running ? <StatusBadge state="running" /> : null}
                       </span>
                       <span
                         className="block truncate text-xs text-muted-foreground"

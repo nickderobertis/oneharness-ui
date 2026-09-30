@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import {
+  agentEventSchema,
   bridgeRequestSchema,
   bridgeResponseSchema,
   bridgeRoutes,
   bridgeStreamFrameSchema,
+  type ConversationTurn,
   conversationTurnSchema,
   toolEventSchema,
   usageSchema,
@@ -141,6 +143,51 @@ describe("IPC validation", () => {
       bridgeStreamFrameSchema.parse({ cursor: "not-a-cursor", kind: "turn", turn: {} }),
     ).toThrow();
     expect(() => bridgeStreamFrameSchema.parse({ kind: "future-frame" })).toThrow();
+  });
+
+  test("carries agent messages and reasoning apart from tools, omitted when a turn has none", () => {
+    const turn = {
+      assistant: "Done",
+      failureKind: null,
+      harness: "claude-code",
+      id: "session-1-0",
+      model: null,
+      reasoning: null,
+      status: "completed",
+      timestamp: "2026-07-15T10:00:00Z",
+      tools: [],
+      unknown: {},
+      usage: {},
+      user: "Inspect",
+    };
+    expect(conversationTurnSchema.parse(turn)).toEqual(turn);
+    expect(Object.hasOwn(conversationTurnSchema.parse(turn), "agentEvents")).toBe(false);
+    const narrated: ConversationTurn = {
+      ...turn,
+      agentEvents: [
+        { index: 0, kind: "reasoning", text: "Plan first." },
+        { index: 1, kind: "message", text: "Looking now." },
+      ],
+    };
+    expect(conversationTurnSchema.parse(narrated)).toEqual(narrated);
+    expect(
+      bridgeStreamFrameSchema.parse({
+        event: { index: 2, kind: "message", text: "Still going." },
+        kind: "agent-event",
+        turnId: "session-1-0",
+      }),
+    ).toMatchObject({ event: { kind: "message" }, turnId: "session-1-0" });
+    // Only the two narration kinds cross this field; anything else stays a tool event.
+    expect(agentEventSchema.safeParse({ index: 3, kind: "tool_call", text: "pwd" }).success).toBe(
+      false,
+    );
+    expect(
+      bridgeStreamFrameSchema.safeParse({
+        event: { index: 0, kind: "message", text: "x" },
+        kind: "agent-event",
+        turnId: "",
+      }).success,
+    ).toBe(false);
   });
 
   test("carries tool timing and correlation without inventing absent measurements", () => {

@@ -15,12 +15,14 @@ import {
   RunReportSchema,
 } from "@oneharness/sdk";
 import {
+  agentEventKindSchema,
   type BridgeRequest,
   type BridgeResponse,
   type BridgeStreamFrame,
   bridgeRequestSchema,
   bridgeResponseSchema,
   bridgeStreamFrameSchema,
+  type ConversationAgentEvent,
   type ConversationCursor,
   type ConversationPage,
   type ConversationSummary,
@@ -215,6 +217,30 @@ function toHistoryActionToolEvent(event: HistoryActionEvent): ConversationToolEv
   };
 }
 
+// oneharness records the agent's own text and reasoning as `message` and
+// `reasoning` events beside its tool activity. They are narration, never tool
+// calls, so they leave the tool list; every other kind, including one a later
+// oneharness adds, is still presented as a tool event.
+function toAgentEvent(event: HistoryActionEvent): ConversationAgentEvent | undefined {
+  const kind = agentEventKindSchema.safeParse(event.kind);
+  if (!kind.success) return undefined;
+  return { index: event.index, kind: kind.data, text: reportedText(event.output) ?? "" };
+}
+
+function splitEvents(events: readonly HistoryActionEvent[]): {
+  agentEvents: ConversationAgentEvent[];
+  tools: ConversationToolEvent[];
+} {
+  const agentEvents: ConversationAgentEvent[] = [];
+  const tools: ConversationToolEvent[] = [];
+  for (const event of events) {
+    const agentEvent = toAgentEvent(event);
+    if (agentEvent) agentEvents.push(agentEvent);
+    else tools.push(toHistoryActionToolEvent(event));
+  }
+  return { agentEvents, tools };
+}
+
 function reasoningFrom(record: HistoryRecord): string | null {
   const source = record as HistoryRecord & Record<string, unknown>;
   for (const key of ["reasoning", "thinking"] as const) {
@@ -229,7 +255,9 @@ function toTurn(record: HistoryRecord, index: number): ConversationTurn {
   const unknown = Object.fromEntries(
     Object.entries(record).filter(([key]) => !knownRecordKeys.has(key)),
   );
+  const { agentEvents, tools } = splitEvents(record.events ?? []);
   return {
+    ...(agentEvents.length > 0 ? { agentEvents } : {}),
     assistant: record.text ?? null,
     ...(record.duration_ms !== undefined ? { durationMs: record.duration_ms } : {}),
     failureKind: record.failure_kind ?? null,
@@ -246,7 +274,7 @@ function toTurn(record: HistoryRecord, index: number): ConversationTurn {
       ? { timeToFirstTokenMs: record.time_to_first_token_ms }
       : {}),
     ...(record.tool_ms !== undefined ? { toolMs: record.tool_ms } : {}),
-    tools: (record.events ?? []).map(toHistoryActionToolEvent),
+    tools,
     unknown,
     usage: {
       ...(record.usage.cache_read_tokens !== undefined
@@ -317,6 +345,45 @@ function toConversationPage(records: HistoryRecord[], requestedOffset = 0): Conv
   return conversation;
 }
 
+function runningConversationPage(summary: HistorySessionSummary): ConversationPage {
+  return {
+    canContinue: false,
+    harnesses: summary.harnesses,
+    ...(summary.labels && Object.keys(summary.labels).length > 0
+      ? { historyLabels: summary.labels }
+      : {}),
+    id: summary.id,
+    name: summary.name || summary.id,
+    nextTurnOffset: null,
+    project: summary.project,
+    startedAt: summary.started,
+    state: "running",
+    // Its turns arrive over the watch stream, which replays the session.
+    totalTurnCount: 0,
+    turns: [],
+  };
+}
+
+/// A turn whose run has written events but no closing record yet. Its prompt,
+/// text and usage live only in that record, so they stay empty until it lands
+/// and replaces this turn under the same id.
+function inFlightTurn(sessionId: string, index: number, harness: string): ConversationTurn {
+  return {
+    assistant: null,
+    failureKind: null,
+    harness,
+    id: `${sessionId}-${index}`,
+    model: null,
+    reasoning: null,
+    status: "running",
+    timestamp: new Date().toISOString(),
+    tools: [],
+    unknown: {},
+    usage: {},
+    user: "",
+  };
+}
+
 function toSummary(summary: HistorySessionSummary, labels: string[]): ConversationSummary {
   return {
     harnesses: summary.harnesses,
@@ -327,6 +394,7 @@ function toSummary(summary: HistorySessionSummary, labels: string[]): Conversati
     ...(labels.length > 0 ? { labels } : {}),
     name: summary.name,
     project: summary.project,
+    ...(summary.running ? { running: true } : {}),
     startedAt: summary.started,
     turnCount: summary.record_count,
   };
@@ -443,6 +511,25 @@ export class BridgeService {
     );
   }
 
+  /// Read a session through `history show`, or — when that cannot be read and
+  /// `history list` marks the session running — its running summary instead.
+  /// The released SDK rejects `history show`'s entry for a run with no closing
+  /// record, so a running session's turns come from `history watch` instead.
+  async #snapshot(
+    session: string,
+  ): Promise<
+    | { kind: "closed"; records: HistoryRecord[] }
+    | { kind: "running"; summary: HistorySessionSummary }
+  > {
+    try {
+      return { kind: "closed", records: await this.#history(session) };
+    } catch (error) {
+      const summary = (await invokeDiscovery(this.environment)).find(({ id }) => id === session);
+      if (summary?.running) return { kind: "running", summary };
+      throw error;
+    }
+  }
+
   async #list(cursor?: ConversationCursor): Promise<{
     conversations: ConversationSummary[];
     nextCursor: ConversationCursor | null;
@@ -528,7 +615,9 @@ export class BridgeService {
     let turnCount = 0;
     let cursor = request.after;
     try {
-      const existing = await this.#history(request.sessionId);
+      const snapshot = await this.#snapshot(request.sessionId);
+      const running = snapshot.kind === "running";
+      const existing = running ? [] : snapshot.records;
       for (const [index, record] of existing.entries()) {
         turnIndexes.set(record.history_id, index);
       }
@@ -545,6 +634,9 @@ export class BridgeService {
         ...(cursor ? { after: cursor } : {}),
         events: true,
         ...(this.environment.historyDir ? { historyDir: this.environment.historyDir } : {}),
+        // Following only this session makes every event line its own, so an
+        // in-flight run shows as a turn before its closing record exists.
+        ...(running ? { session: request.sessionId } : {}),
       });
       // Iterate by hand so closing this stream never waits on the upstream
       // watcher's own teardown; a caller that stops reading must return at once.
@@ -554,13 +646,28 @@ export class BridgeService {
           if (next.done) break;
           const envelope = HistoryStreamEnvelopeSchema.parse(next.value);
           if (envelope.type === "event") {
-            const frame = this.#toolEventFrame(request.sessionId, envelope.line, turnIndexes);
+            const { harness, run_id: runId } = envelope.line;
+            if (running && !turnIndexes.has(runId)) {
+              turnIndexes.set(runId, turnCount);
+              yield bridgeStreamFrameSchema.parse({
+                cursor: null,
+                kind: "turn",
+                turn: inFlightTurn(request.sessionId, turnCount, harness),
+              });
+              turnCount += 1;
+            }
+            const frame = this.#eventFrame(request.sessionId, envelope.line, turnIndexes);
             if (frame) yield frame;
-            else bufferPendingEvent(pendingEvents, envelope.line.run_id, envelope.line.event);
+            // An in-flight run's closing record replaces the turn its events
+            // built, so they are kept to rejoin that record when it lands.
+            if (!frame || running) bufferPendingEvent(pendingEvents, runId, envelope.line.event);
             continue;
           }
           const record = envelope.record;
-          const joined = pendingEvents.get(record.history_id) ?? [];
+          const recorded = new Set((record.events ?? []).map(({ index }) => index));
+          const joined = (pendingEvents.get(record.history_id) ?? []).filter(
+            ({ index }) => !recorded.has(index),
+          );
           pendingEvents.delete(record.history_id);
           if (record.session !== request.sessionId) continue;
           const index = turnIndexes.get(record.history_id) ?? turnCount;
@@ -592,18 +699,20 @@ export class BridgeService {
     }
   }
 
-  #toolEventFrame(
+  #eventFrame(
     sessionId: string,
     line: { event: ActionEvent; run_id: string },
     turnIndexes: ReadonlyMap<string, number>,
   ): BridgeStreamFrame | undefined {
     const index = turnIndexes.get(line.run_id);
     if (index === undefined) return undefined;
-    return bridgeStreamFrameSchema.parse({
-      kind: "tool-event",
-      tool: toHistoryActionToolEvent(line.event),
-      turnId: `${sessionId}-${index}`,
-    });
+    const turnId = `${sessionId}-${index}`;
+    const agentEvent = toAgentEvent(line.event);
+    return bridgeStreamFrameSchema.parse(
+      agentEvent
+        ? { event: agentEvent, kind: "agent-event", turnId }
+        : { kind: "tool-event", tool: toHistoryActionToolEvent(line.event), turnId },
+    );
   }
 
   async handle(input: unknown, presentedAuthorization: unknown): Promise<BridgeResponse> {
@@ -634,12 +743,13 @@ export class BridgeService {
           return { data: { ...(await this.#list(request.cursor)), kind: "list" }, ok: true };
         }
         if (request.kind === "get") {
+          const snapshot = await this.#snapshot(request.sessionId);
           return {
             data: {
-              conversation: toConversationPage(
-                await this.#history(request.sessionId),
-                request.turnOffset,
-              ),
+              conversation:
+                snapshot.kind === "running"
+                  ? runningConversationPage(snapshot.summary)
+                  : toConversationPage(snapshot.records, request.turnOffset),
               kind: "get",
             },
             ok: true,

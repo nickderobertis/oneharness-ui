@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { ConversationToolEvent, ConversationTurn } from "@oneharness-ui/ipc-contract";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { renderToStaticMarkup } from "react-dom/server";
 import { TurnCard } from "../src/features/conversations/components/turn-card";
@@ -49,6 +49,43 @@ describe("TurnCard tool invocations", () => {
     expect(screen.getByText("Judge")).toBeTruthy();
     expect(document.querySelector('img[src="https://example.test/judge.png"]')).toBeTruthy();
     expect(screen.queryByText("claude-code")).toBeNull();
+  });
+
+  test("shows the agent's messages and reasoning in recorded order, apart from its tool calls", async () => {
+    const user = userEvent.setup();
+    render(
+      <TurnCard
+        turn={{
+          ...turnWith([{ index: 1, input: { command: "pwd" }, kind: "tool_call", name: "Bash" }]),
+          agentEvents: [
+            { index: 2, kind: "message", text: "The repository is at **/repo**." },
+            { index: 0, kind: "reasoning", text: "Check the working directory first." },
+          ],
+        }}
+      />,
+    );
+    const activity = screen.getByRole("region", { name: "Agent activity" });
+    const reasoning = within(activity).getByRole("button", { name: "Reasoning" });
+    const message = within(activity).getByRole("group", { name: "Agent message" });
+    expect(
+      reasoning.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(message.querySelector("strong")?.textContent).toBe("/repo");
+    await user.click(reasoning);
+    expect(within(activity).getByText("Check the working directory first.")).toBeTruthy();
+    const tools = screen.getByRole("region", { name: "Tool calls" });
+    expect(within(tools).getAllByRole("button")).toHaveLength(1);
+    expect(within(tools).getByLabelText("Bash tool details")).toBeTruthy();
+    expect(within(activity).queryByLabelText("Bash tool details")).toBeNull();
+  });
+
+  test("says a running turn's prompt and answer are still to come", () => {
+    render(<TurnCard turn={{ ...turnWith([]), assistant: null, status: "running", user: "" }} />);
+    expect(screen.getByText("The prompt is recorded when this run finishes.")).toBeTruthy();
+    expect(screen.getByRole("status").textContent).toBe(
+      "Still running. Its final answer appears when the run finishes.",
+    );
+    expect(screen.queryByText("No assistant text was captured for this run.")).toBeNull();
   });
 
   test("pairs a call with its result by tool call id and expands both payloads", async () => {

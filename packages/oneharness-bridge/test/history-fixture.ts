@@ -1,10 +1,12 @@
-import { readFile, realpath } from "node:fs/promises";
-import { basename, extname, isAbsolute, relative, sep } from "node:path";
+import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { basename, extname, isAbsolute, relative, resolve, sep } from "node:path";
 import {
   type HistoryLine,
   HistoryLineSchema,
   type HistoryRecord,
   OneHarness,
+  type RunOptions,
   type RunReport,
 } from "@oneharness/sdk";
 
@@ -90,4 +92,53 @@ function historyLines(
   );
   lines.push(HistoryLineSchema.parse({ ...run, type: "run" }));
   return lines.map((line) => JSON.stringify(line)).join("\n");
+}
+
+export type HeldRun = {
+  /// Let the provider finish, then wait for the run to close. Safe to call twice.
+  release: () => Promise<void>;
+};
+
+/// Start a real streamed run through the packaged CLI whose provider holds after
+/// writing `before`, so history holds those events but no closing record until
+/// `release` lets it write `after` and exit. `options` must name the fixture
+/// provider through `bins`; only its hold and output are set here.
+export async function startHeldRun(
+  options: RunOptions,
+  { after, before, executable }: { after: string[]; before: string[]; executable?: string },
+): Promise<HeldRun> {
+  const holdDir = await mkdtemp(resolve(tmpdir(), "oneharness-ui-hold-"));
+  const releaseFile = resolve(holdDir, "provider-release");
+  const lines = (values: string[]) => (values.length ? `${values.join("\n")}\n` : "");
+  const run = (async () => {
+    for await (const _ of new OneHarness(executable ? { executable } : {}).runStream({
+      ...options,
+      env: {
+        MOCK_EXIT: "0",
+        MOCK_STDERR: "",
+        ...options.env,
+        MOCK_RELEASE_FILE: releaseFile,
+        MOCK_STDOUT: lines(before),
+        MOCK_STDOUT_AFTER_RELEASE: lines(after),
+      },
+    })) {
+      // Callers read the run through history, not through its own stream.
+    }
+  })();
+  // `release` rethrows a failed run; this only keeps it from going unhandled first.
+  run.catch(() => {});
+  let released: Promise<void> | undefined;
+  return {
+    release: () => {
+      released ??= (async () => {
+        try {
+          await writeFile(releaseFile, "");
+          await run;
+        } finally {
+          await rm(holdDir, { force: true, recursive: true });
+        }
+      })();
+      return released;
+    },
+  };
 }

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type {
+  ConversationAgentEvent as IpcConversationAgentEvent,
+  ConversationSummary as IpcConversationSummary,
   ConversationToolEvent as IpcConversationToolEvent,
   ConversationTurn as IpcConversationTurn,
 } from "@oneharness-ui/ipc-contract";
@@ -11,6 +13,8 @@ import {
 } from "@oneharness-ui/ipc-contract";
 import { conversationLabelLimits } from "@/features/conversations";
 import type {
+  ConversationAgentEvent,
+  ConversationSummary,
   ConversationToolEvent,
   ConversationTurn,
 } from "../src/features/conversations/presentational-types";
@@ -62,6 +66,26 @@ describe("presentational contract drift gates", () => {
     });
     expect(Object.hasOwn(unmeasured, "durationMs")).toBe(false);
     expect(Object.hasOwn(unmeasured, "status")).toBe(false);
+  });
+
+  test("hands the agent's messages, reasoning and running state to presentation unchanged", () => {
+    const agentEventTypesMatchExactly: ExactType<
+      ConversationAgentEvent,
+      IpcConversationAgentEvent
+    > = true;
+    const narrationFieldMatchesExactly: ExactType<
+      Pick<ConversationTurn, "agentEvents">,
+      Pick<IpcConversationTurn, "agentEvents">
+    > = true;
+    const runningFieldMatchesExactly: ExactType<
+      Pick<ConversationSummary, "running">,
+      Pick<IpcConversationSummary, "running">
+    > = true;
+    expect([
+      agentEventTypesMatchExactly,
+      narrationFieldMatchesExactly,
+      runningFieldMatchesExactly,
+    ]).toEqual([true, true, true]);
   });
 
   test("keeps the presentational turn aligned with every validated timing field", () => {
