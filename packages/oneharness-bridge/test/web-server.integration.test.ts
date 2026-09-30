@@ -5,7 +5,11 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, resolve } from "node:path";
 import { OneHarness } from "@oneharness/sdk";
-import { bridgeResponseSchema } from "@oneharness-ui/ipc-contract";
+import {
+  type BridgeStreamFrame,
+  bridgeResponseSchema,
+  bridgeStreamFrameSchema,
+} from "@oneharness-ui/ipc-contract";
 import { startWebServer, WATCH_KEEPALIVE_MS } from "../src/server.ts";
 import { startHeldRun } from "./history-fixture.ts";
 
@@ -245,10 +249,10 @@ describe("web UI over the real HTTP, SDK, CLI, provider, and history boundary", 
           buffered += decoder.decode(chunk.value, { stream: true });
         }
       };
-      const nextFrame = async (): Promise<{ kind: string; [key: string]: unknown }> => {
+      const nextFrame = async (): Promise<BridgeStreamFrame> => {
         for (;;) {
           const line = await nextLine();
-          if (line !== "") return JSON.parse(line);
+          if (line !== "") return bridgeStreamFrameSchema.parse(JSON.parse(line));
         }
       };
       expect(await nextFrame()).toMatchObject({ kind: "opened", sessionId });
