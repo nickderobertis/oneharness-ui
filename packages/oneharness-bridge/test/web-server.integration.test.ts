@@ -5,7 +5,8 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { isAbsolute, resolve } from "node:path";
 import { OneHarness } from "@oneharness/sdk";
-import { startWebServer } from "../src/server.ts";
+import { startWebServer, WATCH_KEEPALIVE_MS } from "../src/server.ts";
+import { startHeldRun } from "./history-fixture.ts";
 
 const repository = resolve(import.meta.dir, "../../..");
 const cliOverride = process.env.ONEHARNESS_UI_TEST_CLI_BIN;
@@ -171,6 +172,101 @@ describe("web UI over the real HTTP, SDK, CLI, provider, and history boundary", 
       { kind: "opened", sessionId, totalTurnCount: 1 },
     );
     await reader.cancel();
+  }, 60_000);
+
+  test("keeps a running session's watch moving with blank keep-alive lines while it is quiet", async () => {
+    const historyDir = resolve(fixtureRoot, "history");
+    await mkdir(historyDir);
+    const live = await startHeldRun(
+      {
+        bins: { "claude-code": provider },
+        harnesses: ["claude-code"],
+        history: true,
+        historyDir,
+        historyName: "quiet-session",
+        mode: "bypass",
+        prompt: "Think for a while",
+      },
+      {
+        after: ['{"type":"result","result":"Finally done","session_id":"web-quiet-native"}'],
+        before: [
+          '{"type":"assistant","message":{"content":[{"type":"text","text":"Thinking it over."}]}}',
+        ],
+        ...(cliOverride ? { executable: cliOverride } : {}),
+      },
+    );
+    try {
+      process.env.ONEHARNESS_UI_HISTORY_DIR = historyDir;
+      if (cliOverride) process.env.ONEHARNESS_BIN = cliOverride;
+      server = await startWebServer({
+        accessToken,
+        port: 0,
+        staticDirectory: resolve(fixtureRoot, "ui"),
+      });
+      const post = async (path: string, body: unknown) =>
+        await fetch(`${endpoint()}${path}`, {
+          body: JSON.stringify(body),
+          headers: {
+            Authorization: accessHeader,
+            "Content-Type": "application/json",
+            Origin: endpoint(),
+          },
+          method: "POST",
+        });
+      let sessionId = "";
+      for (const deadline = Date.now() + 20_000; !sessionId && Date.now() < deadline; ) {
+        const listed = (await (await post("/invoke", { kind: "list" })).json()) as {
+          data?: { conversations?: Array<{ id: string; running?: boolean }> };
+        };
+        sessionId = listed.data?.conversations?.find(({ running }) => running)?.id ?? "";
+        if (!sessionId) await Bun.sleep(50);
+      }
+      expect(sessionId).not.toBe("");
+
+      const stream = await post("/watch", { kind: "watch", sessionId });
+      const reader = stream.body?.getReader();
+      if (!reader) throw new Error("watch response carried no body");
+      const decoder = new TextDecoder();
+      let buffered = "";
+      const nextLine = async (): Promise<string> => {
+        for (;;) {
+          const newline = buffered.indexOf("\n");
+          if (newline >= 0) {
+            const line = buffered.slice(0, newline);
+            buffered = buffered.slice(newline + 1);
+            return line;
+          }
+          const chunk = await reader.read();
+          if (chunk.done) throw new Error("the watch stream closed while the run was quiet");
+          buffered += decoder.decode(chunk.value, { stream: true });
+        }
+      };
+      const nextFrame = async (): Promise<{ kind: string; [key: string]: unknown }> => {
+        for (;;) {
+          const line = await nextLine();
+          if (line !== "") return JSON.parse(line);
+        }
+      };
+      expect(await nextFrame()).toMatchObject({ kind: "opened", sessionId });
+      expect(await nextFrame()).toMatchObject({ kind: "turn", turn: { status: "running" } });
+      expect(await nextFrame()).toMatchObject({
+        event: { kind: "message", text: "Thinking it over." },
+        kind: "agent-event",
+      });
+      // Nothing happens while the run holds, yet the stream keeps writing.
+      const quietSince = Date.now();
+      expect(await nextLine()).toBe("");
+      expect(Date.now() - quietSince).toBeLessThan(WATCH_KEEPALIVE_MS * 3);
+      expect(await nextLine()).toBe("");
+      await live.release();
+      expect(await nextFrame()).toMatchObject({
+        kind: "turn",
+        turn: { assistant: "Finally done", status: "completed" },
+      });
+      await reader.cancel();
+    } finally {
+      await live.release();
+    }
   }, 60_000);
 
   test("rejects cross-origin and invalid contract input", async () => {

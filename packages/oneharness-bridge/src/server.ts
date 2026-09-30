@@ -2,6 +2,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import { realpath, stat } from "node:fs/promises";
 import { extname, isAbsolute, relative, resolve, sep } from "node:path";
 import {
+  type BridgeStreamFrame,
   bridgeResponseSchema,
   bridgeRoutes,
   bridgeStreamFrameSchema,
@@ -53,6 +54,13 @@ const CONTENT_TYPES: Readonly<Record<string, string>> = {
 
 class RequestTooLargeError extends Error {}
 
+// A watched run can stay quiet for as long as its model thinks. A blank line
+// this often keeps such a stream moving: some clients (WebKit among them) hold
+// the tail of a response until more bytes follow it, and Bun closes a response
+// that sends nothing for ten seconds.
+export const WATCH_KEEPALIVE_MS = 1_000;
+const KEEPALIVE = Symbol("keepalive");
+
 /// Stream one conversation as newline-delimited contract frames. The response
 /// body ends as soon as the reader cancels, so a closed tab or a navigated-away
 /// view stops the sidecar's upstream watcher too.
@@ -65,13 +73,26 @@ function watchResponse(
 ): Response {
   const frames = service.watch(input, presentedAuthorization, signal);
   const encoder = new TextEncoder();
+  let pending: Promise<IteratorResult<BridgeStreamFrame>> | undefined;
   return new Response(
     new ReadableStream<Uint8Array>({
       async cancel() {
         await frames.return(undefined);
       },
       async pull(controller) {
-        const next = await frames.next();
+        pending ??= frames.next();
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        const next = await Promise.race([
+          pending,
+          new Promise<typeof KEEPALIVE>((wake) => {
+            timer = setTimeout(() => wake(KEEPALIVE), WATCH_KEEPALIVE_MS);
+          }),
+        ]).finally(() => clearTimeout(timer));
+        if (next === KEEPALIVE) {
+          controller.enqueue(encoder.encode("\n"));
+          return;
+        }
+        pending = undefined;
         if (next.done) {
           controller.close();
           return;

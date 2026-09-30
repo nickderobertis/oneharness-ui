@@ -4,18 +4,23 @@
 
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
 
 // llmlint: ignore-block[boundary_inputs_validated, invalid_states_unrepresentable, no_panics_on_recoverable_errors] Full-tree judges can cite the superseded fixture commit at these line numbers; the current boundary functions below validate and propagate every value.
 const MAX_ARGUMENTS: usize = 256;
 const MAX_ARGUMENT_BYTES: usize = 32_768;
 const MAX_ARGUMENT_TOTAL_BYTES: usize = 1024 * 1024;
 const MAX_STREAM_BYTES: usize = 8 * 1024 * 1024;
+const RELEASE_FILE_NAME: &str = "provider-release";
+const RELEASE_POLL: Duration = Duration::from_millis(25);
+const RELEASE_TIMEOUT: Duration = Duration::from_secs(120);
 
 #[derive(Clone, Copy)]
 enum MockEnvironment {
     Exit,
     Stderr,
     Stdout,
+    StdoutAfterRelease,
 }
 
 impl MockEnvironment {
@@ -24,13 +29,14 @@ impl MockEnvironment {
             Self::Exit => "MOCK_EXIT",
             Self::Stderr => "MOCK_STDERR",
             Self::Stdout => "MOCK_STDOUT",
+            Self::StdoutAfterRelease => "MOCK_STDOUT_AFTER_RELEASE",
         }
     }
 
     fn limit(self) -> usize {
         match self {
             Self::Exit => 3,
-            Self::Stderr | Self::Stdout => MAX_STREAM_BYTES,
+            Self::Stderr | Self::Stdout | Self::StdoutAfterRelease => MAX_STREAM_BYTES,
         }
     }
 }
@@ -134,6 +140,37 @@ fn validate_argv_file(input: &Path) -> io::Result<PathBuf> {
     Ok(file)
 }
 
+/// Accept only a bounded absolute path to a file named `provider-release`, so
+/// the hold seam can only ever wait on a file a test created for that purpose.
+fn validate_release_file(input: &Path) -> io::Result<PathBuf> {
+    if !input.is_absolute()
+        || input.as_os_str().len() > 4096
+        || input.file_name().and_then(|name| name.to_str()) != Some(RELEASE_FILE_NAME)
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "MOCK_RELEASE_FILE must be a bounded absolute path to a provider-release file",
+        ));
+    }
+    Ok(input.to_path_buf())
+}
+
+/// Keep the run in flight until the test releases it, so oneharness has written
+/// the events so far but not the run's closing record.
+fn wait_for_release(file: &Path) -> io::Result<()> {
+    let started = Instant::now();
+    while !file.exists() {
+        if started.elapsed() > RELEASE_TIMEOUT {
+            return Err(io::Error::new(
+                io::ErrorKind::TimedOut,
+                "MOCK_RELEASE_FILE was not created within the fixture's hold limit",
+            ));
+        }
+        std::thread::sleep(RELEASE_POLL);
+    }
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let argv = provider_arguments()?;
     if let Some(path) = std::env::var_os("MOCK_ARGV_FILE") {
@@ -148,6 +185,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .unwrap_or_else(|| "{\"result\":\"mock ok\"}".to_string());
     write!(std::io::stdout(), "{stdout}")?;
     std::io::stdout().flush()?;
+    if let Some(path) = std::env::var_os("MOCK_RELEASE_FILE") {
+        wait_for_release(&validate_release_file(Path::new(&path))?)?;
+        if let Some(rest) = optional_environment(MockEnvironment::StdoutAfterRelease)? {
+            write!(std::io::stdout(), "{rest}")?;
+            std::io::stdout().flush()?;
+        }
+    }
 
     let code = FixtureExitCode::from_environment(optional_environment(MockEnvironment::Exit)?)?;
     std::process::exit(code.process_code());

@@ -189,6 +189,41 @@ function Usage({ usage }: { usage: Turn["usage"] }) {
   );
 }
 
+/** The agent's own messages and reasoning, in recorded order, kept apart from its tool calls. */
+function AgentActivity({ events }: { events: NonNullable<Turn["agentEvents"]> }) {
+  const ordered = [...events].sort((left, right) => left.index - right.index);
+  return (
+    <section aria-label="Agent activity" className="my-3 space-y-2">
+      {ordered.map((event) =>
+        event.kind === "reasoning" ? (
+          <Accordion collapsible key={`reasoning-${event.index}`} type="single">
+            <AccordionItem
+              className="rounded-[10px] border border-dashed bg-card px-3"
+              value={`reasoning-${event.index}`}
+            >
+              <AccordionTrigger className="py-1.5 text-xs text-muted-foreground">
+                Reasoning
+              </AccordionTrigger>
+              <AccordionContent className="whitespace-pre-wrap text-[13px] leading-relaxed text-muted-foreground">
+                {event.text}
+              </AccordionContent>
+            </AccordionItem>
+          </Accordion>
+        ) : (
+          <div
+            aria-label="Agent message"
+            className="border-l-2 border-primary pl-3"
+            key={`message-${event.index}`}
+            role="group"
+          >
+            <MessageResponse label="Agent message">{event.text}</MessageResponse>
+          </div>
+        ),
+      )}
+    </section>
+  );
+}
+
 export interface TurnAuthor {
   avatar?: string;
   label: string;
@@ -197,6 +232,7 @@ export interface TurnAuthor {
 export function TurnCard({ author, turn }: { author?: TurnAuthor; turn: Turn }) {
   const hasUnknown = Object.keys(turn.unknown).length > 0;
   const invocations = pairToolEvents(turn.tools);
+  const inFlight = turn.status === "running";
   return (
     <article
       aria-label={`Turn ${turn.id} from ${turn.harness}`}
@@ -205,7 +241,13 @@ export function TurnCard({ author, turn }: { author?: TurnAuthor; turn: Turn }) 
       <Message from="user">
         <MessageContent className="mb-8 ml-auto max-w-[min(680px,88%)] rounded-[22px_22px_5px_22px] border bg-popover px-5 py-4.5">
           <div className="text-[10px] font-bold uppercase tracking-[.08em] text-subtle">You</div>
-          <MessageResponse label="User message">{turn.user}</MessageResponse>
+          {inFlight && !turn.user ? (
+            <p className="text-[13px] italic text-muted-foreground">
+              The prompt is recorded when this run finishes.
+            </p>
+          ) : (
+            <MessageResponse label="User message">{turn.user}</MessageResponse>
+          )}
         </MessageContent>
       </Message>
       <Message from="assistant">
@@ -236,6 +278,7 @@ export function TurnCard({ author, turn }: { author?: TurnAuthor; turn: Turn }) 
               </AccordionItem>
             </Accordion>
           ) : null}
+          {turn.agentEvents?.length ? <AgentActivity events={turn.agentEvents} /> : null}
           {invocations.length > 0 ? (
             <section aria-label="Tool calls" className="my-3">
               <Accordion className="space-y-1" type="multiple">
@@ -247,6 +290,10 @@ export function TurnCard({ author, turn }: { author?: TurnAuthor; turn: Turn }) 
           ) : null}
           {turn.assistant ? (
             <MessageResponse label="Assistant message">{turn.assistant}</MessageResponse>
+          ) : inFlight ? (
+            <p className="text-[13px] italic text-muted-foreground" role="status">
+              Still running. Its final answer appears when the run finishes.
+            </p>
           ) : (
             <p className="text-[13px] italic text-muted-foreground">
               No assistant text was captured for this run.

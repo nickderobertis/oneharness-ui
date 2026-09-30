@@ -84,7 +84,18 @@ export const toolEventSchema = z.object({
   toolCallId: z.string().max(256).nullable().optional(),
 });
 
+// The agent's own text and reasoning, recorded as finished items between its
+// tool calls. They are narration rather than tool activity, so they travel
+// apart from `tools`; `index` is the run-wide position shared with tool events.
+export const agentEventKinds = ["message", "reasoning"] as const;
+export const agentEventSchema = z.object({
+  index: z.number().int().nonnegative(),
+  kind: z.enum(agentEventKinds),
+  text: z.string(),
+});
+
 export const conversationTurnSchema = z.object({
+  agentEvents: z.array(agentEventSchema).optional(),
   assistant: z.string().nullable(),
   durationMs: z.number().nonnegative().nullable().optional(),
   failureKind: z.string().nullable(),
@@ -134,6 +145,8 @@ export const conversationSummarySchema = conversationSchema
   })
   .extend({
     labels: conversationLabelsSchema.optional(),
+    // A run in this session has recorded events but no closing record yet.
+    running: z.literal(true).optional(),
     turnCount: z.number().int().nonnegative(),
   });
 
@@ -202,8 +215,9 @@ export const bridgeStreamFrameSchema = z.discriminatedUnion("kind", [
     sessionId: sessionIdSchema,
     totalTurnCount: z.number().int().nonnegative(),
   }),
+  // A turn still in flight has no closing record to resume after yet.
   z.object({
-    cursor: historyCursorSchema,
+    cursor: historyCursorSchema.nullable(),
     kind: z.literal("turn"),
     turn: conversationTurnSchema,
   }),
@@ -212,9 +226,16 @@ export const bridgeStreamFrameSchema = z.discriminatedUnion("kind", [
     tool: toolEventSchema,
     turnId: z.string().min(1),
   }),
+  z.object({
+    event: agentEventSchema,
+    kind: z.literal("agent-event"),
+    turnId: z.string().min(1),
+  }),
   z.object({ error: bridgeErrorSchema, kind: z.literal("error") }),
 ]);
 
+export type AgentEventKind = (typeof agentEventKinds)[number];
+export type ConversationAgentEvent = z.infer<typeof agentEventSchema>;
 export type BridgeRequest = z.infer<typeof bridgeRequestSchema>;
 export type BridgeStreamFrame = z.infer<typeof bridgeStreamFrameSchema>;
 export type BridgeWatchRequest = Extract<BridgeRequest, { kind: "watch" }>;

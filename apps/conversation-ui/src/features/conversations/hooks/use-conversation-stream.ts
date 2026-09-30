@@ -6,7 +6,7 @@ import type {
   ConversationTurn,
 } from "@oneharness-ui/ipc-contract";
 import { type InfiniteData, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { BridgeError, watchBridge } from "../api/bridge-client";
 import { conversationKeys } from "./use-conversations";
 
@@ -56,6 +56,30 @@ function withToolEvent(
   };
 }
 
+function withAgentEvent(
+  current: ConversationCache | undefined,
+  turnId: string,
+  event: NonNullable<ConversationTurn["agentEvents"]>[number],
+) {
+  if (!current) return current;
+  return {
+    ...current,
+    pages: current.pages.map((page) => ({
+      ...page,
+      turns: page.turns.map((turn) => {
+        const known = turn.agentEvents ?? [];
+        return turn.id === turnId && !known.some(({ index }) => index === event.index)
+          ? { ...turn, agentEvents: [...known, event] }
+          : turn;
+      }),
+    })),
+  };
+}
+
+function isRunning(current: ConversationCache | undefined): boolean {
+  return current?.pages[0]?.state === "running";
+}
+
 /// Follow the selected conversation while it is on screen. Frames land in the
 /// same cache the paged reader uses, so the view simply re-renders as its turns
 /// and tool events grow.
@@ -64,9 +88,18 @@ export function useConversationStream(sessionId: string | null, enabled: boolean
   const client = useQueryClient();
   const [live, setLive] = useState(false);
   const [error, setError] = useState<Error | null>(null);
+  // Frames only extend a conversation already in the cache, so the watch opens
+  // once the first read has landed. A running session's turns arrive only as
+  // the watch's replay, which would otherwise race that read and be dropped.
+  const loaded = useSyncExternalStore(
+    useCallback((notify: () => void) => client.getQueryCache().subscribe(notify), [client]),
+    () =>
+      sessionId !== null && client.getQueryData(conversationKeys.detail(sessionId)) !== undefined,
+    () => false,
+  );
 
   useEffect(() => {
-    if (!sessionId || !enabled) return;
+    if (!sessionId || !enabled || !loaded) return;
     const controller = new AbortController();
     const key = conversationKeys.detail(sessionId);
     const fallBackToPolling = (cause: unknown) => {
@@ -90,7 +123,20 @@ export function useConversationStream(sessionId: string | null, enabled: boolean
         return;
       }
       if (frame.kind === "turn") {
+        const wasRunning = isRunning(client.getQueryData<ConversationCache>(key));
         client.setQueryData<ConversationCache>(key, (current) => withTurn(current, frame.turn));
+        // A running session settles when its in-flight run closes: re-read it
+        // and the list so both drop the running state oneharness no longer reports.
+        if (wasRunning && frame.turn.status !== "running") {
+          void client.invalidateQueries({ exact: true, queryKey: key });
+          void client.invalidateQueries({ exact: true, queryKey: conversationKeys.all });
+        }
+        return;
+      }
+      if (frame.kind === "agent-event") {
+        client.setQueryData<ConversationCache>(key, (current) =>
+          withAgentEvent(current, frame.turnId, frame.event),
+        );
         return;
       }
       client.setQueryData<ConversationCache>(key, (current) =>
@@ -107,7 +153,7 @@ export function useConversationStream(sessionId: string | null, enabled: boolean
       controller.abort();
       setLive(false);
     };
-  }, [client, enabled, sessionId]);
+  }, [client, enabled, loaded, sessionId]);
 
   return { error, live };
 }

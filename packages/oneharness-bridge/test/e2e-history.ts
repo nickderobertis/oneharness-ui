@@ -3,6 +3,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { OneHarness } from "@oneharness/sdk";
 import { e2eProject } from "./e2e-configuration.ts";
+import { type HeldRun, startHeldRun } from "./history-fixture.ts";
 
 // Resolved from the module URL rather than a Bun-only global: the e2e web
 // server loads this under Bun and the browser journeys load it under the
@@ -109,5 +110,54 @@ export async function seedE2eHistory({
     prompt: "The provider will fail",
     stderr: "rate limit exceeded",
     stdout: '{"result":"","session_id":"e2e-native-failure"}',
+  });
+}
+
+function providerRun(name: string, prompt: string, env: Record<string, string>) {
+  return {
+    bins: { [e2eProviderHarness]: e2eProviderBin },
+    cwd: e2eProject,
+    env: { MOCK_EXIT: "0", MOCK_STDERR: "", ...env },
+    events: true,
+    harnesses: [e2eProviderHarness],
+    history: true,
+    historyDir: e2eHistoryDir,
+    historyName: name,
+    mode: "bypass" as const,
+    prompt,
+  };
+}
+
+/// Record a finished run whose agent reasoned and wrote to the user between
+/// its tool calls. A journey adds it on its own so the shared baseline, which
+/// the visual captures also read, stays as it is.
+export async function seedNarratedE2eSession(): Promise<void> {
+  await new OneHarness().run(
+    providerRun("narrated-session", "Narrate the inspection", {
+      MOCK_STDOUT: [
+        '{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"Check the working directory before answering."}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"I will look at the **workspace** first."}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"pwd"}}]}}',
+        '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"/workspace/product"}]}}',
+        '{"type":"result","result":"Narrated inspection complete","session_id":"e2e-native-narrated"}',
+      ].join("\n"),
+    }),
+  );
+}
+
+/// Start a real streamed run whose provider holds after its first events, so
+/// the session is on disk with those events but no closing record until the
+/// journey calls `release`, which then waits for the run to finish.
+export async function startInFlightE2eSession(): Promise<HeldRun> {
+  return await startHeldRun(providerRun("live-session", "Inspect while I watch", {}), {
+    after: [
+      '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"/workspace/product"}]}}',
+      '{"type":"result","result":"Live inspection finished","session_id":"e2e-native-live"}',
+    ],
+    before: [
+      '{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"Plan the inspection."}]}}',
+      '{"type":"assistant","message":{"content":[{"type":"text","text":"Inspecting the workspace now."}]}}',
+      '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"pwd"}}]}}',
+    ],
   });
 }

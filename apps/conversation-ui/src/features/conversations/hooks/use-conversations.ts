@@ -64,6 +64,7 @@ export function useConversationList() {
 }
 
 export function useConversation(sessionId: string | null, refetchInterval: number | false = false) {
+  const client = useQueryClient();
   return useInfiniteQuery<
     ConversationPage,
     Error,
@@ -85,7 +86,16 @@ export function useConversation(sessionId: string | null, refetchInterval: numbe
         }),
       );
       if (data.kind !== "get") throw new Error("Local bridge returned the wrong response");
-      return data.conversation;
+      const { conversation } = data;
+      if (conversation.state !== "running" || conversation.turns.length > 0) return conversation;
+      // A running session's turns arrive only over the live stream, so a
+      // re-read keeps the ones already shown rather than blanking them.
+      const streamed = client
+        .getQueryData<InfiniteData<ConversationPage, number>>(conversationKeys.detail(sessionId))
+        ?.pages.flatMap((page) => page.turns);
+      return streamed?.length
+        ? { ...conversation, totalTurnCount: streamed.length, turns: streamed }
+        : conversation;
     },
     queryKey: conversationKeys.detail(sessionId ?? "none"),
     select: (data): ConversationData => {

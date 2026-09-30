@@ -25,7 +25,15 @@ export interface ConversationToolEvent {
   toolCallId?: string | null | undefined;
 }
 
+/** The agent's own text (`message`) or reasoning, recorded between its tool calls. */
+export interface ConversationAgentEvent {
+  index: number;
+  kind: "message" | "reasoning";
+  text: string;
+}
+
 export interface ConversationTurn {
+  agentEvents?: ConversationAgentEvent[] | undefined;
   assistant: string | null;
   durationMs?: number | null | undefined;
   failureKind: string | null;
@@ -65,6 +73,7 @@ export interface ConversationSummary {
   labels?: string[] | undefined;
   name: string;
   project: string;
+  running?: true | undefined;
   startedAt: string;
   turnCount: number;
 }

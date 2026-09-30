@@ -10,9 +10,10 @@ import {
   RunOptionsSchema,
   type RunReport,
 } from "@oneharness/sdk";
+import type { BridgeStreamFrame, ConversationSummary } from "@oneharness-ui/ipc-contract";
 import { BridgeService, MAX_CONVERSATION_PAGE_BYTES } from "../src/service.ts";
 import { FUTURE_RECORD_PATCH_ENV } from "./fixtures/future-record-contract.ts";
-import { readFixtureHistoryRecord } from "./history-fixture.ts";
+import { readFixtureHistoryRecord, startHeldRun } from "./history-fixture.ts";
 
 const repository = resolve(import.meta.dir, "../../..");
 const cliOverride = process.env.ONEHARNESS_UI_TEST_CLI_BIN;
@@ -319,6 +320,185 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       toolCallId: "t1",
     });
     expect(Object.hasOwn(tools?.[1] ?? {}, "timingSource")).toBe(false);
+  });
+
+  test("presents the agent's messages and reasoning as narration, never as tool calls", async () => {
+    const report = await seed(
+      "narrated-session",
+      [
+        '{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"Check the working directory first."}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"I will look at the repository."}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"pwd"}}]}}',
+        '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"/repo"}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"The repository is at /repo."}]}}',
+        '{"type":"result","result":"Repository inspected","session_id":"native-narrated"}',
+      ].join("\n"),
+    );
+    const { historyFile } = await readFixtureHistoryRecord(historyDir, report);
+    const sessionId = basename(historyFile, extname(historyFile));
+
+    const selected = await service().handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
+    const turn =
+      selected.ok && selected.data.kind === "get" ? selected.data.conversation.turns[0] : undefined;
+    // The recorded order is kept: `index` counts every kind across the run.
+    expect(turn?.agentEvents).toEqual([
+      { index: 0, kind: "reasoning", text: "Check the working directory first." },
+      { index: 1, kind: "message", text: "I will look at the repository." },
+      { index: 4, kind: "message", text: "The repository is at /repo." },
+    ]);
+    // Tool activity is presented exactly as before, and nothing else joins it.
+    expect(turn?.tools.map(({ index, kind, name }) => ({ index, kind, name }))).toEqual([
+      { index: 2, kind: "tool_call", name: "Bash" },
+      { index: 3, kind: "tool_result", name: null },
+    ]);
+    expect(turn?.tools[0]).toMatchObject({
+      input: { command: "pwd" },
+      status: "completed",
+      timingSource: "stdout_observed",
+      toolCallId: "t1",
+    });
+    expect(turn?.tools[1]).toMatchObject({ output: "/repo", toolCallId: "t1" });
+    expect(turn).toMatchObject({ assistant: "Repository inspected", status: "completed" });
+
+    // A run that recorded no narration omits the field rather than sending an empty list.
+    const quiet = await seed("quiet-session", '{"result":"Nothing to narrate","session_id":"q"}');
+    const quietId = basename(quiet.history_file ?? "", ".jsonl");
+    const quietPage = await service().handle(
+      { kind: "get", sessionId: quietId },
+      TEST_AUTHORIZATION,
+    );
+    expect(
+      quietPage.ok && quietPage.data.kind === "get"
+        ? Object.hasOwn(quietPage.data.conversation.turns[0] ?? {}, "agentEvents")
+        : true,
+    ).toBe(false);
+  });
+
+  test("shows a session whose first run is still going as running, with its events so far", async () => {
+    const controller = new AbortController();
+    // A real streamed run, held by the provider after its first events, so the
+    // packaged CLI has written those events but not the run's closing record.
+    const live = await startHeldRun(
+      {
+        bins: { "claude-code": provider },
+        env: { ONEHARNESS_HISTORY_LABELS: "{}" },
+        harnesses: ["claude-code"],
+        history: true,
+        historyDir,
+        historyName: "live-session",
+        mode: "bypass",
+        prompt: "Inspect while I watch",
+      },
+      {
+        after: [
+          '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"/repo"}]}}',
+          '{"type":"result","result":"Inspection finished","session_id":"native-live"}',
+        ],
+        before: [
+          '{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"Plan the inspection."}]}}',
+          '{"type":"assistant","message":{"content":[{"type":"text","text":"Inspecting now."}]}}',
+          '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"pwd"}}]}}',
+        ],
+        ...(cliOverride ? { executable: cliOverride } : {}),
+      },
+    );
+    try {
+      let summary: ConversationSummary | undefined;
+      for (const deadline = Date.now() + 20_000; Date.now() < deadline; ) {
+        const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
+        summary =
+          listed.ok && listed.data.kind === "list" ? listed.data.conversations[0] : undefined;
+        if (summary?.running) break;
+        await new Promise((wake) => setTimeout(wake, 50));
+      }
+      expect(summary).toMatchObject({ name: "live-session", running: true, turnCount: 0 });
+      const sessionId = summary?.id ?? "";
+
+      const selected = await service().handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
+      expect(
+        selected.ok && selected.data.kind === "get" && selected.data.conversation,
+      ).toMatchObject({ canContinue: false, id: sessionId, state: "running", turns: [] });
+
+      const frames: BridgeStreamFrame[] = [];
+      const watch = service().watch(
+        { kind: "watch", sessionId },
+        TEST_AUTHORIZATION,
+        controller.signal,
+      );
+      const next = async (until: (frame: BridgeStreamFrame) => boolean) => {
+        for (;;) {
+          const { done, value } = await watch.next();
+          if (done) throw new Error(`watch ended early after ${JSON.stringify(frames)}`);
+          frames.push(value);
+          if (until(value)) return;
+        }
+      };
+      await next((frame) => frame.kind === "tool-event");
+      const turnId = `${sessionId}-0`;
+      expect(frames).toEqual([
+        { cursor: null, kind: "opened", sessionId, totalTurnCount: 0 },
+        {
+          cursor: null,
+          kind: "turn",
+          turn: expect.objectContaining({ id: turnId, status: "running", tools: [] }),
+        },
+        {
+          event: { index: 0, kind: "reasoning", text: "Plan the inspection." },
+          kind: "agent-event",
+          turnId,
+        },
+        {
+          event: { index: 1, kind: "message", text: "Inspecting now." },
+          kind: "agent-event",
+          turnId,
+        },
+        {
+          kind: "tool-event",
+          tool: expect.objectContaining({ index: 2, kind: "tool_call", name: "Bash" }),
+          turnId,
+        },
+      ]);
+
+      await live.release();
+      await next((frame) => frame.kind === "turn" && frame.turn.status !== "running");
+      const closed = frames.at(-1);
+      // The closing record keeps every event the in-flight turn already showed.
+      expect(
+        closed?.kind === "turn"
+          ? closed.turn.tools.map(({ index, kind }) => ({ index, kind }))
+          : [],
+      ).toEqual([
+        { index: 2, kind: "tool_call" },
+        { index: 3, kind: "tool_result" },
+      ]);
+      expect(closed?.kind === "turn" ? closed.turn : undefined).toMatchObject({
+        agentEvents: [
+          { index: 0, kind: "reasoning" },
+          { index: 1, kind: "message" },
+        ],
+        assistant: "Inspection finished",
+        id: turnId,
+        status: "completed",
+        user: "Inspect while I watch",
+      });
+      const settled = await service().handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
+      expect(settled.ok && settled.data.kind === "get" && settled.data.conversation).toMatchObject({
+        state: "completed",
+        turns: [{ id: turnId, status: "completed" }],
+      });
+    } finally {
+      controller.abort();
+      await live.release();
+    }
+  });
+
+  test("still refuses a session that is neither readable nor running", async () => {
+    await seed("present-session", '{"result":"Here","session_id":"present"}');
+    const result = await service().handle(
+      { kind: "get", sessionId: "absent-session-20260101T000000Z-1" },
+      TEST_AUTHORIZATION,
+    );
+    expect(result.ok).toBe(false);
   });
 
   test("continues a labeled session and returns the new history selection", async () => {

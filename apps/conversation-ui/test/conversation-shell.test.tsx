@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import type { Conversation, ConversationSummary } from "@oneharness-ui/ipc-contract";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ConversationShell } from "../src/features/conversations/components/conversation-shell";
 
@@ -803,6 +803,134 @@ describe("ConversationShell", () => {
     expect(await screen.findByText("The retry now preserves the path, verified.")).toBeTruthy();
     expect(screen.getAllByRole("article")).toHaveLength(2);
     expect(screen.getByRole("status", { name: "All 2 turns loaded" })).toBeTruthy();
+  }, 30_000);
+
+  test("shows a running session with its events so far, then settles when its run closes", async () => {
+    window.history.replaceState(null, "", "/?session=session-live");
+    let live: WatchStream | undefined;
+    let settled = false;
+    const running = {
+      ...summary,
+      id: "session-live",
+      name: "live-session",
+      running: true as const,
+    };
+    const finished = {
+      ...conversation,
+      id: "session-live",
+      name: "live-session",
+      state: "completed",
+      turns: [
+        {
+          ...conversation.turns[0],
+          agentEvents: [{ index: 0, kind: "message" as const, text: "Looking at the redirect." }],
+          assistant: "Redirect fixed.",
+          id: "session-live-0",
+          tools: [],
+        },
+      ],
+    };
+    const turnId = "session-live-0";
+    const reasoning = {
+      event: { index: 0, kind: "reasoning", text: "Trace the return path first." },
+      kind: "agent-event",
+      turnId,
+    };
+    // The watch replays the running session's events the moment it opens, and
+    // the first read answers later: the replay must not be lost to that race.
+    const replay = (stream: WatchStream) => {
+      stream.push({
+        cursor: null,
+        kind: "turn",
+        turn: {
+          assistant: null,
+          failureKind: null,
+          harness: "claude-code",
+          id: turnId,
+          model: null,
+          reasoning: null,
+          status: "running",
+          timestamp: "2026-07-15T10:05:00Z",
+          tools: [],
+          unknown: {},
+          usage: {},
+          user: "",
+        },
+      });
+      stream.push(reasoning);
+      // A replayed frame must not double the event.
+      stream.push(reasoning);
+      stream.push({
+        event: { index: 1, kind: "message", text: "Looking at the redirect." },
+        kind: "agent-event",
+        turnId,
+      });
+      stream.push({
+        kind: "tool-event",
+        tool: { index: 2, input: { pattern: "return_to" }, kind: "tool_call", name: "Grep" },
+        turnId,
+      });
+    };
+    installBridge(
+      async (request) => {
+        if (request.kind === "list") {
+          const { running: _running, ...closed } = running;
+          return listPage([settled ? closed : running]);
+        }
+        if (!settled) await new Promise((wake) => setTimeout(wake, 150));
+        return success({
+          conversation: settled
+            ? detailPage(finished)
+            : detailPage({
+                ...conversation,
+                canContinue: false,
+                id: "session-live",
+                name: "live-session",
+                state: "running",
+                turns: [],
+              }),
+          kind: "get",
+        });
+      },
+      (stream) => {
+        // Only the first watch replays, so a later reopen while the shell
+        // settles cannot recover frames that first watch let fall on the floor.
+        if (!live) replay(stream);
+        live = stream;
+      },
+    );
+    render(<ConversationShell />);
+
+    const row = await screen.findByRole("button", { name: "Open conversation live-session" });
+    expect(row.textContent).toContain("Running");
+    expect(await screen.findByRole("status", { name: "Live updates on" })).toBeTruthy();
+
+    const activity = await screen.findByRole("region", { name: "Agent activity" });
+    expect(await screen.findByLabelText("Grep tool details")).toBeTruthy();
+    expect(within(activity).getByRole("group", { name: "Agent message" }).textContent).toContain(
+      "Looking at the redirect.",
+    );
+    expect(within(activity).getAllByRole("button", { name: "Reasoning" })).toHaveLength(1);
+    expect(within(activity).queryByLabelText("Grep tool details")).toBeNull();
+    expect(
+      within(screen.getByRole("region", { name: "Tool calls" })).queryByText(
+        "Looking at the redirect.",
+      ),
+    ).toBeNull();
+    expect(screen.getByText("The prompt is recorded when this run finishes.")).toBeTruthy();
+    expect(
+      screen.getByText("Still running. Its final answer appears when the run finishes."),
+    ).toBeTruthy();
+
+    settled = true;
+    live?.push({
+      cursor: "019fc600-0000-7000-8000-000000000003",
+      kind: "turn",
+      turn: { ...finished.turns[0], status: "completed" },
+    });
+    expect(await screen.findByText("Redirect fixed.")).toBeTruthy();
+    await waitFor(() => expect(row.textContent).not.toContain("Running"));
+    expect(screen.queryByText("The prompt is recorded when this run finishes.")).toBeNull();
   }, 30_000);
 
   test("falls back to polling when the live stream is unavailable", async () => {
