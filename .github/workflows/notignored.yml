@@ -27,6 +27,4 @@ jobs:
         with:
           # The scan diffs against the base branch, which a shallow checkout omits.
           fetch-depth: 0
-      # First-party action on its floating major tag, like the screencomp reusable
-      # workflow: `@v0` moves only after a 0.x release has published.
-      - uses: nickderobertis/notignored@v0
+      - uses: nickderobertis/notignored@f95c0286d327803acdabd8a0e56fa3f94438e1b9 # v0.1.17

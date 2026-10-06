@@ -346,7 +346,8 @@ describe("required status-check contexts", () => {
     const steps = suppressions.steps ?? [];
     expect(steps[0]?.uses).toMatch(/^actions\/checkout@[0-9a-f]{40}$/);
     expect(steps[0]?.with?.["fetch-depth"]).toBe(0);
-    expect(steps.some((step) => step.uses === "nickderobertis/notignored@v0")).toBe(true);
+    const source = readFileSync(resolve(root, ".github/workflows/notignored.yml"), "utf8");
+    expect(source).toMatch(/^\s+- uses: nickderobertis\/notignored@[0-9a-f]{40} # v0\.\d+\.\d+$/m);
     for (const name of contextNames(id, suppressions)) {
       expect(requiredContextNames).not.toContain(name);
     }
