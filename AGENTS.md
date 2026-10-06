@@ -19,7 +19,7 @@ owner of oneharness contracts and runtime validation.
 - **Language(s):** rust, typescript.
 - **References composed:** base.md, shapes/web-app.md, shapes/react.md,
   shapes/nextjs.md, languages/rust.md, languages/typescript.md, ci.md,
-  llmlint.md, releasing.md, monorepo.md.
+  llmlint.md, releasing.md, project-graph.md.
 - **Excluded, and why:** asdf and direnv add redundant environment layers over
   pinned Bun/Rust files and the bootstrap script; a network server layout does
   not fit a local-only desktop app.
@@ -62,11 +62,22 @@ with `just setup-llmlint`.
 - Squash-only PRs land on protected `main`; auto-merge, conversation resolution,
   linear history, and every `check`, `supply-chain`, `commitlint`, and `llmlint`
   context are required. Admin bypass is break-glass; merged heads auto-delete.
+- The repository releases on merge: the merged commit is the released commit.
+  Pull requests run the affected tier (`just check-affected` from an explicit
+  merge base); the broader tier, the `full-check` sweep of `just check` on every
+  OS, runs once at merge-to-main, and the semantic-release `version` job in
+  `check.yml` needs it, so a red or cancelled sweep stops the release.
 - semantic-release computes the next version and creates `vX.Y.Z` on protected
   `main`; the version job reconciles the separate artifact workflow with its
   built-in token because
   token-created tags do not emit workflows. That workflow verifies the release
   and tag ancestry, versions its checkout, then builds and checksums artifacts.
+- The `llmlint` job passes when GitHub reports explicit Copilot quota
+  exhaustion, and only then. The judge runs on the short-lived built-in token,
+  so its capacity is the plan's Copilot quota; once that is spent no change can
+  make the required context pass, and failing it would block every merge on
+  billing rather than on code. Config validation still runs, and every finding
+  or other harness error still fails the job.
 
 ## Output and handoff
 
