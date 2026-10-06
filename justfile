@@ -22,7 +22,6 @@ check:
     @ONEHARNESS_QUIET=1 just typecheck
     @ONEHARNESS_QUIET=1 just test
     @ONEHARNESS_QUIET=1 just build
-    @ONEHARNESS_QUIET=1 just supply-chain
     @if [ "${ONEHARNESS_QUIET:-}" != "1" ]; then echo "check: ok"; fi
 
 gate:
@@ -36,7 +35,6 @@ check-affected:
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "import boundaries" "Restore the documented package import direction, then rerun 'just lint'." -- node scripts/check-boundaries.mjs
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "shell lint" "Fix the reported shell diagnostics, then rerun 'just lint'." -- uvx --from shellcheck-py==0.11.0.1 shellcheck scripts/*.sh
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "workflow lint" "Fix the reported workflow diagnostics, then rerun 'just lint'." -- uvx --from actionlint-py==1.7.12.24 actionlint .github/workflows/*.yml
-    @ONEHARNESS_QUIET=1 just supply-chain
     @if [ "${ONEHARNESS_QUIET:-}" != "1" ]; then echo "affected gate: ok"; fi
 
 format:
@@ -108,6 +106,7 @@ dispatch-release:
 upload-release:
     @./scripts/run-quiet.sh "native release upload" "Prepare the canonical checksummed assets and verify the built-in GH_TOKEN, then rerun 'just upload-release'." -- ./scripts/upload-release.sh
 
+# Dependency policy and audit run once per commit in CI's Linux-only supply-chain job, not in check or check-affected.
 supply-chain:
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Rust dependency policy" "Resolve the reported license, advisory, source, or ban finding, then rerun 'just supply-chain'." -- cargo deny check --hide-inclusion-graph
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Rust dependency usage" "Remove or correctly declare the reported dependency, then rerun 'just supply-chain'." -- cargo machete
@@ -118,6 +117,7 @@ upgrade:
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "JavaScript dependency upgrade" "Resolve the package conflict, then rerun 'just upgrade'." -- bun update
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Rust dependency upgrade" "Resolve the Cargo dependency conflict, then rerun 'just upgrade'." -- cargo update
     @ONEHARNESS_QUIET=1 just gate
+    @ONEHARNESS_QUIET=1 just supply-chain
     @if [ "${ONEHARNESS_QUIET:-}" != "1" ]; then echo "upgrade: ok"; fi
 
 setup-llmlint:

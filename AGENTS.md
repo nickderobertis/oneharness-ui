@@ -27,7 +27,11 @@ owner of oneharness contracts and runtime validation.
 ## Workflow
 
 Use the `just` surface; do not hand-roll equivalent routines. `just check` is
-the complete pre-push gate and must pass before commits. Keep llmlint separate:
+the full deterministic sweep and must pass before commits; `just gate` (the
+pre-push hook) runs it, or `just check-affected` when `NX_BASE` is set. Neither
+runs the supply-chain tier (cargo-deny, cargo-machete, bun audit): it runs once
+per commit in CI's Linux-only `supply-chain` job, and locally as
+`just supply-chain`. Keep llmlint separate:
 `just lint-llm`, `just lint-llm-diff`, and `just lint-llm-validate`; install it
 with `just setup-llmlint`.
 
