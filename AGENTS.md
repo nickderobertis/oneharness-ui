@@ -27,11 +27,10 @@ owner of oneharness contracts and runtime validation.
 ## Workflow
 
 Use the `just` surface; do not hand-roll equivalent routines. `just check` is
-the full deterministic sweep and must pass before commits; `just gate` (the
-pre-push hook) runs it, or `just check-affected` when `NX_BASE` is set. Neither
-runs the supply-chain tier (cargo-deny, cargo-machete, bun audit): it runs once
-per commit in CI's Linux-only `supply-chain` job, and locally as
-`just supply-chain`. Keep llmlint separate:
+the full deterministic sweep and must pass before commits. Supply-chain checks
+run once per commit in CI's Linux-only `supply-chain` job, never in `check` or
+`check-affected`; run `just supply-chain` after dependency changes. Keep llmlint
+separate:
 `just lint-llm`, `just lint-llm-diff`, and `just lint-llm-validate`; install it
 with `just setup-llmlint`.
 
@@ -62,11 +61,9 @@ with `just setup-llmlint`.
 - Squash-only PRs land on protected `main`; auto-merge, conversation resolution,
   linear history, and every `check`, `supply-chain`, `commitlint`, and `llmlint`
   context are required. Admin bypass is break-glass; merged heads auto-delete.
-- The repository releases on merge: the merged commit is the released commit.
-  Pull requests run the affected tier (`just check-affected` from an explicit
-  merge base); the broader tier, the `full-check` sweep of `just check` on every
-  OS, runs once at merge-to-main, and the semantic-release `version` job in
-  `check.yml` needs it, so a red or cancelled sweep stops the release.
+- The repository releases on merge, so the broader tier (`full-check`) runs at
+  merge-to-main and the release waits for it; pull requests run only the
+  affected tier. Keep the release after the sweep, never beside it.
 - semantic-release computes the next version and creates `vX.Y.Z` on protected
   `main`; the version job reconciles the separate artifact workflow with its
   built-in token because

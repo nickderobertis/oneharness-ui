@@ -1,10 +1,8 @@
 # conversation-ui-visual
 
-Proves the conversation UI renders as its committed screencomp manifest records.
-The `visual` target captures the production export twice in the pinned Playwright
-container, checks the two are byte-identical and classifies them against
-`shots/baseline`. The spec and its Playwright config stay beside the source they
-render in `conversation-ui`; this project owns when they run.
+Proves the conversation UI renders as its committed screencomp manifest records
+(see `docs/visual-testing.md`). The spec and its Playwright config stay beside the
+source they render in `conversation-ui`; this project owns when they run.
 
 - **Depends on:** `conversation-ui`; the host needs Docker and the screencomp
   binary `just bootstrap` installs.
