@@ -46,6 +46,13 @@ rules:
   - name: live_tier_compiles_and_requires_credential
     override: true
     relevance: the target files define a test tier that connects to a credentialed external service
+  # The screencomp visual-docs capture (apps/conversation-ui-visual) is
+  # documentation output, not a journey the gate runs: it captures the production
+  # export in one x86_64 Docker container outside the cross-OS gate, and no gate
+  # target may run it. The app's browser journeys stay in scope.
+  - name: browser_journeys_run_against_the_built_app
+    override: true
+    relevance: the target files add or change a browser-driven end-to-end journey, or the project definition that owns one, other than a visual-docs project whose only browser run is the screencomp capture in Docker outside the gate
 plugins:
   - "https://raw.githubusercontent.com/nickderobertis/llmlint/main/assets/config_lint.yml@1"
   - "https://raw.githubusercontent.com/nickderobertis/dero-skills/main/skills/bootstrap/create-repo/assets/llmlint/base.llmlint.yml@1"
