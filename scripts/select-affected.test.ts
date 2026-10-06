@@ -28,7 +28,9 @@ function git(cwd: string, args: string[]): string {
     { cwd, stderr: "pipe", stdout: "pipe" },
   );
   if (result.exitCode !== 0) {
-    throw new Error(`git ${args.join(" ")} exited ${result.exitCode}: ${result.stderr}`);
+    throw new Error(
+      `git ${args.join(" ")} exited ${result.exitCode}: ${result.stderr}; run 'git worktree prune' and check the checkout has its HEAD commit, then rerun`,
+    );
   }
   return result.stdout.toString().trim();
 }

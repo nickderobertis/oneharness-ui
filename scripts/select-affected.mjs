@@ -47,8 +47,12 @@ const nx = spawnSync(
   },
 );
 if (nx.status !== 0) {
+  // Nx's own diagnostic names the broken project or revision; it is graph
+  // metadata, never session content.
+  const diagnostic = (nx.error?.message ?? `${nx.stderr}${nx.stdout}`).trim().slice(-4000);
+  if (diagnostic) console.error(diagnostic);
   fail(
-    `nx could not list the affected projects (exit ${nx.status ?? "signal"}); run 'bun x nx show projects --affected --base=${base} --head=${head}' to see its diagnostic`,
+    `nx could not list the affected projects (exit ${nx.status ?? "signal"}); fix the diagnostic above, then rerun 'bun x nx show projects --affected --base=${base} --head=${head}'`,
     1,
   );
 }
@@ -62,6 +66,9 @@ const parsed = z.array(z.string()).safeParse(
   })(),
 );
 if (!parsed.success) {
-  fail("nx printed something other than a JSON list of project names; check the pinned Nx", 1);
+  fail(
+    "nx printed something other than a JSON list of project names; run 'bun install --frozen-lockfile' to restore the pinned Nx, then rerun the selection",
+    1,
+  );
 }
 process.stdout.write(`run=${parsed.data.includes(project)}\n`);

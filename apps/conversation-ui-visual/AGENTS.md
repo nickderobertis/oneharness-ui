@@ -1,14 +1,16 @@
 # conversation-ui-visual
 
-The screencomp visual-docs capture of the conversation UI. The capture itself lives
-where it renders (`apps/conversation-ui/tests/visual`, its Playwright config, the
-root `capture.sh`); this project's `visual` target lists those and the capture
-tooling as inputs, so Nx marks it affected exactly when a capture could change.
+Proves the conversation UI renders as its committed screencomp manifest records.
+The `visual` target captures the production export twice in the pinned Playwright
+container, checks the two are byte-identical and classifies them against
+`shots/baseline`. The spec and its Playwright config stay beside the source they
+render in `conversation-ui`; this project owns when they run.
 
-- **Depends on:** `conversation-ui` (and through it `oneharness-bridge`'s e2e
-  server and `ipc-contract`). Host prerequisites: Docker and the screencomp binary
-  `just bootstrap` installs.
-- **Run:** `just visual` (`bunx nx run conversation-ui-visual:visual`). CI's
-  `Visual docs` workflow captures only when this project is affected.
-- No gate target (`lint`, `format-check`, `typecheck`, `test`) may run a capture.
-  Add any new file a capture renders or reads to the `visual` target's `inputs`.
+- **Depends on:** `conversation-ui`; the host needs Docker and the screencomp
+  binary `just bootstrap` installs.
+- **Run:** `just visual`.
+- The capture is `visual`, never `test` or another gate target: it needs Docker
+  and one x86_64 container, so it cannot run in the cross-OS gate. `test` holds
+  only the stubbed command-contract tests.
+- A file a capture renders or reads goes in the `capture` named input, or
+  changing it will not trigger a capture in CI.

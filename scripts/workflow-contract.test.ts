@@ -7,6 +7,7 @@ const root = resolve(import.meta.dir, "..");
 
 // Branch protection requires these contexts by exact name on every pull request
 // to main. Changing when a suite runs must never leave one unreported.
+// llmlint: ignore-block[contracts_have_one_source_or_a_drift_gate] Branch protection lives in GitHub settings, which this credential-free test cannot read; the operator's governance verification (setup_github_governance.py --verify) is the drift gate that compares the live required checks with these names, and this list is the repository half it reconciles.
 const requiredContexts = [
   "check (macos-15)",
   "check (windows-2025)",
@@ -19,6 +20,8 @@ const requiredContexts = [
   "macos-native-smoke",
   "install (ubuntu-22.04-arm)",
 ] as const;
+// llmlint: ignore-end[contracts_have_one_source_or_a_drift_gate]
+const requiredContextNames: readonly string[] = requiredContexts;
 
 // Workflow files are parsed only as far as these assertions read them.
 const stepSchema = z.object({
@@ -82,13 +85,17 @@ const workflows = new Map<string, Workflow>(
 
 function workflow(file: string): Workflow {
   const value = workflows.get(file);
-  if (!value) throw new Error(`.github/workflows/${file} is missing`);
+  if (!value) {
+    throw new Error(`.github/workflows/${file} is missing; restore it or update this contract`);
+  }
   return value;
 }
 
 function job(file: string, id: string): Job {
   const value = workflow(file).jobs[id];
-  if (!value) throw new Error(`${file} has no ${id} job`);
+  if (!value) {
+    throw new Error(`${file} has no ${id} job; restore the job or update this contract's job id`);
+  }
   return value;
 }
 
@@ -108,10 +115,16 @@ type Context = {
   needs: Record<string, "success" | "failure" | "cancelled" | "skipped">;
 };
 
+function unsupported(detail: string): Error {
+  return new Error(
+    `${detail}; rewrite the workflow condition in the subset this evaluator reads, or extend the evaluator to cover it`,
+  );
+}
+
 function tokenize(expression: string): string[] {
   const tokens = expression.match(/'[^']*'|==|!=|&&|\|\||[!()]|[A-Za-z_][\w.-]*/g) ?? [];
   if (tokens.join("") !== expression.replace(/\s+/g, "")) {
-    throw new Error(`unsupported expression syntax: ${expression}`);
+    throw unsupported(`unsupported expression syntax: ${expression}`);
   }
   return tokens;
 }
@@ -169,21 +182,21 @@ function evaluate(raw: string | undefined, context: Context): Value {
     Object.values(context.needs).every((value) => value === result);
   const primary = (): Value => {
     const token = take();
-    if (token === undefined) throw new Error(`incomplete expression: ${expression}`);
+    if (token === undefined) throw unsupported(`incomplete expression: ${expression}`);
     if (token === "(") {
       const value = or();
-      if (take() !== ")") throw new Error(`unbalanced expression: ${expression}`);
+      if (take() !== ")") throw unsupported(`unbalanced expression: ${expression}`);
       return value;
     }
     if (token.startsWith("'")) return token.slice(1, -1);
     if (peek() === "(") {
       take();
-      if (take() !== ")") throw new Error(`unsupported call arguments: ${expression}`);
+      if (take() !== ")") throw unsupported(`unsupported call arguments: ${expression}`);
       if (token === "always") return true;
       if (token === "cancelled") return Object.values(context.needs).includes("cancelled");
       if (token === "success") return allNeeds("success");
       if (token === "failure") return Object.values(context.needs).includes("failure");
-      throw new Error(`unsupported function ${token}() in: ${expression}`);
+      throw unsupported(`unsupported function ${token}() in: ${expression}`);
     }
     const needsOutput = token.match(/^needs\.([\w-]+)\.(result|outputs\.[\w-]+)$/);
     if (needsOutput?.[1] && needsOutput[2]) {
@@ -194,7 +207,7 @@ function evaluate(raw: string | undefined, context: Context): Value {
     return context.values[token];
   };
   const value = or();
-  if (position !== tokens.length) throw new Error(`trailing tokens in: ${expression}`);
+  if (position !== tokens.length) throw unsupported(`trailing tokens in: ${expression}`);
   return value;
 }
 
@@ -265,7 +278,9 @@ function contextNames(id: string, value: Job): string[] {
   return variants.map((variant) =>
     template.replace(/\$\{\{\s*matrix\.([\w-]+)\s*\}\}/g, (_, key: string) => {
       const replacement = variant[key];
-      if (replacement === undefined) throw new Error(`${id} names matrix.${key}, which is unset`);
+      if (replacement === undefined) {
+        throw new Error(`${id} names matrix.${key}, which is unset; define it or fix the job name`);
+      }
       return replacement;
     }),
   );
@@ -322,7 +337,9 @@ describe("required status-check contexts", () => {
     expect(notignored.permissions).toEqual({ contents: "read", "pull-requests": "write" });
     const [id, suppressions] = Object.entries(notignored.jobs)[0] ?? [];
     expect(Object.keys(notignored.jobs)).toHaveLength(1);
-    if (!id || !suppressions) throw new Error("notignored.yml has no job");
+    if (!id || !suppressions) {
+      throw new Error("notignored.yml has no job; restore its suppressions job");
+    }
     expect(suppressions.if).toBe(
       "github.event.pull_request.head.repo.full_name == github.repository",
     );
@@ -331,7 +348,7 @@ describe("required status-check contexts", () => {
     expect(steps[0]?.with?.["fetch-depth"]).toBe(0);
     expect(steps.some((step) => step.uses === "nickderobertis/notignored@v0")).toBe(true);
     for (const name of contextNames(id, suppressions)) {
-      expect(requiredContexts as readonly string[]).not.toContain(name);
+      expect(requiredContextNames).not.toContain(name);
     }
   });
 });
@@ -394,7 +411,11 @@ const justDumpSchema = z.object({ recipes: z.record(z.string(), justRecipeSchema
 
 function justRecipes(): Record<string, string> {
   const dump = Bun.spawnSync(["just", "--dump", "--dump-format", "json"], { cwd: root });
-  if (dump.exitCode !== 0) throw new Error(`just --dump failed: ${dump.stderr.toString()}`);
+  if (dump.exitCode !== 0) {
+    throw new Error(
+      `just --dump failed: ${dump.stderr.toString()}; fix the justfile so 'just --list' parses, or run 'just bootstrap' if just is missing`,
+    );
+  }
   const { recipes } = justDumpSchema.parse(JSON.parse(dump.stdout.toString()));
   return Object.fromEntries(
     Object.entries(recipes).map(([name, recipe]) => [
@@ -411,7 +432,11 @@ function expand(recipes: Record<string, string>, name: string, seen = new Set<st
   if (seen.has(name)) return "";
   seen.add(name);
   const body = recipes[name];
-  if (body === undefined) throw new Error(`the justfile has no ${name} recipe`);
+  if (body === undefined) {
+    throw new Error(
+      `the justfile has no ${name} recipe; restore it or fix the 'just ${name}' call`,
+    );
+  }
   const nested = [...body.matchAll(/\bjust ([a-z][\w-]*)/g)].map((match) => match[1] ?? "");
   return [body, ...nested.map((child) => expand(recipes, child, seen))].join("\n");
 }
@@ -457,9 +482,13 @@ describe("expensive suites run only when affected", () => {
     const index = (value.steps ?? []).findIndex(
       (step) =>
         step.id === "select" &&
-        step.run?.includes(`bun scripts/select-affected.mjs ${project} >> "$GITHUB_OUTPUT"`),
+        step.run?.includes(`just select-affected ${project} >> "$GITHUB_OUTPUT"`),
     );
-    if (index < 0) throw new Error(`no step selects ${project} from the affected graph`);
+    if (index < 0) {
+      throw new Error(
+        `no step with id 'select' runs 'just select-affected ${project}'; restore the selection step`,
+      );
+    }
     return { index, step: value.steps?.[index] };
   };
 
@@ -535,5 +564,6 @@ describe("expensive suites run only when affected", () => {
       });
     }
     expect(project.targets.visual?.command).toBe("./scripts/verify-visual.sh");
+    expect(project.targets.test?.command).toBe("bun test scripts/visual-docs.test.ts");
   });
 });
