@@ -4,4 +4,5 @@ pre-push:
     gate:
       run: just gate
     llmlint-config:
-      run: command -v llmlint >/dev/null 2>&1 && just lint-llm-validate || true
+      # Skip only when llmlint is not installed; a failing validation blocks the push.
+      run: if command -v llmlint >/dev/null 2>&1; then just lint-llm-validate; fi
