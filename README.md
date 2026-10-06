@@ -164,13 +164,15 @@ SDK → packaged CLI → provider process seam.
 
 `just check` runs format, Biome/accessibility/import-boundary lint, TypeScript,
 Clippy, unit/integration coverage (minimum 95%), real Playwright journeys,
-static export, Rust checks, dependency policy, and audits. Tests replace only
+static export, and Rust checks. Dependency policy and audits (`just supply-chain`)
+run once per commit in CI's Linux-only `supply-chain` job. Tests replace only
 paid model execution with oneharness's own deterministic provider fixture; the
 SDK, CLI, filesystem history, subprocess, bridge, HTTP/Tauri transport, and UI
 remain real.
 
 The separately required native desktop CI gate runs the packaged WebDriverIO
-journey on Linux and Windows. macOS keeps a native DMG build/install smoke
+journey on Linux and Windows when the change reaches `desktop-shell-e2e` in the
+Nx graph; otherwise each variant reports green without packaging. macOS keeps a native DMG build/install smoke
 because upstream official `tauri-driver` has no WKWebView driver.
 
 Rust coverage excludes only `src/main.rs`, the two-line native GUI event-loop
@@ -184,7 +186,8 @@ coverage instrumentation. Linux and macOS execute the same tests with the 95%
 Rust coverage threshold; Windows still runs Clippy over all targets and builds
 the production installer, so only test-binary execution is excluded there.
 
-Conventional commits drive semantic-release on `main`. It creates `vX.Y.Z`, and
+Conventional commits drive semantic-release on `main`, which runs only after that
+commit's full-check sweep succeeded on every OS. It creates `vX.Y.Z`, and
 the version job reconciles a separate release workflow with the repository's
 built-in token. That workflow accepts only a published semver release whose tag
 is reachable from `main`, materializes the version in its build checkout, and

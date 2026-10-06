@@ -63,7 +63,7 @@ test-e2e:
 
 # Pixel capture is intentionally separate from the cross-OS check matrix.
 visual:
-    @./scripts/run-quiet.sh "visual docs" "Inspect the screencomp classification, update the image-free manifest for intentional changes, then rerun 'just visual'." -- ./scripts/verify-visual.sh
+    @./scripts/run-quiet.sh "visual docs" "Inspect the screencomp classification, update the image-free manifest for intentional changes, then rerun 'just visual'." -- bunx nx run conversation-ui-visual:visual --outputStyle=static
 
 # Packages and drives the real desktop binary with official tauri-driver. Upstream supports Linux and Windows only.
 test-desktop-e2e:

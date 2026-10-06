@@ -52,6 +52,8 @@ selection; every other discovered setting remains available.
 - `apps/conversation-ui-e2e`: browser journeys against the built static export,
   run in Chromium and WebKit (Chromium alone on Windows).
 - `apps/desktop-shell-e2e`: native journeys against the packaged desktop build.
+- `apps/conversation-ui-visual`: the screencomp visual-docs capture; its inputs
+  are what the captures render, so CI captures only when it is affected.
 
 Nx owns the project graph and delegates targets to Bun, Biome, Next, and Cargo.
 A deterministic boundary checker prevents feature/package dependency reversal.
