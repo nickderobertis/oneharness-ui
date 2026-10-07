@@ -1,8 +1,8 @@
 # conversation-ui-e2e
 
-Proves the exported conversation UI works for a user: Playwright journeys in
-Chromium and WebKit (Chromium alone on Windows) against the built static export
-and the bridge's real e2e server.
+Proves the exported conversation UI works for a user: Playwright journeys, in
+the browser projects `playwright.config.ts` declares, against the built static
+export and the bridge's real e2e server.
 
 - **Depends on:** `conversation-ui` (built first), `oneharness-bridge` (the e2e
   server and its history fixtures) and `ipc-contract`; the host needs the
