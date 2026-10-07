@@ -3,8 +3,8 @@ import { appendFileSync, mkdtempSync, realpathSync, rmSync, symlinkSync } from "
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 
-const repository = resolve(import.meta.dir, "..");
-const selector = "scripts/select-affected.mjs";
+const repository = resolve(import.meta.dir, "../../..");
+const selector = "packages/affected-selection/src/select-affected.mjs";
 
 // The selection reads real Nx affected output, so each case commits a change in
 // a scratch worktree of HEAD and asks the committed selector about it there.

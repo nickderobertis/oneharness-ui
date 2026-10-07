@@ -1,0 +1,29 @@
+{
+  "name": "affected-selection",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/affected-selection/src",
+  "tags": ["scope:tooling", "type:tool"],
+  "implicitDependencies": [],
+  "namedInputs": {
+    "graph": [
+      "{workspaceRoot}/nx.json",
+      "{workspaceRoot}/package.json",
+      "{workspaceRoot}/**/project.json"
+    ]
+  },
+  "targets": {
+    "test": {
+      "command": "bun test packages/affected-selection/test",
+      "inputs": ["default", "graph", "testRunners"]
+    },
+    "typecheck": {
+      "command": "bunx tsc -p packages/affected-selection/tsconfig.json --noEmit"
+    },
+    "lint": {
+      "command": "bunx biome check --error-on-warnings packages/affected-selection"
+    },
+    "format": { "command": "bunx biome format --write packages/affected-selection" },
+    "format-check": { "command": "bunx biome format packages/affected-selection" }
+  }
+}

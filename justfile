@@ -74,10 +74,10 @@ install-workspace:
     @./scripts/run-quiet.sh "workspace install" "Restore bun.lock or registry access, then rerun 'just install-workspace'." -- bun install --frozen-lockfile --ignore-scripts
 
 # CI calls this to gate an expensive suite: prints run=true or run=false for whether the change between NX_BASE and NX_HEAD reaches the project.
+# The selector validates the project name itself, so the recipe only quotes it.
 select-affected project:
-    @[[ {{quote(project)}} =~ ^[a-z][a-z0-9-]{0,63}$ ]] || { echo "affected selection: pass an Nx project name such as desktop-shell-e2e" >&2; exit 2; }
     @[ -d node_modules/nx ] && [ -d node_modules/zod ] || { echo "affected selection: workspace dependencies are missing; run 'just install-workspace', then rerun 'just select-affected'" >&2; exit 1; }
-    @bun scripts/select-affected.mjs {{quote(project)}}
+    @bun packages/affected-selection/src/select-affected.mjs {{quote(project)}}
 
 build:
     @./scripts/run-quiet.sh "build" "Fix the reported static-export or native build error, then rerun 'just build'." -- env RUSTFLAGS="-D warnings" bunx nx run-many -t build --all --outputStyle=static

@@ -7,7 +7,7 @@ import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { z } from "zod";
 
-const root = resolve(import.meta.dirname, "..");
+const root = resolve(import.meta.dirname, "../../..");
 const fail = (message, status = 2) => {
   console.error(`affected selection: ${message}`);
   process.exit(status);
