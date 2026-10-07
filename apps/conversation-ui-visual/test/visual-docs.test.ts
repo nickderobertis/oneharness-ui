@@ -3,7 +3,7 @@ import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
 
-const root = resolve(import.meta.dir, "..");
+const root = resolve(import.meta.dir, "../../..");
 const versions = readFileSync(resolve(root, "scripts/visual-docs-versions.env"), "utf8");
 const workflow = readFileSync(resolve(root, ".github/workflows/visual-docs.yml"), "utf8");
 const setup = readFileSync(resolve(root, "scripts/setup-screencomp.sh"), "utf8");
@@ -50,7 +50,8 @@ describe("visual docs command contracts", () => {
       screencompConfig.match(/key = "theme"\s+label = "Theme"\s+values = (\[[^\]]+\])/)?.[1] ??
         "null",
     ) as string[] | null;
-    expect(galleryThemes).toEqual(applicationThemes?.filter((theme) => theme !== "system"));
+    expect(applicationThemes).not.toBeNull();
+    expect(galleryThemes).toEqual((applicationThemes ?? []).filter((theme) => theme !== "system"));
   });
 
   test("keeps the capture runtime on the workspace Bun pin", () => {

@@ -32,13 +32,11 @@
       "outputs": []
     },
     "test": {
-      "command": "bun test scripts/visual-docs.test.ts",
-      "inputs": [
-        "capture",
-        "^production",
-        "testRunners",
-        "{workspaceRoot}/scripts/visual-docs.test.ts"
-      ]
+      "command": "bun test apps/conversation-ui-visual/test",
+      "inputs": ["capture", "^production", "testRunners"]
+    },
+    "typecheck": {
+      "command": "bunx tsc -p apps/conversation-ui-visual/tsconfig.json --noEmit"
     },
     "lint": {
       "command": "bunx biome check --error-on-warnings apps/conversation-ui-visual"

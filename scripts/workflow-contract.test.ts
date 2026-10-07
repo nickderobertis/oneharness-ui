@@ -594,6 +594,6 @@ describe("expensive suites run only when affected", () => {
       });
     }
     expect(project.targets.visual?.command).toBe("./scripts/verify-visual.sh");
-    expect(project.targets.test?.command).toBe("bun test scripts/visual-docs.test.ts");
+    expect(project.targets.test?.command).toBe("bun test apps/conversation-ui-visual/test");
   });
 });

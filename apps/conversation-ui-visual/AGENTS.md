@@ -9,6 +9,7 @@ source they render in `conversation-ui`; this project owns when they run.
 - **Run:** `just visual`.
 - The capture is `visual`, never `test` or another gate target: it needs Docker
   and one x86_64 container, so it cannot run in the cross-OS gate. `test` holds
-  only the stubbed command-contract tests.
+  only the stubbed command-contract tests under `test/`, which `typecheck`
+  checks through this project's `tsconfig.json`.
 - A file a capture renders or reads goes in the `capture` named input, or
   changing it will not trigger a capture in CI.
