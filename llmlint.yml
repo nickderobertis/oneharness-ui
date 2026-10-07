@@ -52,7 +52,7 @@ rules:
   # target may run it. The app's browser journeys stay in scope.
   - name: browser_journeys_run_against_the_built_app
     override: true
-    relevance: the target files add or change a browser-driven end-to-end journey, or the project definition that owns one, other than a visual-docs project whose only browser run is the screencomp capture in Docker outside the gate
+    relevance: browser end-to-end journeys or their owning project definitions change, excluding visual-docs projects whose only browser run is Docker screencomp capture outside the gate
 plugins:
   - "https://raw.githubusercontent.com/nickderobertis/llmlint/main/assets/config_lint.yml@1"
   - "https://raw.githubusercontent.com/nickderobertis/dero-skills/main/skills/bootstrap/create-repo/assets/llmlint/base.llmlint.yml@1"
