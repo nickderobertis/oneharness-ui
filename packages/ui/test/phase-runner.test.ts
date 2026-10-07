@@ -25,14 +25,6 @@ const STOP_SLACK_MS = 6_000;
  * below {@link HANG_MS}.
  */
 const OVER_BOUND_MS = 2_000;
-/**
- * Bun's timers run on a clock that drifts from `performance.now()`, so a
- * multi-second runner timer can fire a fraction of a millisecond before the
- * monotonic clock shows its delay has passed (measured up to 0.7 ms at 8 s).
- * The lower-bound assertions allow that drift and nothing near a real early
- * stop, which would land whole seconds short of a bound.
- */
-const TIMER_DRIFT_MS = 5;
 
 const FLOOD_HEAD = "flood head marker";
 const FLOOD_TAIL = "flood tail marker";
@@ -161,7 +153,7 @@ describe("bounded package-test phases", () => {
     expect(error.details.phase).toBe("offline install");
     expect(error.message).toContain(`offline install phase timed out after ${OVER_BOUND_MS} ms`);
     expect(error.details.stdout).toContain("install started");
-    expect(elapsed).toBeGreaterThanOrEqual(OVER_BOUND_MS - TIMER_DRIFT_MS);
+    expect(elapsed).toBeGreaterThanOrEqual(OVER_BOUND_MS);
     expect(elapsed).toBeLessThan(OVER_BOUND_MS + STOP_SLACK_MS);
   }, 60_000);
 
@@ -184,7 +176,7 @@ describe("bounded package-test phases", () => {
     // handler. POSIX platforms can refuse that stop and reach the force kill.
     const minimumElapsed =
       process.platform === "win32" ? OVER_BOUND_MS : OVER_BOUND_MS + TERMINATION_GRACE_MS;
-    expect(elapsed).toBeGreaterThanOrEqual(minimumElapsed - TIMER_DRIFT_MS);
+    expect(elapsed).toBeGreaterThanOrEqual(minimumElapsed);
     expect(elapsed).toBeLessThan(OVER_BOUND_MS + TERMINATION_GRACE_MS + STOP_SLACK_MS);
   }, 60_000);
 
@@ -210,7 +202,7 @@ describe("bounded package-test phases", () => {
       expect(error.message).toContain(
         `${error.details.phase} phase timed out after ${timeoutMs} ms`,
       );
-      expect(elapsed).toBeGreaterThanOrEqual(timeoutMs - TIMER_DRIFT_MS);
+      expect(elapsed).toBeGreaterThanOrEqual(timeoutMs);
       expect(elapsed).toBeLessThan(timeoutMs + STOP_SLACK_MS);
     }
     expect(timings.map(({ error }) => error.details.phase)).toEqual(["pack", "offline install"]);

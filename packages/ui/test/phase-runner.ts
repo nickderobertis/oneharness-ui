@@ -77,21 +77,24 @@ export async function runPhase(phase: Phase): Promise<PhaseResult> {
     collect(child.stderr, stderr),
   ]);
   let timedOut = false;
-  let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
+  let forceKill: MonotonicTimer | undefined;
   const boundStartedAt = performance.now();
-  const boundTimer = setTimeout(() => {
+  const bound = atMonotonic(boundStartedAt + phase.timeoutMs, () => {
     timedOut = true;
     child.kill();
     // On Windows the first kill ends the process, so this fallback cannot run there.
     // Bind the subprocess method directly to keep coverage independent of that platform behavior.
-    forceKillTimer = setTimeout(child.kill.bind(child, "SIGKILL"), TERMINATION_GRACE_MS);
-  }, phase.timeoutMs);
+    forceKill = atMonotonic(
+      performance.now() + TERMINATION_GRACE_MS,
+      child.kill.bind(child, "SIGKILL"),
+    );
+  });
   let exitCode: number;
   try {
     exitCode = await child.exited;
   } finally {
-    clearTimeout(boundTimer);
-    if (forceKillTimer) clearTimeout(forceKillTimer);
+    bound.cancel();
+    forceKill?.cancel();
   }
   await withDeadline(drained, OUTPUT_DRAIN_MS);
   if (timedOut || exitCode !== 0) {
@@ -106,6 +109,26 @@ export async function runPhase(phase: Phase): Promise<PhaseResult> {
     });
   }
   return { exitCode, stderr: captured(stderr), stdout: captured(stdout) };
+}
+
+type MonotonicTimer = { readonly cancel: () => void };
+
+/**
+ * Calls `callback` once `performance.now()` reaches `deadline`. Bun's
+ * multi-second timers can fire a fraction of a millisecond before that clock
+ * shows their delay has passed, so a phase stopped by a plain `setTimeout` could
+ * end short of its bound; a timer that fires early is re-armed for the
+ * remainder instead of acted on.
+ */
+function atMonotonic(deadline: number, callback: () => void): MonotonicTimer {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const check = () => {
+    const remaining = deadline - performance.now();
+    if (remaining <= 0) return callback();
+    timer = setTimeout(check, Math.ceil(remaining));
+  };
+  check();
+  return { cancel: () => clearTimeout(timer) };
 }
 
 function spawnPhase(phase: Phase) {
