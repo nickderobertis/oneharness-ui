@@ -49,10 +49,11 @@ rules:
   # The screencomp visual-docs capture (apps/conversation-ui-visual) is
   # documentation output, not a journey the gate runs: it captures the production
   # export in one x86_64 Docker container outside the cross-OS gate, and no gate
-  # target may run it. The known project is excluded by path (the include list
-  # restates the plugin's, which an override replaces); the relevance clause
-  # keeps any other capture-only project out of scope. The app's browser
-  # journeys stay in scope.
+  # target may run it. The known project is excluded by path; the include list
+  # restates the plugin's, which an override replaces, and
+  # scripts/check-llmlint-overrides.mjs (run by just lint-llm-validate) fails
+  # when the two drift. The relevance clause keeps any other capture-only
+  # project out of scope. The app's browser journeys stay in scope.
   - name: browser_journeys_run_against_the_built_app
     override: true
     files:

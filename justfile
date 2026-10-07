@@ -155,3 +155,4 @@ lint-llm-copilot:
 lint-llm-validate *args:
     @command -v llmlint >/dev/null 2>&1 || { echo "llmlint missing; run just setup-llmlint" >&2; exit 1; }
     @./scripts/run-quiet.sh "semantic lint configuration" "Correct llmlint.yml or its rule references, then rerun 'just lint-llm-validate'." -- llmlint validate "$@"
+    @./scripts/run-quiet.sh "llmlint override scope" "Copy the plugin's include list into the llmlint.yml override, then rerun 'just lint-llm-validate'." -- node scripts/check-llmlint-overrides.mjs
