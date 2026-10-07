@@ -1,0 +1,30 @@
+# Comments on every pull request with the lint and type-check suppressions it
+# adds, each with its rule, stated reason, and line link, so a high-level review
+# sees every bypass. It is a review artifact, not a gate: no required context
+# needs it, and it skips fork pull requests, whose read-only token cannot upsert
+# the comment.
+
+name: notignored
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+concurrency:
+  group: notignored-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  suppressions:
+    name: suppressions
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # The scan diffs against the base branch, which a shallow checkout omits.
+          fetch-depth: 0
+      - uses: nickderobertis/notignored@f95c0286d327803acdabd8a0e56fa3f94438e1b9 # v0.1.17

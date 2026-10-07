@@ -4,16 +4,23 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import userEvent from "@testing-library/user-event";
 import { ConversationShell } from "../src/features/conversations/components/conversation-shell";
 
-class TestIntersectionObserver {
+class TestIntersectionObserver implements IntersectionObserver {
   static intersectingRoots = new Set<Element>();
   static observers = new Set<TestIntersectionObserver>();
   readonly root: Document | Element | null;
+  readonly rootMargin: string;
+  readonly scrollMargin: string;
+  readonly thresholds: ReadonlyArray<number>;
   private readonly callback: IntersectionObserverCallback;
   private target: Element | null = null;
 
   constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
     this.callback = callback;
     this.root = options?.root ?? null;
+    this.rootMargin = options?.rootMargin ?? "0px";
+    this.scrollMargin = options?.scrollMargin ?? "0px";
+    const threshold = options?.threshold ?? 0;
+    this.thresholds = Array.isArray(threshold) ? threshold : [threshold];
     TestIntersectionObserver.observers.add(this);
   }
 
@@ -55,13 +62,12 @@ class TestIntersectionObserver {
       return;
     this.callback(
       [{ isIntersecting: true, target: this.target } as IntersectionObserverEntry],
-      this as unknown as IntersectionObserver,
+      this,
     );
   }
 }
 
-globalThis.IntersectionObserver =
-  TestIntersectionObserver as unknown as typeof IntersectionObserver;
+globalThis.IntersectionObserver = TestIntersectionObserver;
 
 const summary: ConversationSummary = {
   harnesses: ["claude-code"],

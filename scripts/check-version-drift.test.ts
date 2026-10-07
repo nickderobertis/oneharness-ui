@@ -21,8 +21,10 @@ test("accepts a reconciled tree and rejects version, workflow, and browser drift
       mkdir(resolve(root, ".github/workflows"), { recursive: true }),
       mkdir(resolve(root, "apps/conversation-ui"), { recursive: true }),
       mkdir(resolve(root, "apps/conversation-ui-e2e"), { recursive: true }),
+      mkdir(resolve(root, "apps/conversation-ui-visual"), { recursive: true }),
       mkdir(resolve(root, "apps/desktop-shell"), { recursive: true }),
       mkdir(resolve(root, "apps/desktop-shell-e2e"), { recursive: true }),
+      mkdir(resolve(root, "packages/affected-selection"), { recursive: true }),
       mkdir(resolve(root, "packages/browser-test-env"), { recursive: true }),
       mkdir(resolve(root, "packages/ipc-contract"), { recursive: true }),
       mkdir(resolve(root, "packages/oneharness-bridge"), { recursive: true }),
@@ -55,7 +57,9 @@ test("accepts a reconciled tree and rejects version, workflow, and browser drift
       ...[
         "apps/conversation-ui/package.json",
         "apps/conversation-ui-e2e/package.json",
+        "apps/conversation-ui-visual/package.json",
         "apps/desktop-shell-e2e/package.json",
+        "packages/affected-selection/package.json",
         "packages/browser-test-env/package.json",
         "packages/ipc-contract/package.json",
         "packages/ui/package.json",
@@ -74,6 +78,10 @@ test("accepts a reconciled tree and rejects version, workflow, and browser drift
         "oneharness 1.2.3 CLI\n`@oneharness/sdk` package to `1.2.3`\nChromium and WebKit, and in Chromium alone\non Windows\n",
       ),
       writeFile(resolve(root, "docs/native-desktop-e2e.md"), "oneharness 1.2.3 CLI\n"),
+      writeFile(
+        resolve(root, "AGENTS.md"),
+        "- TypeScript is pinned to 6.0.3 in every workspace manifest that declares it\n",
+      ),
       writeFile(
         resolve(root, "docs/architecture.md"),
         "run in Chromium and WebKit (Chromium alone on Windows).\n",
@@ -164,6 +172,32 @@ test("accepts a reconciled tree and rejects version, workflow, and browser drift
     await writeFile(
       resolve(root, "packages/ui/package.json"),
       JSON.stringify({ devDependencies: { typescript: "6.0.3" } }),
+    );
+    await writeFile(
+      resolve(root, "apps/conversation-ui-visual/package.json"),
+      JSON.stringify({ devDependencies: { typescript: "5.9.3" } }),
+    );
+    const visualTypescriptDrift = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
+    expect(visualTypescriptDrift.exitCode).toBe(1);
+    expect(visualTypescriptDrift.stderr.toString()).toContain(
+      "apps/conversation-ui-visual/package.json TypeScript pin must match",
+    );
+    await writeFile(
+      resolve(root, "apps/conversation-ui-visual/package.json"),
+      JSON.stringify({ devDependencies: { typescript: "6.0.3" } }),
+    );
+    await writeFile(
+      resolve(root, "AGENTS.md"),
+      "- TypeScript is pinned to 5.9.3 in every workspace manifest that declares it\n",
+    );
+    const guidanceDrift = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
+    expect(guidanceDrift.exitCode).toBe(1);
+    expect(guidanceDrift.stderr.toString()).toContain(
+      "update the TypeScript pin and its guidance together",
+    );
+    await writeFile(
+      resolve(root, "AGENTS.md"),
+      "- TypeScript is pinned to 6.0.3 in every workspace manifest that declares it\n",
     );
     await writeFile(
       resolve(root, ".github/workflows/check.yml"),

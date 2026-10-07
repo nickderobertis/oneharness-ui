@@ -1,0 +1,51 @@
+{
+  "name": "conversation-ui-visual",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "application",
+  "tags": ["scope:ui", "type:visual"],
+  "implicitDependencies": ["conversation-ui"],
+  "namedInputs": {
+    "capture": [
+      "default",
+      "{workspaceRoot}/apps/conversation-ui/tests/visual/**/*",
+      "{workspaceRoot}/apps/conversation-ui/visual.playwright.config.ts",
+      "{workspaceRoot}/packages/oneharness-bridge/test/e2e-configuration.ts",
+      "{workspaceRoot}/packages/oneharness-bridge/test/e2e-history.ts",
+      "{workspaceRoot}/packages/oneharness-bridge/test/e2e-server.ts",
+      "{workspaceRoot}/packages/oneharness-bridge/test/history-fixture.ts",
+      "{workspaceRoot}/packages/oneharness-bridge/test/fixtures/**/*",
+      "{workspaceRoot}/capture.sh",
+      "{workspaceRoot}/package.json",
+      "{workspaceRoot}/screencomp.toml",
+      "{workspaceRoot}/scripts/setup-screencomp.sh",
+      "{workspaceRoot}/scripts/verify-visual.sh",
+      "{workspaceRoot}/scripts/visual-docs-versions.env",
+      "{workspaceRoot}/shots/baseline/**/*",
+      "{workspaceRoot}/.github/workflows/visual-docs.yml"
+    ]
+  },
+  "targets": {
+    "visual": {
+      "cache": false,
+      "command": "./scripts/verify-visual.sh",
+      "inputs": ["capture", "^production"],
+      "outputs": []
+    },
+    "test": {
+      "command": "bun test apps/conversation-ui-visual/test",
+      "inputs": ["capture", "^production", "testRunners"]
+    },
+    "typecheck": {
+      "command": "bunx tsc -p apps/conversation-ui-visual/tsconfig.json --noEmit"
+    },
+    "lint": {
+      "command": "bunx biome check --error-on-warnings apps/conversation-ui-visual"
+    },
+    "format": {
+      "command": "bunx biome format --write apps/conversation-ui-visual"
+    },
+    "format-check": {
+      "command": "bunx biome format apps/conversation-ui-visual"
+    }
+  }
+}

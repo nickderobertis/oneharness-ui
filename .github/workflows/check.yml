@@ -5,9 +5,12 @@ on:
     branches: [main]
   pull_request:
 
+# A newer pull-request push supersedes the older run. On main a run may be
+# publishing a release, so it finishes; GitHub still replaces a queued run with
+# the newest one.
 concurrency:
   group: check-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
@@ -88,6 +91,55 @@ jobs:
         run: just bootstrap
       - name: Full gate
         run: just check
+
+  # The release sits after the broader tier: semantic-release runs for a commit
+  # on main only when every full-check variant for that commit succeeded, so a
+  # failed or cancelled sweep leaves the version job unstarted.
+  version:
+    name: version
+    needs: full-check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: write
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.5.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: false
+          version: 0.11.28
+      - name: Install just
+        run: cargo install just --locked --version 1.42.4
+      - name: Install pinned workspace
+        run: just bootstrap
+      - name: Establish the initial pre-1.0 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: just seed-release
+      - name: Compute, tag, and publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GITHUB_TOKEN: ${{ github.token }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: just publish-release
+      # Tags pushed with the built-in token emit no workflow events, so the
+      # version job dispatches the artifact workflow itself.
+      - name: Reconcile the latest native artifact run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: just dispatch-release
 
   supply-chain:
     name: supply-chain

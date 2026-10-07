@@ -46,6 +46,26 @@ rules:
   - name: live_tier_compiles_and_requires_credential
     override: true
     relevance: the target files define a test tier that connects to a credentialed external service
+  # The screencomp visual-docs capture (apps/conversation-ui-visual) is
+  # documentation output, not a journey the gate runs: it captures the production
+  # export in one x86_64 Docker container outside the cross-OS gate, and no gate
+  # target may run it. The known project is excluded by path; the include list
+  # restates the plugin's, which an override replaces, and
+  # scripts/check-llmlint-overrides.mjs (run by just lint-llm-validate) fails
+  # when the two drift. The relevance clause keeps any other capture-only
+  # project out of scope. The app's browser journeys stay in scope.
+  - name: browser_journeys_run_against_the_built_app
+    override: true
+    files:
+      include:
+        - "**/e2e/**"
+        - "**/*.spec.ts"
+        - "**/*.spec.tsx"
+        - "**/playwright.config.*"
+        - "**/project.json"
+      exclude:
+        - "apps/conversation-ui-visual/**"
+    relevance: browser end-to-end journeys or their owning project definitions change, excluding visual-docs projects whose only browser run is Docker screencomp capture outside the gate
 plugins:
   - "https://raw.githubusercontent.com/nickderobertis/llmlint/main/assets/config_lint.yml@1"
   - "https://raw.githubusercontent.com/nickderobertis/dero-skills/main/skills/bootstrap/create-repo/assets/llmlint/base.llmlint.yml@1"
@@ -56,3 +76,4 @@ plugins:
   - "https://raw.githubusercontent.com/nickderobertis/dero-skills/main/skills/bootstrap/create-repo/assets/llmlint/languages/typescript.llmlint.yml@1"
   - "https://raw.githubusercontent.com/nickderobertis/dero-skills/main/skills/bootstrap/create-repo/assets/llmlint/ci.llmlint.yml@1"
   - "https://raw.githubusercontent.com/nickderobertis/dero-skills/main/skills/bootstrap/create-repo/assets/llmlint/project-graph.llmlint.yml@1"
+  - "https://raw.githubusercontent.com/nickderobertis/dero-skills/main/skills/bootstrap/create-repo/assets/llmlint/releasing.llmlint.yml@1"

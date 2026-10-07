@@ -2,8 +2,9 @@ import { describe, expect, test } from "bun:test";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { delimiter, join, resolve } from "node:path";
+import { z } from "zod";
 
-const root = resolve(import.meta.dir, "..");
+const root = resolve(import.meta.dir, "../../..");
 const versions = readFileSync(resolve(root, "scripts/visual-docs-versions.env"), "utf8");
 const workflow = readFileSync(resolve(root, ".github/workflows/visual-docs.yml"), "utf8");
 const setup = readFileSync(resolve(root, "scripts/setup-screencomp.sh"), "utf8");
@@ -13,9 +14,10 @@ const themeSource = readFileSync(
   "utf8",
 );
 const verifyScript = readFileSync(resolve(root, "scripts/verify-visual.sh"), "utf8");
-const packageManifest = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")) as {
-  packageManager: string;
-};
+const packageManifest = z
+  .object({ packageManager: z.string() })
+  .parse(JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")));
+const themeList = z.array(z.string());
 
 describe("visual docs command contracts", () => {
   test("keeps workflow tool pins aligned with local capture", () => {
@@ -43,14 +45,16 @@ describe("visual docs command contracts", () => {
   });
 
   test("keeps gallery theme values aligned with captured application themes", () => {
-    const applicationThemes = JSON.parse(
-      themeSource.match(/themes = (\[[^\]]+\])/)?.[1] ?? "null",
-    ) as string[] | null;
-    const galleryThemes = JSON.parse(
-      screencompConfig.match(/key = "theme"\s+label = "Theme"\s+values = (\[[^\]]+\])/)?.[1] ??
-        "null",
-    ) as string[] | null;
-    expect(galleryThemes).toEqual(applicationThemes?.filter((theme) => theme !== "system"));
+    const applicationThemes = themeList.parse(
+      JSON.parse(themeSource.match(/themes = (\[[^\]]+\])/)?.[1] ?? "null"),
+    );
+    const galleryThemes = themeList.parse(
+      JSON.parse(
+        screencompConfig.match(/key = "theme"\s+label = "Theme"\s+values = (\[[^\]]+\])/)?.[1] ??
+          "null",
+      ),
+    );
+    expect(galleryThemes).toEqual(applicationThemes.filter((theme) => theme !== "system"));
   });
 
   test("keeps the capture runtime on the workspace Bun pin", () => {
@@ -104,7 +108,7 @@ describe("visual docs command contracts", () => {
     expect(result.stderr.toString()).toContain("installer checksum mismatch");
   });
 
-  test("runs every capture stage and identifies each failed operation", () => {
+  test("runs every capture stage and names a failed workspace install", () => {
     const directory = mkdtempSync(join(tmpdir(), "visual-capture-test-"));
     const bin = join(directory, "bin");
     mkdirSync(bin);

@@ -1,0 +1,11 @@
+{
+  "name": "@oneharness-ui/conversation-ui-visual",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "typescript": "6.0.3",
+    "zod": "^4.4.3"
+  }
+}

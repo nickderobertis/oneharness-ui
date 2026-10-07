@@ -22,7 +22,6 @@ check:
     @ONEHARNESS_QUIET=1 just typecheck
     @ONEHARNESS_QUIET=1 just test
     @ONEHARNESS_QUIET=1 just build
-    @ONEHARNESS_QUIET=1 just supply-chain
     @if [ "${ONEHARNESS_QUIET:-}" != "1" ]; then echo "check: ok"; fi
 
 gate:
@@ -36,7 +35,6 @@ check-affected:
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "import boundaries" "Restore the documented package import direction, then rerun 'just lint'." -- node scripts/check-boundaries.mjs
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "shell lint" "Fix the reported shell diagnostics, then rerun 'just lint'." -- uvx --from shellcheck-py==0.11.0.1 shellcheck scripts/*.sh
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "workflow lint" "Fix the reported workflow diagnostics, then rerun 'just lint'." -- uvx --from actionlint-py==1.7.12.24 actionlint .github/workflows/*.yml
-    @ONEHARNESS_QUIET=1 just supply-chain
     @if [ "${ONEHARNESS_QUIET:-}" != "1" ]; then echo "affected gate: ok"; fi
 
 format:
@@ -65,11 +63,21 @@ test-e2e:
 
 # Pixel capture is intentionally separate from the cross-OS check matrix.
 visual:
-    @./scripts/run-quiet.sh "visual docs" "Inspect the screencomp classification, update the image-free manifest for intentional changes, then rerun 'just visual'." -- ./scripts/verify-visual.sh
+    @./scripts/run-quiet.sh "visual docs" "Inspect the screencomp classification, update the image-free manifest for intentional changes, then rerun 'just visual'." -- bunx nx run conversation-ui-visual:visual --outputStyle=static
 
 # Packages and drives the real desktop binary with official tauri-driver. Upstream supports Linux and Windows only.
 test-desktop-e2e:
     @./scripts/run-quiet.sh "native desktop journey" "Install the documented WebDriver prerequisite, inspect test-results/desktop-e2e, and rerun 'just test-desktop-e2e'." -- env RUSTFLAGS="-D warnings" bunx nx run desktop-shell-e2e:desktop-e2e --outputStyle=static
+
+# Installs only the locked JavaScript workspace (no browsers, Rust tools or builds), enough for Nx and the repo scripts.
+install-workspace:
+    @./scripts/run-quiet.sh "workspace install" "Restore bun.lock or registry access, then rerun 'just install-workspace'." -- bun install --frozen-lockfile --ignore-scripts
+
+# CI calls this to gate an expensive suite: prints run=true or run=false for whether the change between NX_BASE and NX_HEAD reaches the project.
+# The selector validates the project name itself, so the recipe only quotes it.
+select-affected project:
+    @[ -d node_modules/nx ] && [ -d node_modules/zod ] || { echo "affected selection: workspace dependencies are missing; run 'just install-workspace', then rerun 'just select-affected'" >&2; exit 1; }
+    @bun packages/affected-selection/src/select-affected.mjs {{quote(project)}}
 
 build:
     @./scripts/run-quiet.sh "build" "Fix the reported static-export or native build error, then rerun 'just build'." -- env RUSTFLAGS="-D warnings" bunx nx run-many -t build --all --outputStyle=static
@@ -108,16 +116,21 @@ dispatch-release:
 upload-release:
     @./scripts/run-quiet.sh "native release upload" "Prepare the canonical checksummed assets and verify the built-in GH_TOKEN, then rerun 'just upload-release'." -- ./scripts/upload-release.sh
 
+# GHSA-vfj7-8cjw-p6xm (braces <=3.0.3) has no patched release; braces is reached only through dev tooling
+# (semantic-release's commit-analyzer > micromatch, @wdio/cli and mocha-framework) on repo-authored glob patterns.
+# Remove the bun audit ignore once a fixed braces release exists. No other advisory is ignored.
+# Dependency policy and audit run once per commit in CI's Linux-only supply-chain job, not in check or check-affected.
 supply-chain:
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Rust dependency policy" "Resolve the reported license, advisory, source, or ban finding, then rerun 'just supply-chain'." -- cargo deny check --hide-inclusion-graph
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Rust dependency usage" "Remove or correctly declare the reported dependency, then rerun 'just supply-chain'." -- cargo machete
-    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "JavaScript dependency audit" "Upgrade or replace the vulnerable dependency, then rerun 'just supply-chain'." -- bun audit --audit-level=high
+    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "JavaScript dependency audit" "Upgrade or replace the vulnerable dependency, then rerun 'just supply-chain'." -- bun audit --audit-level=high --ignore=GHSA-vfj7-8cjw-p6xm
     @if [ "${ONEHARNESS_QUIET:-}" != "1" ]; then echo "supply-chain: ok"; fi
 
 upgrade:
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "JavaScript dependency upgrade" "Resolve the package conflict, then rerun 'just upgrade'." -- bun update
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Rust dependency upgrade" "Resolve the Cargo dependency conflict, then rerun 'just upgrade'." -- cargo update
     @ONEHARNESS_QUIET=1 just gate
+    @ONEHARNESS_QUIET=1 just supply-chain
     @if [ "${ONEHARNESS_QUIET:-}" != "1" ]; then echo "upgrade: ok"; fi
 
 setup-llmlint:
@@ -142,3 +155,4 @@ lint-llm-copilot:
 lint-llm-validate *args:
     @command -v llmlint >/dev/null 2>&1 || { echo "llmlint missing; run just setup-llmlint" >&2; exit 1; }
     @./scripts/run-quiet.sh "semantic lint configuration" "Correct llmlint.yml or its rule references, then rerun 'just lint-llm-validate'." -- llmlint validate "$@"
+    @./scripts/run-quiet.sh "llmlint override scope" "Copy the plugin's include list into the llmlint.yml override, then rerun 'just lint-llm-validate'." -- node scripts/check-llmlint-overrides.mjs

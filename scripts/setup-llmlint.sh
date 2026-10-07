@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -uo pipefail
 
-readonly LLMLINT_MIN="0.3.17"
+readonly LLMLINT_MIN="0.3.23"
 readonly BIN_DIR="$HOME/.local/bin"
 readonly ORIGINAL_PATH="$PATH"
 log() { printf 'setup-llmlint: %s\n' "$*" >&2; }

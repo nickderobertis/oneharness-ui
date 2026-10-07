@@ -24,7 +24,7 @@
     },
     "test": {
       "dependsOn": [{ "projects": ["ui"], "target": "test" }],
-      "command": "bun test scripts/build-native.test.ts scripts/check-version-drift.test.ts scripts/publish-ui.test.ts scripts/visual-docs.test.ts"
+      "command": "bun test scripts/check-version-drift.test.ts scripts/publish-ui.test.ts scripts/workflow-contract.test.ts"
     }
   }
 }

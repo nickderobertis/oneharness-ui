@@ -81,8 +81,16 @@ const typescriptVersion = rootManifest.devDependencies?.typescript;
 const typescriptManifests = [
   ["apps/conversation-ui/package.json", readJson("apps/conversation-ui/package.json")],
   ["apps/conversation-ui-e2e/package.json", readJson("apps/conversation-ui-e2e/package.json")],
+  [
+    "apps/conversation-ui-visual/package.json",
+    readJson("apps/conversation-ui-visual/package.json"),
+  ],
   ["apps/desktop-shell/package.json", desktopManifest],
   ["apps/desktop-shell-e2e/package.json", readJson("apps/desktop-shell-e2e/package.json")],
+  [
+    "packages/affected-selection/package.json",
+    readJson("packages/affected-selection/package.json"),
+  ],
   ["packages/browser-test-env/package.json", readJson("packages/browser-test-env/package.json")],
   ["packages/ipc-contract/package.json", readJson("packages/ipc-contract/package.json")],
   ["packages/oneharness-bridge/package.json", bridgeManifest],
@@ -97,6 +105,12 @@ for (const [path, manifest] of typescriptManifests) {
       `${path} TypeScript pin must match root package.json; update both manifests together`,
     );
   }
+}
+const typescriptGuidance = `TypeScript is pinned to ${typescriptVersion}`;
+if (!read("AGENTS.md").replace(/\s+/g, " ").includes(typescriptGuidance)) {
+  throw new Error(
+    `AGENTS.md must state "${typescriptGuidance}"; update the TypeScript pin and its guidance together`,
+  );
 }
 const sdkVersion = bridgeManifest.dependencies?.["@oneharness/sdk"];
 if (

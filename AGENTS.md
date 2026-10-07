@@ -19,7 +19,7 @@ owner of oneharness contracts and runtime validation.
 - **Language(s):** rust, typescript.
 - **References composed:** base.md, shapes/web-app.md, shapes/react.md,
   shapes/nextjs.md, languages/rust.md, languages/typescript.md, ci.md,
-  llmlint.md, releasing.md, monorepo.md.
+  llmlint.md, releasing.md, project-graph.md.
 - **Excluded, and why:** asdf and direnv add redundant environment layers over
   pinned Bun/Rust files and the bootstrap script; a network server layout does
   not fit a local-only desktop app.
@@ -27,7 +27,10 @@ owner of oneharness contracts and runtime validation.
 ## Workflow
 
 Use the `just` surface; do not hand-roll equivalent routines. `just check` is
-the complete pre-push gate and must pass before commits. Keep llmlint separate:
+the full deterministic sweep and must pass before commits. Supply-chain checks
+run once per commit in CI's Linux-only `supply-chain` job, never in `check` or
+`check-affected`; run `just supply-chain` after dependency changes. Keep llmlint
+separate:
 `just lint-llm`, `just lint-llm-diff`, and `just lint-llm-validate`; install it
 with `just setup-llmlint`.
 
@@ -35,7 +38,8 @@ with `just setup-llmlint`.
 
 - Dependency direction is shared → features → app; features do not import one
   another. Nx project tags and the TypeScript linter enforce the graph.
-- TypeScript stays at 5.9 until Next/Nx support the package-layout changes in 7.
+- TypeScript is pinned to 6.0.3 in every workspace manifest that declares it
+  and stays below 7 until Next/Nx support the package-layout changes in 7.
 - Never copy, generate, or maintain oneharness contract types here. Import SDK
   types and validators from the reproducibly pinned public `@oneharness/sdk` package.
 - Treat URL state, IPC, sidecar IO, executable/config discovery, CLI output,
@@ -58,11 +62,20 @@ with `just setup-llmlint`.
 - Squash-only PRs land on protected `main`; auto-merge, conversation resolution,
   linear history, and every `check`, `supply-chain`, `commitlint`, and `llmlint`
   context are required. Admin bypass is break-glass; merged heads auto-delete.
+- The repository releases on merge, so the broader tier (`full-check`) runs at
+  merge-to-main and the release waits for it; pull requests run only the
+  affected tier. Keep the release after the sweep, never beside it.
 - semantic-release computes the next version and creates `vX.Y.Z` on protected
   `main`; the version job reconciles the separate artifact workflow with its
   built-in token because
   token-created tags do not emit workflows. That workflow verifies the release
   and tag ancestry, versions its checkout, then builds and checksums artifacts.
+- The `llmlint` job passes when GitHub reports explicit Copilot quota
+  exhaustion, and only then. The judge runs on the short-lived built-in token,
+  so its capacity is the plan's Copilot quota; once that is spent no change can
+  make the required context pass, and failing it would block every merge on
+  billing rather than on code. Config validation still runs, and every finding
+  or other harness error still fails the job.
 
 ## Output and handoff
 

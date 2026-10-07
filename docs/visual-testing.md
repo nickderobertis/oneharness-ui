@@ -22,7 +22,9 @@ Commit only that JSON digest manifest, never baseline PNG files.
 ## Repository setup
 
 The `Visual docs` workflow is a strict drift gate and also publishes the review
-gallery. A maintainer must enable GitHub Pages with **Deploy from a branch** and
+gallery. It captures only when the change reaches the `conversation-ui-visual` Nx
+project, whose inputs are the files the captures render plus the capture
+tooling; a closed pull request still runs the preview cleanup. A maintainer must enable GitHub Pages with **Deploy from a branch** and
 select the `gh-pages` branch. Make the Pages site public if inline images should
 appear in pull-request comments. This strict gate does not push manifests and
 uses the scoped built-in token for publishing and comments, so it does not expose
