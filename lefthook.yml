@@ -4,5 +4,6 @@ pre-push:
     gate:
       run: just gate
     llmlint-config:
-      # Skip only when llmlint is not installed; a failing validation blocks the push.
+      # llmlint is an opt-in local install (just setup-llmlint), and the required llmlint
+      # CI job validates the config either way, so a host without it is not refused here.
       run: if command -v llmlint >/dev/null 2>&1; then just lint-llm-validate; fi
