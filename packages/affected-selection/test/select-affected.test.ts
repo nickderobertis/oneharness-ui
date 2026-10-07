@@ -49,7 +49,6 @@ function select(project: string, base: string) {
   };
 }
 
-// Commits one appended line to `path` on top of a clean base and returns that base.
 function commitChangeTo(path: string): string {
   git(worktree, ["reset", "--quiet", "--hard", "HEAD"]);
   const base = git(worktree, ["rev-parse", "HEAD"]);

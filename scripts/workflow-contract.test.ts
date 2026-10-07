@@ -428,7 +428,6 @@ function justRecipes(): Record<string, string> {
   );
 }
 
-// The commands a recipe runs, following its nested `just <recipe>` calls.
 function expand(recipes: Record<string, string>, name: string, seen = new Set<string>()): string {
   if (seen.has(name)) return "";
   seen.add(name);
