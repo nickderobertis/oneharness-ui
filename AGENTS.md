@@ -38,8 +38,8 @@ with `just setup-llmlint`.
 
 - Dependency direction is shared → features → app; features do not import one
   another. Nx project tags and the TypeScript linter enforce the graph.
-- TypeScript is pinned to 6.0.3 in every workspace manifest and stays below 7
-  until Next/Nx support the package-layout changes in 7.
+- TypeScript is pinned to 6.0.3 in every workspace manifest that declares it
+  and stays below 7 until Next/Nx support the package-layout changes in 7.
 - Never copy, generate, or maintain oneharness contract types here. Import SDK
   types and validators from the reproducibly pinned public `@oneharness/sdk` package.
 - Treat URL state, IPC, sidecar IO, executable/config discovery, CLI output,

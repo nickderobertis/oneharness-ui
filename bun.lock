@@ -86,6 +86,10 @@
         "zod": "^4.4.3",
       },
     },
+    "apps/conversation-ui-visual": {
+      "name": "@oneharness-ui/conversation-ui-visual",
+      "version": "0.1.0",
+    },
     "apps/desktop-shell": {
       "name": "@oneharness-ui/desktop-shell",
       "version": "0.1.0",
@@ -538,6 +542,8 @@
     "@oneharness-ui/conversation-ui": ["@oneharness-ui/conversation-ui@workspace:apps/conversation-ui"],
 
     "@oneharness-ui/conversation-ui-e2e": ["@oneharness-ui/conversation-ui-e2e@workspace:apps/conversation-ui-e2e"],
+
+    "@oneharness-ui/conversation-ui-visual": ["@oneharness-ui/conversation-ui-visual@workspace:apps/conversation-ui-visual"],
 
     "@oneharness-ui/desktop-shell": ["@oneharness-ui/desktop-shell@workspace:apps/desktop-shell"],
 
