@@ -49,9 +49,21 @@ rules:
   # The screencomp visual-docs capture (apps/conversation-ui-visual) is
   # documentation output, not a journey the gate runs: it captures the production
   # export in one x86_64 Docker container outside the cross-OS gate, and no gate
-  # target may run it. The app's browser journeys stay in scope.
+  # target may run it. The known project is excluded by path (the include list
+  # restates the plugin's, which an override replaces); the relevance clause
+  # keeps any other capture-only project out of scope. The app's browser
+  # journeys stay in scope.
   - name: browser_journeys_run_against_the_built_app
     override: true
+    files:
+      include:
+        - "**/e2e/**"
+        - "**/*.spec.ts"
+        - "**/*.spec.tsx"
+        - "**/playwright.config.*"
+        - "**/project.json"
+      exclude:
+        - "apps/conversation-ui-visual/**"
     relevance: browser end-to-end journeys or their owning project definitions change, excluding visual-docs projects whose only browser run is Docker screencomp capture outside the gate
 plugins:
   - "https://raw.githubusercontent.com/nickderobertis/llmlint/main/assets/config_lint.yml@1"
