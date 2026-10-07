@@ -11,6 +11,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 const remedy = "then rerun just lint-llm-validate";
+const isRecord = (value) => typeof value === "object" && value !== null && !Array.isArray(value);
+const malformed = (what) =>
+  new Error(`llmlint config printed ${what}; update llmlint with just setup-llmlint, ${remedy}`);
+
 const resolveConfig = (args) => {
   const result = spawnSync("llmlint", ["config", ...args], { encoding: "utf8" });
   if (result.status !== 0) {
@@ -18,26 +22,55 @@ const resolveConfig = (args) => {
       `llmlint config ${args.join(" ")} failed: ${result.stderr.trim()}; fix llmlint.yml, ${remedy}`,
     );
   }
-  return JSON.parse(result.stdout);
+  let parsed;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch {
+    throw malformed("output that is not JSON");
+  }
+  if (!isRecord(parsed) || !isRecord(parsed.config) || !Array.isArray(parsed.config.rules)) {
+    throw malformed("no config.rules list");
+  }
+  return parsed;
 };
-const ruleNamed = (config, name) => config.config.rules.find((rule) => rule.name === name);
+
+const includeOf = (config, name) => {
+  const rule = config.config.rules.find((entry) => isRecord(entry) && entry.name === name);
+  if (rule === undefined) throw malformed(`no rule named ${JSON.stringify(name)}`);
+  if (rule.files === null || rule.files === undefined) return [];
+  const include = isRecord(rule.files) ? rule.files.include : undefined;
+  if (!Array.isArray(include) || !include.every((glob) => typeof glob === "string")) {
+    throw malformed(`a non-string files.include for ${JSON.stringify(name)}`);
+  }
+  return include;
+};
+
 const sameList = (left, right) =>
   left.length === right.length && left.every((value, index) => value === right[index]);
 
 const local = resolveConfig(["--sources"]);
-const restated = Object.entries(local.sources.rules).filter(
-  ([, origin]) => origin.fields?.files !== undefined && origin.fields.files !== origin.source,
-);
+if (!isRecord(local.sources) || !isRecord(local.sources.rules)) {
+  throw malformed("no sources.rules map");
+}
+const restated = Object.entries(local.sources.rules).flatMap(([name, origin]) => {
+  if (!isRecord(origin) || typeof origin.source !== "string") {
+    throw malformed(`no source for rule ${JSON.stringify(name)}`);
+  }
+  const filesSource = isRecord(origin.fields) ? origin.fields.files : undefined;
+  return filesSource !== undefined && filesSource !== origin.source
+    ? [{ name, plugin: origin.source }]
+    : [];
+});
+
 const scratch = mkdtempSync(join(tmpdir(), "oneharness-ui-llmlint-"));
 try {
   const stale = [];
-  for (const [name, origin] of restated) {
-    const pluginConfig = join(scratch, `${name}.yml`);
-    writeFileSync(pluginConfig, `plugins:\n  - ${JSON.stringify(origin.source)}\n`);
-    const upstream = ruleNamed(resolveConfig(["-c", pluginConfig]), name)?.files?.include ?? [];
-    const current = ruleNamed(local, name)?.files?.include ?? [];
+  for (const [index, { name, plugin }] of restated.entries()) {
+    const pluginConfig = join(scratch, `plugin-${index}.yml`);
+    writeFileSync(pluginConfig, `plugins:\n  - ${JSON.stringify(plugin)}\n`);
+    const upstream = includeOf(resolveConfig(["-c", pluginConfig]), name);
     // A plugin rule with no include list is narrowed on purpose, not restated.
-    if (upstream.length > 0 && !sameList(upstream, current)) {
+    if (upstream.length > 0 && !sameList(upstream, includeOf(local, name))) {
       stale.push(`${name}: plugin includes ${JSON.stringify(upstream)}`);
     }
   }
