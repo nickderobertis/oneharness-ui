@@ -479,6 +479,7 @@ describe("gate tiers", () => {
 });
 
 describe("expensive suites run only when affected", () => {
+  const recipes = justRecipes();
   const selection = (value: Job, project: string) => {
     const index = (value.steps ?? []).findIndex(
       (step) =>
@@ -492,6 +493,34 @@ describe("expensive suites run only when affected", () => {
     }
     return { index, step: value.steps?.[index] };
   };
+
+  test("a clean checkout installs the locked workspace, and nothing expensive, before selecting", () => {
+    const install = recipes["install-workspace"] ?? "";
+    expect(install).toContain("bun install --frozen-lockfile --ignore-scripts");
+    expect(expand(recipes, "install-workspace")).not.toMatch(
+      /bootstrap|playwright install|cargo |tauri|build|capture/,
+    );
+    for (const [file, id, project] of [
+      ["desktop-e2e.yml", "desktop-e2e", "desktop-shell-e2e"],
+      ["visual-docs.yml", "select", "conversation-ui-visual"],
+    ] as const) {
+      const value = job(file, id);
+      const before = (value.steps ?? []).slice(0, selection(value, project).index);
+      const installs = before.filter((step) => /^just install-workspace$/m.test(step.run ?? ""));
+      expect({ file, installs: installs.length, gated: installs[0]?.if ?? null }).toEqual({
+        file,
+        installs: 1,
+        gated: null,
+      });
+      const expensive = before.filter((step) =>
+        /just (bootstrap|bundle|test-desktop-e2e|visual)\b|capture\.sh/.test(step.run ?? ""),
+      );
+      expect({ file, expensive: expensive.map((step) => step.name) }).toEqual({
+        file,
+        expensive: [],
+      });
+    }
+  });
 
   test("the packaged desktop journey is skipped per step, so both contexts still report", () => {
     const desktop = job("desktop-e2e.yml", "desktop-e2e");

@@ -69,10 +69,14 @@ visual:
 test-desktop-e2e:
     @./scripts/run-quiet.sh "native desktop journey" "Install the documented WebDriver prerequisite, inspect test-results/desktop-e2e, and rerun 'just test-desktop-e2e'." -- env RUSTFLAGS="-D warnings" bunx nx run desktop-shell-e2e:desktop-e2e --outputStyle=static
 
+# Installs only the locked JavaScript workspace (no browsers, Rust tools or builds), enough for Nx and the repo scripts.
+install-workspace:
+    @./scripts/run-quiet.sh "workspace install" "Restore bun.lock or registry access, then rerun 'just install-workspace'." -- bun install --frozen-lockfile --ignore-scripts
+
 # CI calls this to gate an expensive suite: prints run=true or run=false for whether the change between NX_BASE and NX_HEAD reaches the project.
 select-affected project:
     @[[ {{quote(project)}} =~ ^[a-z][a-z0-9-]{0,63}$ ]] || { echo "affected selection: pass an Nx project name such as desktop-shell-e2e" >&2; exit 2; }
-    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "workspace install" "Restore bun.lock or registry access, then rerun 'just select-affected'." -- bun install --frozen-lockfile --ignore-scripts
+    @[ -d node_modules/nx ] && [ -d node_modules/zod ] || { echo "affected selection: workspace dependencies are missing; run 'just install-workspace', then rerun 'just select-affected'" >&2; exit 1; }
     @bun scripts/select-affected.mjs {{quote(project)}}
 
 build:

@@ -36,6 +36,8 @@ jobs:
           bun-version: 1.3.14
       - name: Install just
         run: cargo install just --locked --version 1.42.4
+      - name: Install the locked workspace for selection
+        run: just install-workspace
       - name: Select the capture from the affected project graph
         id: select
         shell: bash
