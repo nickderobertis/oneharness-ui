@@ -318,7 +318,7 @@ describe("required status-check contexts", () => {
     expect(starts(unknown, pullRequest())).toBeUndefined();
   });
 
-  test("no matrix job reporting a required context carries a job-level condition", () => {
+  test("the desktop-e2e, macos-native-smoke and supply-chain jobs carry no job-level condition", () => {
     for (const [file, id] of [
       ["desktop-e2e.yml", "desktop-e2e"],
       ["desktop-e2e.yml", "macos-native-smoke"],
