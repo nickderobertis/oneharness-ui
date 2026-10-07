@@ -36,6 +36,13 @@ export type PhaseResult = {
 };
 
 export type PhaseFailureDetails = {
+  /**
+   * `performance.now()` reading taken as the phase's bound timer started, or
+   * `null` when the phase never started. Timing is measured from here on the
+   * monotonic clock: in `bun test` a `Date.now()` read just after a spawn can
+   * lag that clock by over 100 ms, which makes a correct stop look early.
+   */
+  readonly boundStartedAt: number | null;
   /** `null` when the phase never started or was stopped before it could exit. */
   readonly exitCode: number | null;
   readonly phase: string;
@@ -71,6 +78,7 @@ export async function runPhase(phase: Phase): Promise<PhaseResult> {
   ]);
   let timedOut = false;
   let forceKillTimer: ReturnType<typeof setTimeout> | undefined;
+  const boundStartedAt = performance.now();
   const boundTimer = setTimeout(() => {
     timedOut = true;
     child.kill();
@@ -88,6 +96,7 @@ export async function runPhase(phase: Phase): Promise<PhaseResult> {
   await withDeadline(drained, OUTPUT_DRAIN_MS);
   if (timedOut || exitCode !== 0) {
     throw new PhaseFailure({
+      boundStartedAt,
       exitCode: timedOut ? null : exitCode,
       phase: phase.name,
       stderr: captured(stderr),
@@ -109,6 +118,7 @@ function spawnPhase(phase: Phase) {
     });
   } catch (cause) {
     throw new PhaseFailure({
+      boundStartedAt: null,
       exitCode: null,
       phase: phase.name,
       stderr: cause instanceof Error ? cause.message : String(cause),

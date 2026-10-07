@@ -133,13 +133,13 @@ describe("bounded package-test phases", () => {
     expect(error.details.phase).toBe("consumer verification");
     expect(error.details.timedOut).toBe(false);
     expect(error.details.exitCode).toBeNull();
+    expect(error.details.boundStartedAt).toBeNull();
     expect(error.message).toContain("consumer verification phase could not start");
     expect(error.details.stderr.length).toBeGreaterThan(0);
   });
 
   test("stops an over-bound phase at its bound and reports what it had written", async () => {
     const hanging = await writeHangingScript("over-bound");
-    const startedAt = Date.now();
 
     const error = await captureFailure({
       command: ["bun", hanging],
@@ -147,7 +147,7 @@ describe("bounded package-test phases", () => {
       name: "offline install",
       timeoutMs: OVER_BOUND_MS,
     });
-    const elapsed = Date.now() - startedAt;
+    const elapsed = elapsedSinceBound(error);
 
     expect(error.details.timedOut).toBe(true);
     expect(error.details.phase).toBe("offline install");
@@ -159,7 +159,6 @@ describe("bounded package-test phases", () => {
 
   test("kills an over-bound phase that ignores the polite stop", async () => {
     const hanging = await writeHangingScript("ignores-termination", { ignoresTermination: true });
-    const startedAt = Date.now();
 
     const error = await captureFailure({
       command: ["bun", hanging],
@@ -167,7 +166,7 @@ describe("bounded package-test phases", () => {
       name: "offline install",
       timeoutMs: OVER_BOUND_MS,
     });
-    const elapsed = Date.now() - startedAt;
+    const elapsed = elapsedSinceBound(error);
 
     expect(error.details.timedOut).toBe(true);
     expect(error.details.phase).toBe("offline install");
@@ -189,14 +188,13 @@ describe("bounded package-test phases", () => {
     const timings = [];
     for (const { name, timeoutMs } of bounds) {
       const hanging = await writeHangingScript(`bound-${timeoutMs}`);
-      const startedAt = Date.now();
       const error = await captureFailure({
         command: ["bun", hanging],
         cwd: workspace,
         name,
         timeoutMs,
       });
-      timings.push({ elapsed: Date.now() - startedAt, error, timeoutMs });
+      timings.push({ elapsed: elapsedSinceBound(error), error, timeoutMs });
     }
 
     for (const { elapsed, error, timeoutMs } of timings) {
@@ -224,6 +222,13 @@ await new Promise((done) => setTimeout(done, ${HANG_MS}));
 `,
   );
   return path;
+}
+
+/** Milliseconds from the runner's own bound timer starting until now, on the monotonic clock. */
+function elapsedSinceBound(error: PhaseFailure): number {
+  const { boundStartedAt } = error.details;
+  if (boundStartedAt === null) throw new Error(`the ${error.details.phase} phase never started`);
+  return performance.now() - boundStartedAt;
 }
 
 async function captureFailure(phase: Parameters<typeof runPhase>[0]): Promise<PhaseFailure> {
