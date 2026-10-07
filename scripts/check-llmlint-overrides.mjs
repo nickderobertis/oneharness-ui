@@ -17,6 +17,11 @@ const malformed = (what) =>
 
 const resolveConfig = (args) => {
   const result = spawnSync("llmlint", ["config", ...args], { encoding: "utf8" });
+  if (result.error !== undefined) {
+    throw new Error(
+      `could not run llmlint: ${result.error.message}; install it with just setup-llmlint, ${remedy}`,
+    );
+  }
   if (result.status !== 0) {
     throw new Error(
       `llmlint config ${args.join(" ")} failed: ${result.stderr.trim()}; fix llmlint.yml, ${remedy}`,
@@ -56,7 +61,13 @@ const restated = Object.entries(local.sources.rules).flatMap(([name, origin]) =>
   if (!isRecord(origin) || typeof origin.source !== "string") {
     throw malformed(`no source for rule ${JSON.stringify(name)}`);
   }
-  const filesSource = isRecord(origin.fields) ? origin.fields.files : undefined;
+  if (origin.fields !== undefined && !isRecord(origin.fields)) {
+    throw malformed(`non-object field sources for rule ${JSON.stringify(name)}`);
+  }
+  const filesSource = origin.fields?.files;
+  if (filesSource !== undefined && typeof filesSource !== "string") {
+    throw malformed(`a non-string files source for rule ${JSON.stringify(name)}`);
+  }
   return filesSource !== undefined && filesSource !== origin.source
     ? [{ name, plugin: origin.source }]
     : [];
