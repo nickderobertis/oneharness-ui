@@ -98,6 +98,13 @@ describe("affected suite selection", () => {
     expect(select("desktop-shell-e2e", "f".repeat(40)).stdout).toBe("run=true\n");
   });
 
+  test("rejects a project the workspace does not have rather than skipping its suite", () => {
+    const result = select("desktop-shel-e2e", "0".repeat(40));
+    expect(result.exitCode).toBe(2);
+    expect(result.stdout).toBe("");
+    expect(result.stderr).toContain("'desktop-shel-e2e' is not an Nx project here");
+  });
+
   test("rejects a base that is not a commit SHA with a remedy", () => {
     const result = select("desktop-shell-e2e", "origin/main");
     expect(result.exitCode).toBe(2);

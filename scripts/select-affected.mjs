@@ -23,6 +23,47 @@ if (!/^[0-9a-f]{40}$/.test(base) || !/^([0-9a-f]{40}|HEAD)$/.test(head)) {
   fail("NX_BASE must be a commit SHA and NX_HEAD must be a commit SHA or HEAD");
 }
 
+// CI runs this under Bun, so `bun x nx` resolves the workspace's pinned Nx on
+// every runner OS without a shell.
+function listProjects(args, rerun) {
+  const nx = spawnSync(process.execPath, ["x", "nx", "show", "projects", ...args, "--json"], {
+    cwd: root,
+    encoding: "utf8",
+    env: { ...process.env, NX_DAEMON: "false", NX_TUI: "false" },
+  });
+  if (nx.status !== 0) {
+    // Nx's own diagnostic names the broken project or revision; it is graph
+    // metadata, never session content.
+    const diagnostic = (nx.error?.message ?? `${nx.stderr}${nx.stdout}`).trim().slice(-4000);
+    if (diagnostic) console.error(diagnostic);
+    fail(
+      `nx could not list the projects (exit ${nx.status ?? "signal"}); fix the diagnostic above, then rerun '${rerun}'`,
+      1,
+    );
+  }
+  const parsed = z.array(z.string()).safeParse(
+    (() => {
+      try {
+        return JSON.parse(nx.stdout);
+      } catch {
+        return null;
+      }
+    })(),
+  );
+  if (!parsed.success) {
+    fail(
+      "nx printed something other than a JSON list of project names; run 'just install-workspace' to restore the pinned Nx, then rerun the selection",
+      1,
+    );
+  }
+  return parsed.data;
+}
+
+// A misspelled project is never affected, so it would skip its suite silently.
+if (!listProjects([], "bun x nx show projects").includes(project)) {
+  fail(`'${project}' is not an Nx project here; pass a name 'bun x nx show projects' lists`);
+}
+
 // A push that creates the branch reports an all-zero `before`, and a force push
 // can name a commit the checkout lacks. Neither gives a base to diff from, so
 // the suite runs rather than being skipped on a guess.
@@ -35,40 +76,8 @@ if (!baseKnown) {
   process.exit(0);
 }
 
-// CI runs this under Bun, so `bun x nx` resolves the workspace's pinned Nx on
-// every runner OS without a shell.
-const nx = spawnSync(
-  process.execPath,
-  ["x", "nx", "show", "projects", "--affected", `--base=${base}`, `--head=${head}`, "--json"],
-  {
-    cwd: root,
-    encoding: "utf8",
-    env: { ...process.env, NX_DAEMON: "false", NX_TUI: "false" },
-  },
+const affected = listProjects(
+  ["--affected", `--base=${base}`, `--head=${head}`],
+  `bun x nx show projects --affected --base=${base} --head=${head}`,
 );
-if (nx.status !== 0) {
-  // Nx's own diagnostic names the broken project or revision; it is graph
-  // metadata, never session content.
-  const diagnostic = (nx.error?.message ?? `${nx.stderr}${nx.stdout}`).trim().slice(-4000);
-  if (diagnostic) console.error(diagnostic);
-  fail(
-    `nx could not list the affected projects (exit ${nx.status ?? "signal"}); fix the diagnostic above, then rerun 'bun x nx show projects --affected --base=${base} --head=${head}'`,
-    1,
-  );
-}
-const parsed = z.array(z.string()).safeParse(
-  (() => {
-    try {
-      return JSON.parse(nx.stdout);
-    } catch {
-      return null;
-    }
-  })(),
-);
-if (!parsed.success) {
-  fail(
-    "nx printed something other than a JSON list of project names; run 'bun install --frozen-lockfile' to restore the pinned Nx, then rerun the selection",
-    1,
-  );
-}
-process.stdout.write(`run=${parsed.data.includes(project)}\n`);
+process.stdout.write(`run=${affected.includes(project)}\n`);
