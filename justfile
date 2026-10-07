@@ -116,11 +116,14 @@ dispatch-release:
 upload-release:
     @./scripts/run-quiet.sh "native release upload" "Prepare the canonical checksummed assets and verify the built-in GH_TOKEN, then rerun 'just upload-release'." -- ./scripts/upload-release.sh
 
+# GHSA-vfj7-8cjw-p6xm (braces <=3.0.3) has no patched release; braces is reached only through dev tooling
+# (semantic-release's commit-analyzer > micromatch, @wdio/cli and mocha-framework) on repo-authored glob patterns.
+# Remove the bun audit ignore once a fixed braces release exists. No other advisory is ignored.
 # Dependency policy and audit run once per commit in CI's Linux-only supply-chain job, not in check or check-affected.
 supply-chain:
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Rust dependency policy" "Resolve the reported license, advisory, source, or ban finding, then rerun 'just supply-chain'." -- cargo deny check --hide-inclusion-graph
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Rust dependency usage" "Remove or correctly declare the reported dependency, then rerun 'just supply-chain'." -- cargo machete
-    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "JavaScript dependency audit" "Upgrade or replace the vulnerable dependency, then rerun 'just supply-chain'." -- bun audit --audit-level=high
+    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "JavaScript dependency audit" "Upgrade or replace the vulnerable dependency, then rerun 'just supply-chain'." -- bun audit --audit-level=high --ignore=GHSA-vfj7-8cjw-p6xm
     @if [ "${ONEHARNESS_QUIET:-}" != "1" ]; then echo "supply-chain: ok"; fi
 
 upgrade:
