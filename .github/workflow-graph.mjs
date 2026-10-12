@@ -117,8 +117,16 @@ export function resolveRun(file, workflow, scenario, graph = workflows(), stack 
           } else throw new Error(`Unresolved reusable call: ${job.uses}`);
           if (!called) throw new Error(`Missing reusable workflow: ${target}`);
           const callTrigger = typeof called.on === 'object' && !Array.isArray(called.on) ? called.on?.workflow_call : undefined;
-          const defaults = Object.fromEntries(Object.entries(callTrigger?.inputs ?? {}).map(([key, value]) => [key, value.default ?? (value.type === 'boolean' ? false : '')]));
-          const nestedScenario = { ...scenario, inputs: { ...defaults, ...Object.fromEntries(Object.entries(job.with ?? {}).map(([k,v]) => [k, typeof v === 'string' ? interpolate(v, expanded) : v])) } };
+          const declared = callTrigger?.inputs ?? {};
+          const supplied = Object.fromEntries(Object.entries(job.with ?? {}).map(([key, value]) => [key, typeof value === 'string' ? interpolate(value, expanded) : value]));
+          for (const key of Object.keys(supplied)) if (!(key in declared)) throw new Error(`Unknown reusable input: ${target}:${key}`);
+          const inputs = Object.fromEntries(Object.entries(declared).map(([key, value]) => {
+            if (value.required && !(key in supplied)) throw new Error(`Missing required reusable input: ${target}:${key}`);
+            const resolved = supplied[key] ?? value.default ?? (value.type === 'boolean' ? false : value.type === 'number' ? 0 : '');
+            if (typeof resolved !== value.type) throw new Error(`Invalid reusable input type: ${target}:${key}; expected ${value.type}`);
+            return [key, resolved];
+          }));
+          const nestedScenario = { ...scenario, inputs };
           rows.push(...resolveRun(target, called, nestedScenario, graph, [...stack, file]).map(row => ({ ...row, active: active && row.active, call: `${file}:${id}` })));
           continue;
         }

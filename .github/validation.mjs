@@ -49,7 +49,7 @@ export function matrix(value) {
 /** @param {unknown} value @param {string} site */
 function step(value, site) {
   const document = object(value, site);
-  return { ...document, id: optional(document.id, `${site}.id`, text), run: optional(document.run, `${site}.run`, text), uses: optional(document.uses, `${site}.uses`, text), env: optional(document.env, `${site}.env`, (value, site) => record(value, site, (value, site) => text(value, site, true))) };
+  return { ...document, name: optional(document.name, `${site}.name`, text), if: optional(document.if, `${site}.if`, text), with: optional(document.with, `${site}.with`, (value, site) => record(value, site, scalar)), id: optional(document.id, `${site}.id`, text), run: optional(document.run, `${site}.run`, text), uses: optional(document.uses, `${site}.uses`, text), env: optional(document.env, `${site}.env`, (value, site) => record(value, site, (value, site) => text(value, site, true))) };
 }
 /** @param {unknown} value @param {string} site */
 export function job(value, site) {
@@ -73,7 +73,7 @@ function input(value, site) {
   if (type !== 'string' && type !== 'boolean' && type !== 'number') throw new Error(`Unsupported input type: ${site}`);
   const defaultValue = optional(document.default, `${site}.default`, scalar);
   if (defaultValue !== undefined && typeof defaultValue !== type) throw new Error(`${site} has an invalid default`);
-  return { ...document, type, default: defaultValue };
+  return { ...document, type, required: optional(document.required, `${site}.required`, boolean), default: defaultValue };
 }
 /** @param {unknown} value @param {string} site */
 export function trigger(value, site) {
