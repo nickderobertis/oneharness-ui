@@ -126,8 +126,11 @@ upload-release:
 supply-chain:
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Rust dependency policy" "Resolve the reported license, advisory, source, or ban finding, then rerun 'just supply-chain'." -- cargo deny check --hide-inclusion-graph
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Rust dependency usage" "Remove or correctly declare the reported dependency, then rerun 'just supply-chain'." -- cargo machete
-    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "JavaScript dependency audit" "Upgrade or replace the vulnerable dependency, then rerun 'just supply-chain'." -- bun audit --audit-level=high --ignore=GHSA-vfj7-8cjw-p6xm --ignore=GHSA-8r5x-fm3f-whwj --ignore=GHSA-p8wg-vrv2-v86f --ignore=GHSA-cjq9-62q9-8jv4
+    @ONEHARNESS_QUIET=1 just audit-javascript
     @if [ "${ONEHARNESS_QUIET:-}" != "1" ]; then echo "supply-chain: ok"; fi
+
+audit-javascript:
+    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "JavaScript dependency audit" "Upgrade or replace the vulnerable dependency, then rerun 'just supply-chain'." -- bun audit --audit-level=high --ignore=GHSA-vfj7-8cjw-p6xm --ignore=GHSA-8r5x-fm3f-whwj --ignore=GHSA-p8wg-vrv2-v86f --ignore=GHSA-cjq9-62q9-8jv4
 
 upgrade:
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "JavaScript dependency upgrade" "Resolve the package conflict, then rerun 'just upgrade'." -- bun update
@@ -159,3 +162,17 @@ lint-llm-validate *args:
     @command -v llmlint >/dev/null 2>&1 || { echo "llmlint missing; run just setup-llmlint" >&2; exit 1; }
     @./scripts/run-quiet.sh "semantic lint configuration" "Correct llmlint.yml or its rule references, then rerun 'just lint-llm-validate'." -- llmlint validate "$@"
     @./scripts/run-quiet.sh "llmlint override scope" "Copy the plugin's include list into the llmlint.yml override, then rerun 'just lint-llm-validate'." -- node scripts/check-llmlint-overrides.mjs
+
+# CI supplies the immutable event document and writes only the classifier's routing flag.
+classify-macos-coverage:
+    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Mac coverage classification" "Supply the PR event path, base/head refs and writable runner temp/output paths, then rerun just classify-macos-coverage." -- bash -c 'node .github/macos-policy.mjs classify --event "${GITHUB_EVENT_PATH:?}" --base "${BASE_SHA:?}" --head "${HEAD_SHA:?}" > "${RUNNER_TEMP:?}/macos-policy.json"'
+    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Mac coverage output recording" "Restore the classifier JSON and writable GITHUB_OUTPUT path, then rerun just classify-macos-coverage." -- node .github/record-policy-output.mjs "${RUNNER_TEMP:-}/macos-policy.json"
+
+macos-proof-result:
+    @node .github/macos-policy.mjs carrier --policy "${POLICY_RESULT:-}" --mac "${MAC_RESULT:-}" --required "${MAC_REQUIRED:-}"
+
+verify-macos-artifact:
+    @bash "{{justfile_directory()}}/scripts/verify-macos-artifact.sh"
+
+checkout-release:
+    @./scripts/run-quiet.sh "release source checkout" "Repair the verified release tag or token as reported above, then rerun just checkout-release." -- ./scripts/checkout-release.sh

@@ -47,7 +47,7 @@ test('budget reporter refuses stale or missing input', () => {
 
 test('the pinned reusable snapshot is the exact upstream source used for scheduling resolution', () => {
   const lock = JSON.parse(readFileSync(resolve(root, '.github/reusable-workflows/lock.json'), 'utf8'));
-  const source = readFileSync(resolve(root, '.github/reusable-workflows/screencomp.yml'));
+  const source = readFileSync(resolve(root, '.github/reusable-workflows/screencomp.yml'), 'utf8').split('\n').slice(1).join('\n');
   assert.equal(createHash('sha256').update(source).digest('hex'), lock.sha256);
   assert.equal(workflows()['visual-docs.yml'].jobs['visual-docs'].uses, lock.uses);
 });

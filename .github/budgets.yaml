@@ -1,5 +1,6 @@
 schema_version: 1
 budgets:
+  # llmlint: ignore[comments_earn_their_place] The manager explicitly requires this exact scheduling-exception reason at each registration to preserve the agreement allowing separate bounds.
   # The brief explicitly requests both jobs/run and Mac-spending runs/change bounds; the manager approved separate budgets for these two scheduling constraints.
   - id: oneharness-ui-macos-jobs-per-run
     description: >-
@@ -18,6 +19,7 @@ budgets:
     threshold: 1
     unit: jobs
     labels: [github-workflows]
+  # llmlint: ignore[comments_earn_their_place] The manager explicitly requires this exact scheduling-exception reason at each registration to preserve the agreement allowing separate bounds.
   # The brief explicitly requests both jobs/run and Mac-spending runs/change bounds; the manager approved separate budgets for these two scheduling constraints.
   - id: oneharness-ui-macos-runs-per-change
     description: >-

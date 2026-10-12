@@ -21,6 +21,14 @@
         "zod": "^4.4.3",
       },
     },
+    ".github": {
+      "name": "oneharness-ui-github-tooling",
+      "dependencies": {
+        "@actions/expressions": "0.3.61",
+        "@onebudgetspec/sdk": "0.1.4",
+        "yaml": "2.9.0",
+      },
+    },
     "apps/conversation-ui": {
       "name": "@oneharness-ui/conversation-ui",
       "version": "0.1.0",
@@ -236,6 +244,8 @@
     "@actions/core": ["@actions/core@3.0.1", "", { "dependencies": { "@actions/exec": "^3.0.0", "@actions/http-client": "^4.0.0" } }, "sha512-a6d/Nwahm9fliVGRhdhofo40HjHQasUPusmc7vBfyky+7Z+P2A1J68zyFVaNcEclc/Se+eO595oAr5nwEIoIUA=="],
 
     "@actions/exec": ["@actions/exec@3.0.0", "", { "dependencies": { "@actions/io": "^3.0.2" } }, "sha512-6xH/puSoNBXb72VPlZVm7vQ+svQpFyA96qdDBvhB8eNZOE8LtPf9L4oAsfzK/crCL8YZ+19fKYVnM63Sl+Xzlw=="],
+
+    "@actions/expressions": ["@actions/expressions@0.3.61", "", {}, "sha512-Ig+tXELvTjlqxQAWBQnLNn2dPpNraLMdSnT+vDzDPmJtbNUhIAH/Z9kVT8pZ8UtJi9vUGs8hwHE8JFJmbOnLEA=="],
 
     "@actions/http-client": ["@actions/http-client@4.0.1", "", { "dependencies": { "tunnel": "^0.0.6", "undici": "^6.23.0" } }, "sha512-+Nvd1ImaOZBSoPbsUtEhv+1z99H12xzncCkz0a3RuehINE81FZSe2QTj3uvAPTcJX/SCzUQHQ0D1GrPMbrPitg=="],
 
@@ -550,6 +560,22 @@
     "@octokit/request-error": ["@octokit/request-error@7.1.0", "", { "dependencies": { "@octokit/types": "^16.0.0" } }, "sha512-KMQIfq5sOPpkQYajXHwnhjCC0slzCNScLHs9JafXc4RAJI+9f+jNDlBNaIMTvazOPLgb4BnlhGJOTbnN0wIjPw=="],
 
     "@octokit/types": ["@octokit/types@16.0.0", "", { "dependencies": { "@octokit/openapi-types": "^27.0.0" } }, "sha512-sKq+9r1Mm4efXW1FCk7hFSeJo4QKreL/tTbR0rz/qx/r1Oa2VV83LTA/H/MuCOX7uCIJmQVRKBcbmWoySjAnSg=="],
+
+    "@onebudgetspec/cli": ["@onebudgetspec/cli@0.1.4", "", { "optionalDependencies": { "@onebudgetspec/cli-darwin-arm64": "0.1.4", "@onebudgetspec/cli-darwin-x64": "0.1.4", "@onebudgetspec/cli-linux-arm64": "0.1.4", "@onebudgetspec/cli-linux-x64": "0.1.4", "@onebudgetspec/cli-win32-arm64": "0.1.4", "@onebudgetspec/cli-win32-x64": "0.1.4" }, "bin": { "onebudgetspec": "bin/onebudgetspec.js" } }, "sha512-Tq1FkYjSqJCEI441hMppHz64wXvj0IDg/MeRh0qrDaCIdgAiXNKL6EKSefMv9uuO9yiBwIs33FtwhEHzdAdJfg=="],
+
+    "@onebudgetspec/cli-darwin-arm64": ["@onebudgetspec/cli-darwin-arm64@0.1.4", "", { "os": "darwin", "cpu": "arm64" }, "sha512-nFjU4DnAR73B2lyKtq8kmxaE4F/XtyHrvUzoYSCGkFpb8lqTTmkRPr4FjNzlutgQD0wn6JHlF9as3u/AHpx01g=="],
+
+    "@onebudgetspec/cli-darwin-x64": ["@onebudgetspec/cli-darwin-x64@0.1.4", "", { "os": "darwin", "cpu": "x64" }, "sha512-87Dez6i+8DNXp5F1Dnc4nKfDt4n9fSAIWf/ceQHYRb0nWhWLZR3kD1StdbUuPZEqZ3MXTpq49+biIiWR7i75HA=="],
+
+    "@onebudgetspec/cli-linux-arm64": ["@onebudgetspec/cli-linux-arm64@0.1.4", "", { "os": "linux", "cpu": "arm64" }, "sha512-1hfcpTPg9zb4fFpUV9Pqn6qFj4TPUptXlPU7RoAMIbGwfg2JZZ/N8cu5AOxa32MFiNmyaRVq3H+3uoThCQlEWw=="],
+
+    "@onebudgetspec/cli-linux-x64": ["@onebudgetspec/cli-linux-x64@0.1.4", "", { "os": "linux", "cpu": "x64" }, "sha512-EE309bKhIz96v58aDhg0AVqYe3bQarFy9Dv0N3WcR2YWCRNV0n1d5OSgSQmNc8hh8b6JTu5cbKr/cPZswiwLjA=="],
+
+    "@onebudgetspec/cli-win32-arm64": ["@onebudgetspec/cli-win32-arm64@0.1.4", "", { "os": "win32", "cpu": "arm64" }, "sha512-qND1GWB9Zxc9KSnfX9UN7BSsYbbi3YbBjh64pFHu9PuzywKdNfsmYFdmKjbeALhvNtwL0jjM3DYiQX9kFa9RCw=="],
+
+    "@onebudgetspec/cli-win32-x64": ["@onebudgetspec/cli-win32-x64@0.1.4", "", { "os": "win32", "cpu": "x64" }, "sha512-qHhVj30S/Ynj71FMEcco18Nk5biQum1YxQyHzyZ5i1yZfryvFIAu94BfnqWS1WzIQjQi3KdeW56DhNfpuOg5jA=="],
+
+    "@onebudgetspec/sdk": ["@onebudgetspec/sdk@0.1.4", "", { "optionalDependencies": { "@onebudgetspec/cli": "0.1.4" } }, "sha512-sey8ntapirT9NqilIJ8RR7lzyjNteR87RlUVprCLU6tBxCdPpU1+ZeUDspCc4a2tvSPpiBdd465siX2byKkbhQ=="],
 
     "@oneharness-ui/affected-selection": ["@oneharness-ui/affected-selection@workspace:packages/affected-selection"],
 
@@ -1760,6 +1786,8 @@
     "once": ["once@1.4.0", "", { "dependencies": { "wrappy": "1" } }, "sha512-lNaJgI+2Q5URQBkccEKHTQOPaXdUxnZZElQTZY0MFUAuaEqe1E+Nyvgdz/aIyNi6Z9MzO5dv1H8n58/GELp3+w=="],
 
     "oneharness-cli": ["oneharness-cli@0.19.0", "", { "optionalDependencies": { "@oneharness/cli-darwin-arm64": "0.19.0", "@oneharness/cli-darwin-x64": "0.19.0", "@oneharness/cli-linux-arm64": "0.19.0", "@oneharness/cli-linux-x64": "0.19.0", "@oneharness/cli-win32-x64": "0.19.0" }, "bin": { "oneharness": "bin/oneharness.js" } }, "sha512-pO5AyBjLjqYwH9lYdw1h58mGYkOZMnWIGuduLY93JbedujzNlHxIyonrYjnSPgkxZNvoakvs4iUNhBb2UcgNGA=="],
+
+    "oneharness-ui-github-tooling": ["oneharness-ui-github-tooling@workspace:.github"],
 
     "onetime": ["onetime@5.1.2", "", { "dependencies": { "mimic-fn": "^2.1.0" } }, "sha512-kbpaSSGJTWdAY5KPVeMOKXSrPtr8C8C7wodJbcsd51jRnmD+GZu8Y0VoU6Dm5Z4vWr0Ig/1NKuWRKf7j5aaYSg=="],
 

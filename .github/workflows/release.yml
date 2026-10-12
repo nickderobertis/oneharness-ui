@@ -83,30 +83,22 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: just bundle
+      # Historical release tags may predate the verifier recipe. Keep package
+      # production on the verified tag and load verification from this workflow's revision.
+      - name: Load verification commands from the workflow revision
+        if: runner.os == 'macOS'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: release-verification
+          sparse-checkout: |
+            justfile
+            scripts/verify-macos-artifact.sh
+          sparse-checkout-cone-mode: false
       - name: Mount, install, and verify native application
         if: runner.os == 'macOS'
-        run: |
-          shopt -s nullglob
-          images=(target/release/bundle/dmg/*.dmg)
-          if (( ${#images[@]} != 1 )); then
-            echo "Expected one DMG under target/release/bundle/dmg; inspect the bundle output and rerun the macOS smoke" >&2
-            exit 1
-          fi
-          image="${images[0]}"
-          mount="$(hdiutil attach "$image" -nobrowse | tail -1 | sed 's#^.*\(/Volumes/.*\)#\1#')"
-          case "$mount" in
-            /Volumes/*) ;;
-            *) echo "DMG mount did not resolve under /Volumes; inspect hdiutil output and rerun the macOS smoke" >&2; exit 1 ;;
-          esac
-          trap 'hdiutil detach "$mount"' EXIT
-          sudo ditto "$mount/oneharness.app" /Applications/oneharness.app
-          hdiutil detach "$mount"
-          trap - EXIT
-          test -x /Applications/oneharness.app/Contents/MacOS/oneharness
-          bridge=/Applications/oneharness.app/Contents/MacOS/oneharness-ui-bridge
-          test -x "$bridge"
-          response="$(printf '{"kind":"unknown"}\n' | "$bridge")"
-          node -e 'const value=JSON.parse(process.argv[1]); if(value.ok!==false||value.error?.code!=="INVALID_REQUEST") process.exit(1)' "$response"
+        # llmlint: ignore[release_does_not_regate_an_already_swept_commit] The dispatch explicitly requires acceptance of the newly materialized exact-tag DMG before publication. This validates installed release payload assembly after set-version and bundling, without repeating the shared quality sweep.
+        run: just --justfile release-verification/justfile --working-directory "$GITHUB_WORKSPACE" verify-macos-artifact
       - name: Prepare canonical release assets and checksums
         env:
           BUNDLE_DIRECTORY: target/release/bundle
@@ -150,18 +142,18 @@ jobs:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
+      - name: Install just
+        run: cargo install just --locked --version 1.42.4
       - name: Validate and check out the release source
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TAG: ${{ inputs.release_tag }}
-        run: ./scripts/checkout-release.sh
+        run: just checkout-release
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           pattern: release-*-${{ inputs.release_tag }}
           merge-multiple: true
           path: target/release-assets
-      - name: Install just
-        run: cargo install just --locked --version 1.42.4
       - name: Publish assets after all native assertions
         env:
           GH_TOKEN: ${{ github.token }}

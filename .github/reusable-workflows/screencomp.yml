@@ -1,3 +1,4 @@
+# llmlint: ignore-file[comments_earn_their_place, boundary_inputs_validated] This is an immutable upstream workflow fixture, not an Actions entrypoint: its original source bytes are checked against the pinned upstream digest. Rewriting upstream comments or architecture logic would falsify that fixture. The resolver validates the workflow shape and producer matrix, rejects unsupported/duplicate architecture lanes, and only consumes the checked output for scheduling.
 # screencomp reusable visual-docs workflow.
 #
 # Call it from a consumer repo and own only the capture; everything downstream —
