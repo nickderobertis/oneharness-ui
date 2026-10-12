@@ -1,0 +1,5 @@
+{
+  "uses": "nickderobertis/screencomp/.github/workflows/visual-docs-reusable.yml@4bacdb8b8ad407f775cfade4697bbe02de1d316f",
+  "source": "https://raw.githubusercontent.com/nickderobertis/screencomp/4bacdb8b8ad407f775cfade4697bbe02de1d316f/.github/workflows/visual-docs-reusable.yml",
+  "sha256": "68ef284961e7197af18d95ec5e61cf78de141b5ffce9e5ef5825e38bc52aac5e"
+}

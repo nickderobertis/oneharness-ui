@@ -1,0 +1,25 @@
+{
+  "name": "github-workflows",
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": ".github",
+  "tags": ["scope:tooling", "type:tool"],
+  "namedInputs": {
+    "policy": ["{projectRoot}/**/*", "!{projectRoot}/node_modules/**/*", "!{projectRoot}/.telemetry/**/*", "{workspaceRoot}/scripts/release-assets.mjs", "{workspaceRoot}/scripts/set-version.mjs", "{workspaceRoot}/scripts/dispatch-release.sh", "{workspaceRoot}/scripts/checkout-release.sh", "{workspaceRoot}/scripts/upload-release.sh", "{workspaceRoot}/scripts/workflow-contract.test.ts", "{workspaceRoot}/justfile"]
+  },
+  "targets": {
+    "test": {
+      "cache": false,
+      "inputs": ["policy"],
+      "command": "npm ci --prefix .github --ignore-scripts && node --test .github/tests/*.test.mjs"
+    },
+    "budgets": {
+      "cache": false,
+      "dependsOn": ["test"],
+      "inputs": ["policy"],
+      "command": "node .github/check-budgets.mjs"
+    },
+    "lint": { "command": "uvx --from actionlint-py==1.7.12.24 actionlint .github/workflows/*.yml" },
+    "typecheck": { "command": "node .github/check-syntax.mjs" }
+  }
+}

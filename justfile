@@ -30,7 +30,7 @@ gate:
 
 check-affected:
     @[[ "${NX_BASE:-}" =~ ^[0-9a-f]{40}$ && "${NX_HEAD:-}" =~ ^([0-9a-f]{40}|HEAD)$ ]] || { echo "affected checks: NX_BASE must be a commit SHA and NX_HEAD must be a commit SHA or HEAD" >&2; exit 2; }
-    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "affected checks" "Fix the reported affected-project findings, then rerun the shared gate with the same NX_BASE and NX_HEAD." -- env RUSTFLAGS="-D warnings" bunx nx affected -t format-check lint typecheck test fixture-integration build --base="$NX_BASE" --head="$NX_HEAD" --outputStyle=static
+    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "affected checks" "Fix the reported affected-project findings, then rerun the shared gate with the same NX_BASE and NX_HEAD." -- env RUSTFLAGS="-D warnings" bunx nx affected -t format-check lint typecheck test fixture-integration build budgets --base="$NX_BASE" --head="$NX_HEAD" --outputStyle=static
     @files=(coverage/*/lcov.info); if [ -e "${files[0]}" ]; then ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "affected coverage" "Add user-facing tests for the uncovered authored code, then rerun the affected gate." -- node scripts/check-coverage.mjs "${files[@]}"; fi
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "import boundaries" "Restore the documented package import direction, then rerun 'just lint'." -- node scripts/check-boundaries.mjs
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "shell lint" "Fix the reported shell diagnostics, then rerun 'just lint'." -- uvx --from shellcheck-py==0.11.0.1 shellcheck scripts/*.sh

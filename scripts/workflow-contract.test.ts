@@ -318,10 +318,9 @@ describe("required status-check contexts", () => {
     expect(starts(unknown, pullRequest())).toBeUndefined();
   });
 
-  test("the desktop-e2e, macos-native-smoke and supply-chain jobs carry no job-level condition", () => {
+  test("the desktop-e2e and supply-chain jobs carry no job-level condition", () => {
     for (const [file, id] of [
       ["desktop-e2e.yml", "desktop-e2e"],
-      ["desktop-e2e.yml", "macos-native-smoke"],
       ["check.yml", "supply-chain"],
     ] as const) {
       expect({ job: `${file}:${id}`, if: job(file, id).if ?? null }).toEqual({

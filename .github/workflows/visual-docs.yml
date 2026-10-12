@@ -57,7 +57,7 @@ jobs:
   visual-docs:
     needs: select
     if: ${{ !cancelled() && (github.event.action == 'closed' || needs.select.outputs.capture == 'true') }}
-    uses: nickderobertis/screencomp/.github/workflows/visual-docs-reusable.yml@v0
+    uses: nickderobertis/screencomp/.github/workflows/visual-docs-reusable.yml@4bacdb8b8ad407f775cfade4697bbe02de1d316f # v0
     with:
       capture-command: bash capture.sh
       container: mcr.microsoft.com/playwright:v1.61.1-noble

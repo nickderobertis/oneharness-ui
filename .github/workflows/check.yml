@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
+    inputs:
+      macos_diagnostic:
+        description: Run the sequential Mac assertions manually
+        type: boolean
+        default: false
 
 # A newer pull-request push supersedes the older run. On main a run may be
 # publishing a release, so it finishes; GitHub still replaces a queued run with
@@ -20,6 +26,143 @@ defaults:
     shell: bash
 
 jobs:
+  macos-policy:
+    name: classify macOS coverage
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    outputs:
+      required: ${{ steps.classify.outputs.required }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.5.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+      - name: Classify the exact PR diff
+        id: classify
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          node .github/macos-policy.mjs classify --event "$GITHUB_EVENT_PATH" --base "$BASE_SHA" --head "$HEAD_SHA" > "$RUNNER_TEMP/macos-policy.json"
+          node .github/record-policy-output.mjs "$RUNNER_TEMP/macos-policy.json"
+
+  macos-pr:
+    name: sequential macOS PR assertions
+    needs: macos-policy
+    if: >-
+      always() &&
+      ((github.event_name == 'pull_request' && needs.macos-policy.result == 'success' && needs.macos-policy.outputs.required == 'true') ||
+      (github.event_name == 'workflow_dispatch' && inputs.macos_diagnostic == true))
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.5.0
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version: 1.3.14
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          enable-cache: false
+          version: 0.11.28
+      - name: Install Tauri prerequisites
+        if: runner.os == 'Linux'
+        run: >-
+          sudo apt-get update -qq && sudo apt-get install -y
+          libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - name: Install just
+        run: cargo install just --locked --version 1.42.4
+      - name: Bootstrap clean checkout
+        run: just bootstrap
+      - name: Shared gate from explicit merge base
+        if: github.event_name == 'pull_request'
+        shell: bash
+        run: |
+          git fetch --no-tags origin "$GITHUB_BASE_REF"
+          base="$(git merge-base HEAD "origin/$GITHUB_BASE_REF")"
+          NX_BASE="$base" NX_HEAD=HEAD just check-affected
+
+      - name: Manual diagnostic gate
+        if: github.event_name == 'workflow_dispatch'
+        run: just check
+      - name: Build native DMG
+        env:
+          BUNDLE_FORMATS: dmg
+        run: just bundle
+      - name: Prepare release-like assets and checksums
+        env:
+          BUNDLE_DIRECTORY: target/release/bundle
+          RELEASE_ASSET_DIRECTORY: target/release-assets
+          RELEASE_ASSET_FORMATS: dmg
+          RELEASE_PLATFORM: macos-aarch64
+          RELEASE_TAG: v0.1.0
+        run: just prepare-release-assets
+      - name: Mount, install, and verify native application
+        run: |
+          shopt -s nullglob
+          images=(target/release/bundle/dmg/*.dmg)
+          if (( ${#images[@]} != 1 )); then
+            echo "Expected one DMG under target/release/bundle/dmg; inspect the bundle output and rerun the macOS smoke" >&2
+            exit 1
+          fi
+          image="${images[0]}"
+          mount="$(hdiutil attach "$image" -nobrowse | tail -1 | sed 's#^.*\(/Volumes/.*\)#\1#')"
+          case "$mount" in
+            /Volumes/*) ;;
+            *) echo "DMG mount did not resolve under /Volumes; inspect hdiutil output and rerun the macOS smoke" >&2; exit 1 ;;
+          esac
+          trap 'hdiutil detach "$mount"' EXIT
+          sudo ditto "$mount/oneharness.app" /Applications/oneharness.app
+          hdiutil detach "$mount"
+          trap - EXIT
+          test -x /Applications/oneharness.app/Contents/MacOS/oneharness
+          bridge=/Applications/oneharness.app/Contents/MacOS/oneharness-ui-bridge
+          test -x "$bridge"
+          response="$(printf '{"kind":"unknown"}\n' | "$bridge")"
+          node -e 'const value=JSON.parse(process.argv[1]); if(value.ok!==false||value.error?.code!=="INVALID_REQUEST") process.exit(1)' "$response"
+
+  macos-check:
+    name: check (macos-15)
+    needs: [macos-policy, macos-pr]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.5.0
+      - name: Report required Mac proof or authorized omission
+        env:
+          POLICY_RESULT: ${{ needs.macos-policy.result }}
+          MAC_RESULT: ${{ needs.macos-pr.result }}
+          MAC_REQUIRED: ${{ needs.macos-policy.outputs.required }}
+        run: node .github/macos-policy.mjs carrier --policy "$POLICY_RESULT" --mac "$MAC_RESULT" --required "$MAC_REQUIRED"
+
+  macos-native-smoke:
+    name: macos-native-smoke
+    needs: [macos-policy, macos-pr]
+    if: always() && github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 26.5.0
+      - name: Report required Mac proof or authorized omission
+        env:
+          POLICY_RESULT: ${{ needs.macos-policy.result }}
+          MAC_RESULT: ${{ needs.macos-pr.result }}
+          MAC_REQUIRED: ${{ needs.macos-policy.outputs.required }}
+        run: node .github/macos-policy.mjs carrier --policy "$POLICY_RESULT" --mac "$MAC_RESULT" --required "$MAC_REQUIRED"
+
   check:
     name: check (${{ matrix.os }})
     if: github.event_name == 'pull_request'
@@ -27,7 +170,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15, windows-2025]
+        os: [ubuntu-24.04, windows-2025]
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -65,7 +208,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-15, windows-2025]
+        os: [ubuntu-24.04, windows-2025]
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
@@ -162,6 +305,11 @@ jobs:
         run: just bootstrap
       - name: Dependency policy and audit
         run: just supply-chain
+      - name: Audit the locked private workflow tooling
+        run: |
+          npm ci --prefix .github --ignore-scripts
+          npm audit --prefix .github --audit-level=high
+
 
   install:
     name: install (${{ matrix.os }})
@@ -182,10 +330,6 @@ jobs:
             bundles: deb,appimage
             platform: linux-aarch64
             assets: appimage,deb
-          - os: macos-15
-            bundles: dmg
-            platform: macos-aarch64
-            assets: dmg
           - os: windows-2025
             bundles: msi,nsis
             platform: windows-x86_64
@@ -245,15 +389,6 @@ jobs:
           ONEHARNESS_UI_E2E_PREBUILT: "1"
           ONEHARNESS_UI_E2E_STARTUP_ONLY: "1"
         run: xvfb-run -a just test-desktop-e2e
-      - name: Mount and verify macOS artifact
-        if: runner.os == 'macOS'
-        run: |
-          image="$(find . -name '*.dmg' -print -quit)"
-          test -n "$image"
-          mount="$(hdiutil attach "$image" -nobrowse | tail -1 | sed 's#^.*\(/Volumes/.*\)#\1#')"
-          sudo ditto "$mount/oneharness.app" /Applications/oneharness.app
-          hdiutil detach "$mount"
-          test -x /Applications/oneharness.app/Contents/MacOS/oneharness
       - name: Install and verify Windows artifact
         if: runner.os == 'Windows'
         shell: pwsh
