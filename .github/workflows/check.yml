@@ -106,6 +106,7 @@ jobs:
         run: just verify-macos-artifact
 
   macos-check:
+    # llmlint: ignore[names_match_behavior] Branch protection requires this exact display name. This Linux carrier reports the separate macos-pr proof or an explicit authorized omission; it does not claim to execute native assertions.
     name: check (macos-15)
     needs: [macos-policy, macos-pr]
     if: always() && github.event_name == 'pull_request'
@@ -125,6 +126,7 @@ jobs:
         run: just macos-proof-result
 
   macos-native-smoke:
+    # llmlint: ignore[names_match_behavior] Branch protection requires this exact display name. This Linux carrier reports the separate macos-pr native smoke proof or an explicit authorized omission; it does not claim to execute native assertions.
     name: macos-native-smoke
     needs: [macos-policy, macos-pr]
     if: always() && github.event_name == 'pull_request'
