@@ -118,12 +118,15 @@ upload-release:
 
 # GHSA-vfj7-8cjw-p6xm (braces <=3.0.3) has no patched release; braces is reached only through dev tooling
 # (semantic-release's commit-analyzer > micromatch, @wdio/cli and mocha-framework) on repo-authored glob patterns.
-# Remove the bun audit ignore once a fixed braces release exists. No other advisory is ignored.
+# Remove the bun audit ignore once a fixed braces release exists.
+# GHSA-8r5x-fm3f-whwj and GHSA-p8wg-vrv2-v86f (handlebars <=4.7.9) and GHSA-cjq9-62q9-8jv4 (next <16.3.8)
+# are ignored temporarily, as the user authorized on 2026-10-12, so unrelated changes can land; the planned
+# dependency fix upgrades or replaces both packages and removes these three ignores.
 # Dependency policy and audit run once per commit in CI's Linux-only supply-chain job, not in check or check-affected.
 supply-chain:
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Rust dependency policy" "Resolve the reported license, advisory, source, or ban finding, then rerun 'just supply-chain'." -- cargo deny check --hide-inclusion-graph
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Rust dependency usage" "Remove or correctly declare the reported dependency, then rerun 'just supply-chain'." -- cargo machete
-    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "JavaScript dependency audit" "Upgrade or replace the vulnerable dependency, then rerun 'just supply-chain'." -- bun audit --audit-level=high --ignore=GHSA-vfj7-8cjw-p6xm
+    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "JavaScript dependency audit" "Upgrade or replace the vulnerable dependency, then rerun 'just supply-chain'." -- bun audit --audit-level=high --ignore=GHSA-vfj7-8cjw-p6xm --ignore=GHSA-8r5x-fm3f-whwj --ignore=GHSA-p8wg-vrv2-v86f --ignore=GHSA-cjq9-62q9-8jv4
     @if [ "${ONEHARNESS_QUIET:-}" != "1" ]; then echo "supply-chain: ok"; fi
 
 upgrade:
