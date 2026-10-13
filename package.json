@@ -26,7 +26,7 @@
   ],
   "scripts": {
     "nx": "nx",
-    "prepare": "lefthook install"
+    "prepare": "node scripts/setup-hooks.mjs"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.5",
