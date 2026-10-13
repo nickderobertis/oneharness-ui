@@ -46,8 +46,12 @@ just check
 `bootstrap` downloads the immutable upstream oneharness source archive,
 verifies its SHA-256, builds its SDK package and compatible CLI, installs the
 workspace, and provisions the pinned Rust gate tools. `just --list` shows the
-complete command surface. Recipes with release inputs accept validated
-environment values (for example, `BUNDLE_FORMATS=deb just bundle`) so values
+complete command surface. CI verifies deterministic checks and llmlint; pushes do not
+run these checks or capture screenshots. Workspace installation removes the obsolete
+repository-local Lefthook pre-push dispatcher on existing clones while preserving
+custom hooks and shared hook directories. Manual `just gate`, `just lint-llm-validate`,
+`just lint-llm-diff`, and `just visual` remain available. Recipes with release inputs
+accept validated environment values (for example, `BUNDLE_FORMATS=deb just bundle`) so values
 are never interpolated into shell source.
 
 ## Install
