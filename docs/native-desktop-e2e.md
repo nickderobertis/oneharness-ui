@@ -26,7 +26,10 @@ the same isolated, writable WebView2 user-data folder through the driver
 capability and EdgeDriver's documented host-application argument channel. An
 automation-only Tauri window configuration validates that argument before use,
 so the driver can discover the application's DevTools endpoint without touching
-the user's normal application profile. The local launcher runs no plugin worker hooks; this journey uses standard
+the user's normal application profile. The local launcher lives in the independent `desktop-driver` project, whose
+helper target exercises readiness without application dependencies. The native
+journey depends on that project and includes its sources in its inputs. The
+launcher runs no plugin worker hooks; this journey uses standard
 WebDriver operations and keeps the release application uninstrumented.
 Readiness requires the proxied `/status` endpoint to return `value.ready: true`,
 which confirms the native driver is also ready. The poll has a 120-second bound

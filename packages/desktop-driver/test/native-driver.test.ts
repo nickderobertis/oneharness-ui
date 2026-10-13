@@ -7,10 +7,13 @@ import {
   nativeDriverResult,
   prepareNativeDriver,
   validateDriverExecutable,
-} from "./native-driver.ts";
+} from "../src/native-driver.ts";
 
 test("PowerShell result fields and version pattern stay aligned with the validated consumer", async () => {
-  const producer = await readFile(new URL("./prepare-edge-driver.ps1", import.meta.url), "utf8");
+  const producer = await readFile(
+    new URL("../src/prepare-edge-driver.ps1", import.meta.url),
+    "utf8",
+  );
   const results = [...producer.matchAll(/@\{([^}]+)\}\s*\|\s*ConvertTo-Json/g)];
   expect(results).toHaveLength(2);
   for (const result of results) {

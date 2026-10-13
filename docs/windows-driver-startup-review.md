@@ -51,7 +51,7 @@ upstream `ensureMsEdgeDriver` errors were tolerated when auto-download was enabl
 and its `DriverPool` delegated to `@wdio/native-core`'s hard-coded 10,000ms
 `pollForReadiness`. The configurable startup timeout did not extend that poll.
 The finished tree replaces that re-export with local launcher lifecycle code in
-`apps/desktop-shell-e2e/tests/tauri-launcher-service.ts`, native discovery and
+`packages/desktop-driver/src/tauri-launcher-service.ts`, native discovery and
 validated subprocess output in `native-driver.ts`, and explicit Windows
 preparation in `prepare-edge-driver.ps1`. No product/journey assertion changed. A local freshness gate reconciles both
 PowerShell result key sets and its version-match pattern with the Zod consumer;
@@ -98,8 +98,16 @@ and does not verify the dispatch's changed code.
 
 Final local validation uses the repository's affected command surface:
 `NX_BASE=2eb9a508b13e2e699ede2fb0070140e2f931c45a NX_HEAD=HEAD just check-affected`.
-The e2e helper suite has 26 passing tests; its formatting, lint and typecheck
-also pass. Documentation version drift verification and its regression test pass.
+Driver readiness tests run in `desktop-driver:test`, an independent shared
+project with no workspace dependencies or product build prerequisites. The
+packaged journey imports its launcher through the existing service adapter and
+depends on `desktop-driver` for affected selection; its inputs explicitly include
+`packages/desktop-driver/src/**/*`, including the Windows preparation script.
+The held-readiness success/failure tests and their ten-second real failure bound
+are preserved. Graph and real-selector tests verify that launcher changes select
+both helper checks and the native journey, while product changes select the
+journey without selecting the driver helper tier. Formatting, lint, typecheck
+and tests run through the affected gate. Documentation version drift verification and its regression test pass.
 PowerShell's `Parser.ParseFile` reports no syntax errors. These local checks do
 not execute Windows registry, Authenticode or native-driver download operations.
 The required semantic tier is
@@ -110,10 +118,10 @@ it invokes the real local launcher and its process, HTTP, error and cleanup
 boundaries. Its narrow `e2e_not_mocked` annotation documents this task's explicit
 held-readiness requirement. It does not claim real Windows driver coverage.
 
-The ten-second local timeout regression also has a narrow
-`expensive_tests_stay_behind_their_own_edge` annotation: the documented e2e helper
-tier owns it, and its bound leaves room for cold Windows subprocess startup.
-The packaged journey still has its separate `desktop-e2e` edge. Splitting helper
-project dependencies and reporting the third-party startup defects upstream are
-recorded as non-blocking follow-up drafts, outside this dispatch. Shared lint
-rules, thresholds and test commands were not changed.
+The `expensive_tests_stay_behind_their_own_edge` suppression is removed. Driver
+lifecycle implementation and regression tests now share the isolated
+`packages/desktop-driver` project. Helper-project isolation is complete; the
+non-blocking upstream defect report remains separate. No shared lint rules or
+thresholds were weakened. Test ownership changed structurally: the existing
+product-specific helper target remains in `desktop-shell-e2e`, while the bounded
+startup regression runs only in `desktop-driver:test` when its own inputs change.

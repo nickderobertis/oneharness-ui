@@ -20,6 +20,7 @@ const journeyTargetSchema = z.object({
   targets: z.object({
     "desktop-e2e": z.object({
       dependsOn: z.array(z.string()),
+      inputs: z.array(z.unknown()),
       options: z.object({ command: z.string() }),
     }),
   }),
@@ -72,11 +73,21 @@ describe("native desktop journey project graph", () => {
         "desktop-shell",
       );
 
+      expect(graph.nodes["desktop-driver"]?.data.root).toBe("packages/desktop-driver");
+      const driverWorkspaceDependencies = graph.dependencies["desktop-driver"]
+        ?.map(({ target }) => target)
+        .filter((target) => Object.hasOwn(graph.nodes, target));
+      expect(driverWorkspaceDependencies).toEqual([]);
+      expect(graph.dependencies["desktop-shell-e2e"]?.map(({ target }) => target)).toContain(
+        "desktop-driver",
+      );
+
       const { targets } = journeyTargetSchema.parse(
         JSON.parse(await nx(["show", "project", "desktop-shell-e2e", "--json"])),
       );
       const journey = targets["desktop-e2e"];
       expect(journey.dependsOn).toContain("desktop-shell:build");
+      expect(journey.inputs).toContain("{workspaceRoot}/packages/desktop-driver/src/**/*");
       buildTargetSchema.parse(JSON.parse(await nx(["show", "project", "desktop-shell", "--json"])));
 
       // The target names its entrypoint, the entrypoint names the WebdriverIO
