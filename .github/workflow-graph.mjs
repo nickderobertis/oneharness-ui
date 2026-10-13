@@ -165,7 +165,7 @@ function screencompMatrix(job, context) {
   const output = resolve(directory, 'output');
   try {
     const env = { ...process.env, GITHUB_OUTPUT: output, ...Object.fromEntries(Object.entries(environment).map(([key, value]) => [key, interpolate(text(value, 'producer environment expression', true), context)])) };
-    execFileSync('bash', ['-c', shell], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] });
+    execFileSync('bash', ['-c', 'export PATH="$HOME/.local/bin:$PATH"\n' + shell], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] });
     const matrix = readFileSync(output, 'utf8').trim().match(/^matrix=(.+)$/m)?.[1];
     if (!matrix) throw new Error('Unresolved screencomp matrix output');
     const parsed = validateMatrix(JSON.parse(matrix));

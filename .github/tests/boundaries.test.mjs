@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { parse } from 'yaml';
@@ -126,4 +126,29 @@ test('the production verifier JSON command identifies parsing and field failures
     if (expected) assert.match(result.stderr, expected);
     assert.doesNotMatch(result.stderr, /do-not-log-this/);
   }
+});
+
+
+test('classifier CLI runs through a symlinked executable path', () => {
+  const scratch = mkdtempSync(resolve(process.env.ONEPIPELINE_NODE_SCRATCH_DIR ?? tmpdir(), 'policy-symlink-'));
+  try {
+    const command = resolve(scratch, 'policy.mjs');
+    symlinkSync(resolve(root, '.github/macos-policy.mjs'), command);
+    const event = resolve(scratch, 'event.json');
+    writeFileSync(event, JSON.stringify({ event_name: 'push' }));
+    const result = spawnSync(process.execPath, [command, 'classify', '--event', event, '--base', 'unknown', '--head', 'unknown'], { encoding: 'utf8', env: { ...process.env, GITHUB_EVENT_NAME: 'push' } });
+    assert.equal(result.status, 0);
+    assert.equal(JSON.parse(result.stdout).macosRequired, false);
+  } finally { rmSync(scratch, { recursive: true, force: true }); }
+});
+
+
+test('graph resolves the real reusable matrix with the bootstrap tool directory absent from PATH', () => {
+  const env = { ...process.env };
+  const pathKey = Object.keys(env).find(key => key.toLowerCase() === 'path');
+  assert.ok(pathKey);
+  env[pathKey] = env[pathKey].split(process.platform === 'win32' ? ';' : ':').filter(path => !/[\\/]\.local[\\/]bin$/.test(path)).join(process.platform === 'win32' ? ';' : ':');
+  const script = `import { workflows, resolveRun } from './.github/workflow-graph.mjs'; resolveRun('visual-docs.yml', workflows()['visual-docs.yml'], {id:'bootstrap-path',event:'pull_request',payload:{},inputs:{}});`;
+  const result = spawnSync(process.execPath, ['--input-type=module', '-e', script], { cwd: root, env, encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
 });

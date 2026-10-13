@@ -1,6 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { options } from './options.mjs';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { diffClass } from './release-diff.mjs';
 import { object, text } from './validation.mjs';
 
@@ -33,7 +33,7 @@ export function carrier(policyResult, macResult, required) {
   if (required === 'false' && macResult === 'skipped') return 'Classifier authorized omission; Mac assertions did not run';
   throw new Error(`Required Mac work is ${macResult || 'missing'}; inspect the Mac job and retry`);
 }
-if (import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (process.argv[1] && realpathSync(fileURLToPath(import.meta.url)) === realpathSync(process.argv[1])) {
   const [command, ...args] = process.argv.slice(2);
   try {
   if (command === 'classify') {

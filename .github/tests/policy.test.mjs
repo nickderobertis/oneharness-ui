@@ -30,7 +30,7 @@ function history() {
 }
 function classification(cwd, payload, base, head) {
   const event = resolve(cwd, 'event.json'); writeFileSync(event, JSON.stringify(payload));
-  return JSON.parse(execFileSync(process.execPath, [policy, 'classify', '--event', event, '--base', base, '--head', head], { cwd, encoding: 'utf8' }));
+  return JSON.parse(execFileSync(process.execPath, [policy, 'classify', '--event', event, '--base', base, '--head', head], { cwd, encoding: 'utf8', env: { ...process.env, GITHUB_EVENT_NAME: payload.event_name } }));
 }
 function pr(fork = false, bot = false) {
   return { repository: { full_name: repo }, action: 'synchronize', pull_request: { user: { login: bot ? identity.login : 'contributor', type: bot ? 'Bot' : 'User' }, title: 'chore(release): 0.2.0', base: { ref: 'main' }, head: { ref: bot ? 'release/v0.2.0' : 'feature', repo: { full_name: fork ? 'fork/oneharness-ui' : repo } } } };

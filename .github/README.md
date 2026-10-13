@@ -75,3 +75,10 @@ measurements through `report`; only onebudgetspec compares the approved threshol
 They reject stale/missing telemetry and do not rerun scenarios. The affected merge
 path selects this project and its budgets for workflow/tooling inputs; native
 packaging stays behind the existing desktop packaging edge.
+
+Classifier subprocess fixtures set their own `GITHUB_EVENT_NAME`, so a hosted PR
+run cannot override modeled push/release/manual events. CLI entry detection
+compares canonical paths, including macOS's symlinked temporary directories.
+The graph's matrix-producing shell adds the existing bootstrap installation
+location (`$HOME/.local/bin`) to PATH before executing the pinned upstream body;
+this also resolves the real screencomp binary in Git Bash on Windows.

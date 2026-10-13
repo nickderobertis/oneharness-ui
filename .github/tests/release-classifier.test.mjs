@@ -29,7 +29,7 @@ test('configured release automation requires identity, branch, ownership and sem
     const payload = { event_name: 'pull_request', repository: { full_name: 'owner/repo' }, pull_request: { title: 'chore(release): version', user: { login: 'release-bot' }, head: { ref: 'release/version', repo: { full_name: 'owner/repo' } } } };
     const classify = (event = payload, from = base) => {
       writeFileSync(resolve(cwd, 'event.json'), JSON.stringify(event));
-      return JSON.parse(execFileSync(process.execPath, [resolve(tooling, 'macos-policy.mjs'), 'classify', '--event', resolve(cwd, 'event.json'), '--base', from, '--head', 'HEAD'], { cwd, encoding: 'utf8' }));
+      return JSON.parse(execFileSync(process.execPath, [resolve(tooling, 'macos-policy.mjs'), 'classify', '--event', resolve(cwd, 'event.json'), '--base', from, '--head', 'HEAD'], { cwd, encoding: 'utf8', env: { ...process.env, GITHUB_EVENT_NAME: event.event_name } }));
     };
     for (const [path, content] of Object.entries(files)) writeFileSync(resolve(cwd, path), content.replaceAll('0.1.0', '0.2.0'));
     writeFileSync(resolve(cwd, 'CHANGELOG.md'), '# History\n\n## 0.2.0\nVersion update\n');
@@ -79,7 +79,7 @@ test('classifier grammar and semantic locations reconcile with the production ve
     }
     git('add', '.'); git('commit', '-qm', 'ci: real versioned contents'); const base = git('rev-parse', 'HEAD');
     const event = resolve(cwd, 'event.json'); writeFileSync(event, '{"event_name":"pull_request"}');
-    const classify = () => JSON.parse(execFileSync(process.execPath, [resolve(root, '.github/macos-policy.mjs'), 'classify', '--event', event, '--base', base, '--head', 'HEAD'], { cwd, encoding: 'utf8' }));
+    const classify = () => JSON.parse(execFileSync(process.execPath, [resolve(root, '.github/macos-policy.mjs'), 'classify', '--event', event, '--base', base, '--head', 'HEAD'], { cwd, encoding: 'utf8', env: { ...process.env, GITHUB_EVENT_NAME: 'pull_request' } }));
     for (const path of paths) {
       const document = JSON.parse(readFileSync(resolve(cwd, path), 'utf8')); document.version = '0.2.0';
       writeFileSync(resolve(cwd, path), JSON.stringify(document));
