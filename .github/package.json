@@ -1,0 +1,13 @@
+{
+  "dependencies": {
+    "@actions/expressions": "0.3.61",
+    "@onebudgetspec/sdk": "0.1.4",
+    "yaml": "2.9.0"
+  },
+  "name": "oneharness-ui-github-tooling",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": "26.5.0"
+  }
+}

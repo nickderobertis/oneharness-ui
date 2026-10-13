@@ -23,8 +23,6 @@ defaults:
 jobs:
   release:
     name: release (${{ matrix.os }})
-    permissions:
-      contents: write
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -85,6 +83,22 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: just bundle
+      # Historical release tags may predate the verifier recipe. Keep package
+      # production on the verified tag and load verification from this workflow's revision.
+      - name: Load verification commands from the workflow revision
+        if: runner.os == 'macOS'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          ref: ${{ github.workflow_sha }}
+          path: release-verification
+          sparse-checkout: |
+            justfile
+            scripts/verify-macos-artifact.sh
+          sparse-checkout-cone-mode: false
+      - name: Mount, install, and verify native application
+        if: runner.os == 'macOS'
+        # llmlint: ignore[release_does_not_regate_an_already_swept_commit] The dispatch explicitly requires acceptance of the newly materialized exact-tag DMG before publication. This validates installed release payload assembly after set-version and bundling, without repeating the shared quality sweep.
+        run: just --justfile release-verification/justfile --working-directory "$GITHUB_WORKSPACE" verify-macos-artifact
       - name: Prepare canonical release assets and checksums
         env:
           BUNDLE_DIRECTORY: target/release/bundle
@@ -111,7 +125,36 @@ jobs:
           name: arm64-release-startup-${{ inputs.release_tag }}
           path: test-results/desktop-e2e
           retention-days: 7
-      - name: Upload native release and checksums
+      - name: Stage verified native release and checksums
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f # v6.0.0
+        with:
+          if-no-files-found: error
+          name: release-${{ matrix.platform }}-${{ inputs.release_tag }}
+          path: target/release-assets
+
+  publish:
+    name: publish verified native assets
+    needs: release
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - name: Install just
+        run: cargo install just --locked --version 1.42.4
+      - name: Validate and check out the release source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ inputs.release_tag }}
+        run: just checkout-release
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: release-*-${{ inputs.release_tag }}
+          merge-multiple: true
+          path: target/release-assets
+      - name: Publish assets after all native assertions
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_ASSET_DIRECTORY: target/release-assets
@@ -120,7 +163,7 @@ jobs:
 
   verify-public-arm64:
     name: verify public ARM64 installer
-    needs: release
+    needs: publish
     runs-on: ubuntu-22.04-arm
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0

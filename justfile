@@ -30,7 +30,7 @@ gate:
 
 check-affected:
     @[[ "${NX_BASE:-}" =~ ^[0-9a-f]{40}$ && "${NX_HEAD:-}" =~ ^([0-9a-f]{40}|HEAD)$ ]] || { echo "affected checks: NX_BASE must be a commit SHA and NX_HEAD must be a commit SHA or HEAD" >&2; exit 2; }
-    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "affected checks" "Fix the reported affected-project findings, then rerun the shared gate with the same NX_BASE and NX_HEAD." -- env RUSTFLAGS="-D warnings" bunx nx affected -t format-check lint typecheck test fixture-integration build --base="$NX_BASE" --head="$NX_HEAD" --outputStyle=static
+    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "affected checks" "Fix the reported affected-project findings, then rerun the shared gate with the same NX_BASE and NX_HEAD." -- env RUSTFLAGS="-D warnings" bunx nx affected -t format-check lint typecheck test fixture-integration build budgets --base="$NX_BASE" --head="$NX_HEAD" --outputStyle=static
     @files=(coverage/*/lcov.info); if [ -e "${files[0]}" ]; then ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "affected coverage" "Add user-facing tests for the uncovered authored code, then rerun the affected gate." -- node scripts/check-coverage.mjs "${files[@]}"; fi
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "import boundaries" "Restore the documented package import direction, then rerun 'just lint'." -- node scripts/check-boundaries.mjs
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "shell lint" "Fix the reported shell diagnostics, then rerun 'just lint'." -- uvx --from shellcheck-py==0.11.0.1 shellcheck scripts/*.sh
@@ -48,6 +48,10 @@ lint:
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "shell lint" "Fix the reported shell diagnostics, then rerun 'just lint'." -- uvx --from shellcheck-py==0.11.0.1 shellcheck scripts/*.sh
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "workflow lint" "Fix the reported workflow diagnostics, then rerun 'just lint'." -- uvx --from actionlint-py==1.7.12.24 actionlint .github/workflows/*.yml
     @if [ "${ONEHARNESS_QUIET:-}" != "1" ]; then echo "lint: ok"; fi
+
+# Nx uses cmd on Windows; let just's configured shell expand workflow paths.
+lint-workflows:
+    @./scripts/run-quiet.sh "workflow lint" "Fix the reported workflow diagnostics, then rerun 'just lint-workflows'." -- uvx --from actionlint-py==1.7.12.24 actionlint .github/workflows/*.yml
 
 typecheck:
     @./scripts/run-quiet.sh "typecheck" "Fix the reported TypeScript or Rust diagnostics, then rerun 'just typecheck'." -- env RUSTFLAGS="-D warnings" bunx nx run-many -t typecheck --all --outputStyle=static
@@ -126,8 +130,11 @@ upload-release:
 supply-chain:
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Rust dependency policy" "Resolve the reported license, advisory, source, or ban finding, then rerun 'just supply-chain'." -- cargo deny check --hide-inclusion-graph
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Rust dependency usage" "Remove or correctly declare the reported dependency, then rerun 'just supply-chain'." -- cargo machete
-    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "JavaScript dependency audit" "Upgrade or replace the vulnerable dependency, then rerun 'just supply-chain'." -- bun audit --audit-level=high --ignore=GHSA-vfj7-8cjw-p6xm --ignore=GHSA-8r5x-fm3f-whwj --ignore=GHSA-p8wg-vrv2-v86f --ignore=GHSA-cjq9-62q9-8jv4
+    @ONEHARNESS_QUIET=1 just audit-javascript
     @if [ "${ONEHARNESS_QUIET:-}" != "1" ]; then echo "supply-chain: ok"; fi
+
+audit-javascript:
+    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "JavaScript dependency audit" "Upgrade or replace the vulnerable dependency, then rerun 'just supply-chain'." -- bun audit --audit-level=high --ignore=GHSA-vfj7-8cjw-p6xm --ignore=GHSA-8r5x-fm3f-whwj --ignore=GHSA-p8wg-vrv2-v86f --ignore=GHSA-cjq9-62q9-8jv4
 
 upgrade:
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "JavaScript dependency upgrade" "Resolve the package conflict, then rerun 'just upgrade'." -- bun update
@@ -159,3 +166,17 @@ lint-llm-validate *args:
     @command -v llmlint >/dev/null 2>&1 || { echo "llmlint missing; run just setup-llmlint" >&2; exit 1; }
     @./scripts/run-quiet.sh "semantic lint configuration" "Correct llmlint.yml or its rule references, then rerun 'just lint-llm-validate'." -- llmlint validate "$@"
     @./scripts/run-quiet.sh "llmlint override scope" "Copy the plugin's include list into the llmlint.yml override, then rerun 'just lint-llm-validate'." -- node scripts/check-llmlint-overrides.mjs
+
+# CI supplies the immutable event document and writes only the classifier's routing flag.
+classify-macos-coverage:
+    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Mac coverage classification" "Supply the PR event path, base/head refs and writable runner temp/output paths, then rerun just classify-macos-coverage." -- bash -c 'node .github/macos-policy.mjs classify --event "${GITHUB_EVENT_PATH:?}" --base "${BASE_SHA:?}" --head "${HEAD_SHA:?}" > "${RUNNER_TEMP:?}/macos-policy.json"'
+    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Mac coverage output recording" "Restore the classifier JSON and writable GITHUB_OUTPUT path, then rerun just classify-macos-coverage." -- node .github/record-policy-output.mjs "${RUNNER_TEMP:-}/macos-policy.json"
+
+macos-proof-result:
+    @node .github/macos-policy.mjs carrier --policy "${POLICY_RESULT:-}" --mac "${MAC_RESULT:-}" --required "${MAC_REQUIRED:-}"
+
+verify-macos-artifact:
+    @bash "{{justfile_directory()}}/scripts/verify-macos-artifact.sh"
+
+checkout-release:
+    @./scripts/run-quiet.sh "release source checkout" "Repair the verified release tag or token as reported above, then rerun just checkout-release." -- ./scripts/checkout-release.sh

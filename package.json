@@ -21,7 +21,8 @@
   },
   "workspaces": [
     "apps/*",
-    "packages/*"
+    "packages/*",
+    ".github"
   ],
   "scripts": {
     "nx": "nx",

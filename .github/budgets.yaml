@@ -1,0 +1,38 @@
+schema_version: 1
+budgets:
+  # llmlint: ignore[comments_earn_their_place] The manager explicitly requires this exact scheduling-exception reason at each registration to preserve the agreement allowing separate bounds.
+  # The brief explicitly requests both jobs/run and Mac-spending runs/change bounds; the manager approved separate budgets for these two scheduling constraints.
+  - id: oneharness-ui-macos-jobs-per-run
+    description: >-
+      Maximum Mac job instances per resolved workflow run across the complete
+      workflow/call graph and matrices. Workload: 12 event classes, source,
+      version-only and dependency diffs, same-repository/fork ownership, every
+      released architecture; manual diagnostic opt-in evaluated separately.
+      Measurement source: telemetry. Basis: design. Estimated reporting runtime:
+      2 seconds, excluding installation and journeys; no measured queue-time claim.
+      inner_measure_reason: one run can occupy several shared Mac slots even when
+      the lifecycle run count stays within its bound; the manager approved
+      retaining both scheduling constraints.
+    command: [node, macos-budget.mjs, --metric, jobs-per-run, --telemetry, .github/.telemetry/macos-policy.json]
+    measure: reported
+    direction: max
+    threshold: 1
+    unit: jobs
+    labels: [github-workflows]
+  # llmlint: ignore[comments_earn_their_place] The manager explicitly requires this exact scheduling-exception reason at each registration to preserve the agreement allowing separate bounds.
+  # The brief explicitly requests both jobs/run and Mac-spending runs/change bounds; the manager approved separate budgets for these two scheduling constraints.
+  - id: oneharness-ui-macos-runs-per-change
+    description: >-
+      Maximum Mac-spending workflow runs for a single-push lifecycle: ordinary PR,
+      base merge, semantic-release tag and artifact dispatch, downstream smoke.
+      This repository releases directly from tags and opens no release PR.
+      Workload: 12 event classes, three diff classes, same-repository/fork ownership,
+      every released architecture. Explicit manual diagnostics excluded.
+      Measurement source: telemetry. Basis: design. Estimated reporting runtime:
+      2 seconds, excluding installation and journeys; no measured queue-time claim.
+    command: [node, macos-budget.mjs, --metric, runs-per-change, --telemetry, .github/.telemetry/macos-policy.json]
+    measure: reported
+    direction: max
+    threshold: 2
+    unit: runs
+    labels: [github-workflows]
