@@ -81,6 +81,21 @@ describe("affected suite selection", () => {
     expect(select("desktop-shell-e2e", unrelated).stdout).toBe("run=false\n");
   }, 120_000);
 
+  test("isolates driver helper checks while keeping launcher changes on the native journey edge", () => {
+    const launcher = commitChangeTo("packages/desktop-driver/src/tauri-launcher-service.ts");
+    expect(select("desktop-driver", launcher).stdout).toBe("run=true\n");
+    expect(select("desktop-shell-e2e", launcher).stdout).toBe("run=true\n");
+
+    const product = commitChangeTo("apps/desktop-shell/src/runtime.rs");
+    expect(select("desktop-driver", product).stdout).toBe("run=false\n");
+    expect(select("desktop-shell-e2e", product).stdout).toBe("run=true\n");
+
+    const regression = commitChangeTo(
+      "packages/desktop-driver/test/tauri-launcher-service.test.ts",
+    );
+    expect(select("desktop-driver", regression).stdout).toBe("run=true\n");
+  }, 120_000);
+
   test("captures visual docs for a rendered file or capture input, not for an unrelated change", () => {
     const rendered = commitChangeTo(
       "apps/conversation-ui/src/features/conversations/components/status-badge.tsx",

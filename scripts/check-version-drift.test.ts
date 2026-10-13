@@ -26,6 +26,7 @@ test("accepts a reconciled tree and rejects version, workflow, and browser drift
       mkdir(resolve(root, "apps/desktop-shell-e2e"), { recursive: true }),
       mkdir(resolve(root, "packages/affected-selection"), { recursive: true }),
       mkdir(resolve(root, "packages/browser-test-env"), { recursive: true }),
+      mkdir(resolve(root, "packages/desktop-driver"), { recursive: true }),
       mkdir(resolve(root, "packages/ipc-contract"), { recursive: true }),
       mkdir(resolve(root, "packages/oneharness-bridge"), { recursive: true }),
       mkdir(resolve(root, "packages/ui"), { recursive: true }),
@@ -61,6 +62,7 @@ test("accepts a reconciled tree and rejects version, workflow, and browser drift
         "apps/desktop-shell-e2e/package.json",
         "packages/affected-selection/package.json",
         "packages/browser-test-env/package.json",
+        "packages/desktop-driver/package.json",
         "packages/ipc-contract/package.json",
         "packages/ui/package.json",
       ].map((path) =>
@@ -171,6 +173,19 @@ test("accepts a reconciled tree and rejects version, workflow, and browser drift
     expect(typescriptDrift.stderr.toString()).toContain("update both manifests together");
     await writeFile(
       resolve(root, "packages/ui/package.json"),
+      JSON.stringify({ devDependencies: { typescript: "6.0.3" } }),
+    );
+    await writeFile(
+      resolve(root, "packages/desktop-driver/package.json"),
+      JSON.stringify({ devDependencies: { typescript: "5.9.3" } }),
+    );
+    const driverTypescriptDrift = Bun.spawnSync(["node", "scripts/check-version-drift.mjs", root]);
+    expect(driverTypescriptDrift.exitCode).toBe(1);
+    expect(driverTypescriptDrift.stderr.toString()).toContain(
+      "packages/desktop-driver/package.json TypeScript pin must match",
+    );
+    await writeFile(
+      resolve(root, "packages/desktop-driver/package.json"),
       JSON.stringify({ devDependencies: { typescript: "6.0.3" } }),
     );
     await writeFile(

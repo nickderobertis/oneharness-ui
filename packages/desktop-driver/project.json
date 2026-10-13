@@ -1,0 +1,25 @@
+{
+  "name": "desktop-driver",
+  "$schema": "../../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "packages/desktop-driver/src",
+  "tags": ["scope:shared", "type:test-env"],
+  "implicitDependencies": [],
+  "targets": {
+    "test": {
+      "command": "bun test packages/desktop-driver/test"
+    },
+    "typecheck": {
+      "command": "bunx tsc -p packages/desktop-driver/tsconfig.json --noEmit"
+    },
+    "lint": {
+      "command": "bunx biome check --error-on-warnings packages/desktop-driver"
+    },
+    "format": {
+      "command": "bunx biome format --write packages/desktop-driver"
+    },
+    "format-check": {
+      "command": "bunx biome format packages/desktop-driver"
+    }
+  }
+}

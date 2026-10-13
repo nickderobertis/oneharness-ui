@@ -92,6 +92,7 @@ const typescriptManifests = [
     readJson("packages/affected-selection/package.json"),
   ],
   ["packages/browser-test-env/package.json", readJson("packages/browser-test-env/package.json")],
+  ["packages/desktop-driver/package.json", readJson("packages/desktop-driver/package.json")],
   ["packages/ipc-contract/package.json", readJson("packages/ipc-contract/package.json")],
   ["packages/oneharness-bridge/package.json", bridgeManifest],
   ["packages/ui/package.json", readJson("packages/ui/package.json")],

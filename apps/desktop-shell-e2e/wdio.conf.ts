@@ -73,14 +73,7 @@ export const config: WebdriverIO.Config = {
     [
       tauriLauncherService,
       {
-        appBinaryPath: appBinary,
-        autoDownloadEdgeDriver: true,
-        autoInstallTauriDriver: false,
-        captureBackendLogs: true,
-        captureFrontendLogs: false,
-        driverProvider: "external",
         logDir: artifacts,
-        logLevel: "info",
       },
     ],
   ],
