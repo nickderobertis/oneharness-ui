@@ -53,6 +53,20 @@ export class launcher {
   }
 
   async onPrepare(_config: unknown, capabilities: TauriCapabilities[]) {
+    for (const capability of capabilities) {
+      if (
+        capability.browserName !== undefined &&
+        capability.browserName !== "tauri" &&
+        capability.browserName !== "wry"
+      ) {
+        throw new Error(
+          `tauri-driver supports browserName tauri or wry, got: ${capability.browserName}`,
+        );
+      }
+      // WDIO needs browserName to select the service; tauri-driver forwards it to
+      // WebKitWebDriver/msedgedriver, which reject the session on that name.
+      delete capability.browserName;
+    }
     const nativeDriver = this.options.nativeDriverPath
       ? validateDriverExecutable(this.options.nativeDriverPath, "native WebDriver")
       : await prepareNativeDriver();

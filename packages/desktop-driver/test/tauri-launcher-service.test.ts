@@ -39,6 +39,20 @@ if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('port o
 let ready = false;
 let notified = false;
 const server = createServer((request, response) => {
+  if (request.method === 'POST' && request.url === '/session') {
+    let body = '';
+    request.on('data', (chunk) => { body += chunk; });
+    request.on('end', () => {
+      // Like WebKitWebDriver/msedgedriver behind tauri-driver: a browserName fails matching.
+      const always = JSON.parse(body).capabilities?.alwaysMatch ?? {};
+      if ('browserName' in always) {
+        response.writeHead(500).end(JSON.stringify({value: {error: 'session not created', message: 'Failed to match capabilities'}}));
+        return;
+      }
+      response.end(JSON.stringify({value: {sessionId: 'held-driver-session', capabilities: always}}));
+    });
+    return;
+  }
   if (request.url !== '/status') { response.writeHead(404).end(); return; }
   response.setHeader('Content-Type', 'application/json');
   response.end(JSON.stringify({value: {ready}}));
@@ -91,7 +105,7 @@ describe("native desktop WebDriver service", () => {
   test("holds session setup until the native driver reports ready", async () => {
     const driver = await fixture();
     const capabilities: TauriCapabilities[] = [
-      { "tauri:options": { application: process.execPath } },
+      { browserName: "tauri", "tauri:options": { application: process.execPath } },
     ];
     let prepared = false;
     const preparation = driver.launcher.onPrepare({ maxInstances: 1 }, capabilities).then(() => {
@@ -112,6 +126,13 @@ describe("native desktop WebDriver service", () => {
         `http://${capabilities[0]?.hostname}:${capabilities[0]?.port}/status`,
       );
       expect(await response.json()).toEqual({ value: { ready: true } });
+      const { hostname, port, ...requested } = capabilities[0] ?? {};
+      const session = await fetch(`http://${hostname}:${port}/session`, {
+        method: "POST",
+        body: JSON.stringify({ capabilities: { alwaysMatch: requested } }),
+      });
+      expect(session.status).toBe(200);
+      expect(requested).toEqual({ "tauri:options": { application: process.execPath } });
     } finally {
       await driver.cleanup();
     }
@@ -137,6 +158,21 @@ describe("native desktop WebDriver service", () => {
       await driver.cleanup();
     }
   }, 20_000);
+  test("a non-Tauri browserName is rejected before driver launch", async () => {
+    const root = await mkdtemp(resolve(tmpdir(), "desktop-browser-name-"));
+    try {
+      const launcher = new service.launcher({ logDir: root, nativeDriverPath: process.execPath });
+      await expect(
+        launcher.onPrepare(
+          { maxInstances: 1 },
+          JSON.parse('[{"browserName":"chrome"}]') as TauriCapabilities[],
+        ),
+      ).rejects.toThrow("tauri-driver supports browserName tauri or wry, got: chrome");
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   test("invalid launcher configuration is rejected before setup", () => {
     expect(() => new service.launcher({ logDir: "relative" })).toThrow("requires an absolute path");
     expect(() => new service.launcher({ logDir: tmpdir(), startTimeout: 0 })).toThrow();

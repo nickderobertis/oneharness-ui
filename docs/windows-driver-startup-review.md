@@ -104,7 +104,7 @@ packaged journey imports its launcher through the existing service adapter and
 depends on `desktop-driver` for affected selection; its inputs explicitly include
 `packages/desktop-driver/src/**/*`, including the Windows preparation script.
 The held-readiness success/failure tests and their ten-second real failure bound
-are preserved: nine driver tests and 18 product-specific helper tests pass. Graph and real-selector tests verify that launcher changes select
+are preserved: ten driver tests and 18 product-specific helper tests pass. Graph and real-selector tests verify that launcher changes select
 both helper checks and the native journey, while product changes select the
 journey without selecting the driver helper tier. Deliberately adding a product
 dependency made the selector regression fail with `run=true` instead of
@@ -116,6 +116,15 @@ PowerShell's `Parser.ParseFile` reports no syntax errors. These local checks do
 not execute Windows registry, Authenticode or native-driver download operations.
 The required semantic tier is
 `just lint-llm-diff 2eb9a508b13e2e699ede2fb0070140e2f931c45a`.
+
+The first publication of this launcher failed `install (ubuntu-22.04-arm)` job
+115445244906 at session creation, after readiness passed: WebKitWebDriver
+answered `Failed to match capabilities` because the replacement launcher, unlike
+`@wdio/tauri-service`, forwarded `browserName: "tauri"`. The launcher now rejects
+any browserName other than `tauri` or `wry` and removes it before the session,
+as the upstream service does. The held-readiness test's driver rejects a session
+request carrying browserName; against the published launcher that request got
+HTTP 500 instead of 200, and it passes on the finished tree.
 
 The readiness regression seam replaces only the driver's readiness behavior;
 it invokes the real local launcher and its process, HTTP, error and cleanup
