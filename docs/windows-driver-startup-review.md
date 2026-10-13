@@ -1,17 +1,18 @@
 # Windows desktop WebDriver startup review
 
 Reviewed read-only: every completed `desktop-e2e` workflow run created from
-2026-10-06T00:00:00Z through 2026-10-13T16:00:00Z, plus the explicitly required
-failed attempt 1 of run 38418554958. At initial inspection its workflow was still running because of a
-manager-initiated retry; this dispatch did not re-run, cancel or modify CI.
-The inventory includes Windows jobs only. Successful native-journey commands
+2026-10-06T00:00:00Z through 2026-10-13T16:00:00Z: 22 runs and 23 `desktop-e2e (windows-2025)` jobs, because
+run 38418554958 has two attempts. The set and every attempt's jobs were
+reconciled from the workflow-runs and per-attempt jobs APIs after all of them
+settled, and every Windows job log was read; this dispatch did not re-run,
+cancel or modify CI. The inventory includes Windows jobs only. Successful native-journey commands
 prove the tests ran; selection-only successes do not. The original 11-of-13
 workflow-success figure counted selection skips, so it was not a journey pass rate.
 
 | Run created (UTC) | Run | Windows job | Pre-test outcome |
 | --- | --- | --- | --- |
-| 2026-10-07T12:38:05Z | [37622408684](https://github.com/nickderobertis/oneharness-ui/actions/runs/37622408684) | 112795677648 | Cancelled before native journey |
-| 2026-10-07T12:57:49Z | [37624826420](https://github.com/nickderobertis/oneharness-ui/actions/runs/37624826420) | 112804306181 | Cancelled before native journey |
+| 2026-10-07T12:38:05Z | [37622408684](https://github.com/nickderobertis/oneharness-ui/actions/runs/37622408684) | 112795677648 | Cancelled during the native-journey step (see below); whether it reached the first test is not recorded |
+| 2026-10-07T12:57:49Z | [37624826420](https://github.com/nickderobertis/oneharness-ui/actions/runs/37624826420) | 112804306181 | Cancelled during bootstrap, before the native-journey step |
 | 2026-10-07T13:11:00Z | [37626505068](https://github.com/nickderobertis/oneharness-ui/actions/runs/37626505068) | 112809847822 | Reached first test; native journey passed |
 | 2026-10-07T13:39:35Z | [37630257653](https://github.com/nickderobertis/oneharness-ui/actions/runs/37630257653) | 112822352911 | Reached first test; native journey passed |
 | 2026-10-07T14:04:49Z | [37633708173](https://github.com/nickderobertis/oneharness-ui/actions/runs/37633708173) | 112834910760 | Reached first test; native journey passed |
@@ -34,11 +35,29 @@ workflow-success figure counted selection skips, so it was not a journey pass ra
 | 2026-10-13T15:02:10Z | [38418554958](https://github.com/nickderobertis/oneharness-ui/actions/runs/38418554958) | 115369401264 | Failed before first test: msedgedriver download failed; service continued, then 10-second tauri-driver readiness timeout |
 | 2026-10-13T15:02:10Z | [38418554958, attempt 2](https://github.com/nickderobertis/oneharness-ui/actions/runs/38418554958) | 115406088574 | Reached first test; native journey passed on the unchanged PR head |
 
+Rows were classified from each job's steps and log. A successful journey step
+prints `native desktop journey: ok`; selection-skipped jobs show the selection
+step succeeding and the bootstrap and journey steps skipped. Both cancellations
+came from the workflow's `cancel-in-progress` concurrency group when a newer run
+on the same branch started: job 112804306181 was cancelled at 13:11:41Z, during
+bootstrap, after run 37626505068 was created at 13:11:00Z. Job 112795677648 was
+cancelled at 12:58:20Z, after run 37624826420 was created at 12:57:49Z, while the
+Windows journey step had been running for 7m47s. That step was cancelled with
+exit -1073741510 (0xC000013A, console control exit) and printed no driver or
+WebDriver error. Successful Windows journey steps in the same branch took
+7m09s to 9m59s, so the log cannot show whether it stopped before or after the
+first test, and the run uploaded no artifact. It is not counted as a driver failure.
+
+The journey's output is quiet on success and only run 38418554958 uploaded a
+Windows artifact, so a tolerated msedgedriver download failure inside a job
+whose journey still passed would leave no trace in these logs. None of the other
+22 job logs contains a driver, WebDriver or msedgedriver error.
+
 The only pre-test startup failure found is job 115369401264. Its job log reports
 `SevereServiceError: Failed to start tauri-driver ... failed to become ready within
 10000ms`. The run's `desktop-e2e-windows-2025` artifact (11826972346) supplies the
-missing antecedent: WebView2 153.0.4234.48 needed msedgedriver; the PowerShell
-download failed at 15:20:53.211Z. The service logged “continuing anyway”, launched
+missing antecedent: WebView2 153.0.4234.48 needed msedgedriver; the check began at
+15:19:34.042Z and the PowerShell download failed at 15:20:53.211Z. The service logged “continuing anyway”, launched
 tauri-driver at 15:20:53.369Z, and timed out at 15:21:03.494Z. Repeated
 `hyper::Error(IncompleteMessage)` shows an intermediary listening without a
 usable native status response. The logs do not reveal the downloader's underlying
