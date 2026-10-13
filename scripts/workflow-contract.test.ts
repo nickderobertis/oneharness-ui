@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { z } from "zod";
 
 const root = resolve(import.meta.dir, "..");
@@ -594,4 +596,51 @@ describe("expensive suites run only when affected", () => {
     expect(project.targets.visual?.command).toBe("./scripts/verify-visual.sh");
     expect(project.targets.test?.command).toBe("bun test apps/conversation-ui-visual/test");
   });
+});
+
+test("release notes render features, fixes and breaking changes with the configured preset", async () => {
+  const configuration = z
+    .object({
+      plugins: z.array(
+        z.union([z.string(), z.tuple([z.string(), z.record(z.string(), z.unknown())])]),
+      ),
+    })
+    .parse(JSON.parse(readFileSync(resolve(root, ".releaserc.json"), "utf8")));
+  const plugin = configuration.plugins.find(
+    (entry) => Array.isArray(entry) && entry[0] === "@semantic-release/release-notes-generator",
+  );
+  if (!Array.isArray(plugin))
+    throw new Error(
+      "Release notes plugin configuration is missing; restore @semantic-release/release-notes-generator in .releaserc.json and rerun bun test scripts/workflow-contract.test.ts",
+    );
+  expect(plugin[1].preset).toBe("conventionalcommits");
+  const require = createRequire(import.meta.url);
+  const pluginPath = require.resolve(plugin[0], {
+    paths: [dirname(require.resolve("semantic-release"))],
+  });
+  const { generateNotes } = await import(pathToFileURL(pluginPath).href);
+  const notes = await generateNotes(plugin[1], {
+    cwd: root,
+    options: { repositoryUrl: "https://github.com/nickderobertis/oneharness-ui.git" },
+    logger: { log() {} },
+    lastRelease: { version: "0.1.0", gitTag: "v0.1.0" },
+    nextRelease: { version: "0.2.0", gitTag: "v0.2.0" },
+    commits: [
+      { hash: "a".repeat(40), message: "feat: continue saved conversations" },
+      { hash: "b".repeat(40), message: "fix: recover interrupted sessions" },
+      {
+        hash: "c".repeat(40),
+        message:
+          "feat!: require validated session identifiers\n\nBREAKING CHANGE: session identifiers must be validated",
+      },
+    ],
+  });
+  expect(notes).toMatch(/^## \[0\.2\.0\]\(https:\/\/github\.com\//m);
+  expect(notes).toContain("### Features");
+  expect(notes).toContain("### Bug Fixes");
+  expect(notes).toContain("### ⚠ BREAKING CHANGES");
+  expect(notes).toContain("continue saved conversations");
+  expect(notes).toContain("recover interrupted sessions");
+  expect(notes).toContain("require validated session identifiers");
+  expect(notes).toContain("session identifiers must be validated");
 });
