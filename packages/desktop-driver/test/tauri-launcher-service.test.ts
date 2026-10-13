@@ -44,7 +44,16 @@ const server = createServer((request, response) => {
     request.on('data', (chunk) => { body += chunk; });
     request.on('end', () => {
       // Like WebKitWebDriver/msedgedriver behind tauri-driver: a browserName fails matching.
-      const always = JSON.parse(body).capabilities?.alwaysMatch ?? {};
+      let always;
+      try {
+        always = JSON.parse(body).capabilities.alwaysMatch;
+      } catch {
+        always = undefined;
+      }
+      if (typeof always !== 'object' || always === null || Array.isArray(always)) {
+        response.writeHead(400).end(JSON.stringify({value: {error: 'invalid argument', message: 'alwaysMatch must be an object'}}));
+        return;
+      }
       if ('browserName' in always) {
         response.writeHead(500).end(JSON.stringify({value: {error: 'session not created', message: 'Failed to match capabilities'}}));
         return;
@@ -165,9 +174,11 @@ describe("native desktop WebDriver service", () => {
       await expect(
         launcher.onPrepare(
           { maxInstances: 1 },
+          // The capability type forbids "chrome"; untyped WDIO config can still carry it,
+          // so the test supplies it as parsed data to reach the runtime rejection.
           JSON.parse('[{"browserName":"chrome"}]') as TauriCapabilities[],
         ),
-      ).rejects.toThrow("tauri-driver supports browserName tauri or wry, got: chrome");
+      ).rejects.toThrow("browserName is tauri, wry or unset");
     } finally {
       await rm(root, { recursive: true, force: true });
     }

@@ -28,6 +28,9 @@ const launcherOptions = z.object({
   nativeDriverPath: absolutePath.optional(),
 });
 type LauncherOptions = z.infer<typeof launcherOptions>;
+const capabilityList = z
+  .array(z.looseObject({ browserName: z.enum(["tauri", "wry"]).optional() }))
+  .max(64);
 
 async function freePort(): Promise<number> {
   const server = createServer();
@@ -53,16 +56,14 @@ export class launcher {
   }
 
   async onPrepare(_config: unknown, capabilities: TauriCapabilities[]) {
+    // WDIO hands the launcher its configured capabilities; check their shape
+    // without copying them, because the session uses these same objects.
+    if (!capabilityList.safeParse(capabilities).success) {
+      throw new Error(
+        "tauri-driver capabilities must be objects whose browserName is tauri, wry or unset",
+      );
+    }
     for (const capability of capabilities) {
-      if (
-        capability.browserName !== undefined &&
-        capability.browserName !== "tauri" &&
-        capability.browserName !== "wry"
-      ) {
-        throw new Error(
-          `tauri-driver supports browserName tauri or wry, got: ${capability.browserName}`,
-        );
-      }
       // WDIO needs browserName to select the service; tauri-driver forwards it to
       // WebKitWebDriver/msedgedriver, which reject the session on that name.
       delete capability.browserName;
