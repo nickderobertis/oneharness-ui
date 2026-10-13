@@ -26,8 +26,10 @@ test("PowerShell result fields and version pattern stay aligned with the validat
   const version = z.toJSONSchema(nativeDriverResult.shape.version).pattern;
   if (typeof version !== "string")
     throw new Error("native driver version must have a shared pattern");
-  const capture = `MSEdgeDriver (${version.replace(/^\^|\$$/g, "")})`;
-  expect(producer.split(capture)).toHaveLength(3);
+  const parser = await readFile(new URL("../src/edge-driver-version.ps1", import.meta.url), "utf8");
+  const capture = `(?:Microsoft Edge WebDriver|MSEdgeDriver) (${version.replace(/^\^|\$$/g, "")})`;
+  expect(parser.split(capture)).toHaveLength(2);
+  expect(producer.split("& $readVersion ")).toHaveLength(3);
 });
 
 test("native executable validation rejects relative paths and directories", () => {
@@ -95,6 +97,79 @@ describe("msedgedriver download architecture", () => {
         ["x64", "win64"],
       ]);
       expect(architecture).toBe(downloads.get(process.arch) ?? "unsupported");
+    },
+    70_000,
+  );
+});
+
+async function readDriverVersion(stdout: string, exitCode = 0) {
+  const root = await mkdtemp(resolve(tmpdir(), "desktop-edge-version-"));
+  const lines = stdout.split("\n");
+  const driver = resolve(root, process.platform === "win32" ? "msedgedriver.cmd" : "msedgedriver");
+  await writeFile(
+    driver,
+    process.platform === "win32"
+      ? `@echo off\r\n${lines.map((line) => `echo ${line}`).join("\r\n")}\r\nexit /b ${exitCode}\r\n`
+      : `#!/bin/sh\n${lines.map((line) => `echo '${line}'`).join("\n")}\nexit ${exitCode}\n`,
+    { mode: 0o700 },
+  );
+  try {
+    // Invoke the parser as prepare-edge-driver.ps1 does, and surface its
+    // exception message the way that script's catch blocks receive it.
+    const parser = fileURLToPath(new URL("../src/edge-driver-version.ps1", import.meta.url));
+    return execFileSync(
+      powershell,
+      [
+        "-NoProfile",
+        "-NonInteractive",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-Command",
+        "try { & $env:EDGE_VERSION_PARSER $env:EDGE_DRIVER } catch { [Console]::Error.Write($_.Exception.Message); exit 1 }",
+      ],
+      {
+        encoding: "utf8",
+        env: { ...process.env, EDGE_DRIVER: driver, EDGE_VERSION_PARSER: parser },
+        stdio: "pipe",
+        timeout: 60_000,
+      },
+    ).trim();
+  } catch (error) {
+    throw new Error(String((error as { stderr?: unknown }).stderr ?? error));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+}
+
+describe("msedgedriver version report", () => {
+  test.skipIf(!hasPowerShell)(
+    "accepts the current and legacy banners, including multi-line output",
+    async () => {
+      expect(
+        await readDriverVersion(
+          "Microsoft Edge WebDriver 153.0.4234.48 (cf31d6623d8718e7a3c3e181e55e59c1aae57a73)",
+        ),
+      ).toBe("153.0.4234.48");
+      expect(await readDriverVersion("MSEdgeDriver 120.0.2210.91 (abc)")).toBe("120.0.2210.91");
+      expect(
+        await readDriverVersion(
+          "Starting msedgedriver\nMicrosoft Edge WebDriver 153.0.4234.48 (x)",
+        ),
+      ).toBe("153.0.4234.48");
+    },
+    70_000,
+  );
+
+  test.skipIf(!hasPowerShell)(
+    "names the driver and what it printed when no version is reported",
+    async () => {
+      const failure = readDriverVersion("unexpected banner 1.2");
+      await expect(failure).rejects.toThrow(/msedgedriver at .*msedgedriver/);
+      await expect(failure).rejects.toThrow(/did not report its version \(exit 0\)/);
+      await expect(failure).rejects.toThrow(/it printed 'unexpected banner 1\.2'/);
+      await expect(
+        readDriverVersion("Microsoft Edge WebDriver 153.0.4234.48 (x)", 3),
+      ).rejects.toThrow(/\(exit 3\); it printed 'Microsoft Edge WebDriver 153\.0\.4234\.48 \(x\)'/);
     },
     70_000,
   );

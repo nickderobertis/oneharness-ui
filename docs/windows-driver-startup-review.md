@@ -176,6 +176,29 @@ after starting a worker. All three tests failed there and pass now. The accepted
 validation. The download itself and the
 Windows PowerShell 5.1 runtime remain for the merge path.
 
+The third publication failed `desktop-e2e (windows-2025)` job 115480138437 (run
+38450585633) in `onPrepare`: `prepare-edge-driver.ps1` downloaded and verified
+msedgedriver for WebView2 153.0.4234.48 three times and threw `downloaded
+msedgedriver did not report its version` each time. Its version check matched
+only `MSEdgeDriver <version>`, but current builds print another banner; the
+Linux build of that same 153.0.4234.48 release prints `Microsoft Edge WebDriver
+153.0.4234.48 (cf31d6623d8718e7a3c3e181e55e59c1aae57a73)`. The check also
+matched raw native output, which PowerShell returns as an array for multi-line
+output, where `-match` filters instead of setting `$Matches`. The same check
+guarded the PATH-driver branch, so a matching installed driver was always
+ignored.
+
+The finished tree parses the version once, in
+`packages/desktop-driver/src/edge-driver-version.ps1`, for both the PATH and
+downloaded drivers. It joins the output into one string and accepts both
+banners. When no version is found it throws with the driver path, exit code and
+what the driver printed, cut to 200 characters. A rejected PATH driver is
+reported on stderr before the download. Tests run that script under PowerShell
+against stand-in driver executables. They cover the current banner, the legacy
+banner, multi-line output, an unrecognized banner and a non-zero exit. With the
+previous single-banner match on unjoined output, the banner test and the
+pattern-alignment test failed; both pass now.
+
 The readiness regression seam replaces only the driver's readiness behavior;
 it invokes the real local launcher and its process, HTTP, error and cleanup
 boundaries. Its narrow `e2e_not_mocked` annotation documents this task's explicit

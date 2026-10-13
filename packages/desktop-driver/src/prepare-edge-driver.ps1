@@ -17,17 +17,17 @@ $runtime = @(
 ) | ForEach-Object { if (Test-Path $_) { (Get-ItemProperty $_).pv } } | Select-Object -First 1
 if ($runtime -notmatch '^\d+\.\d+\.\d+\.\d+$') { throw 'WebView2 runtime version is absent or invalid; install WebView2' }
 $major = $runtime.Split('.')[0]
+$readVersion = Join-Path $PSScriptRoot 'edge-driver-version.ps1'
 $existing = Get-Command msedgedriver.exe -CommandType Application -ErrorAction SilentlyContinue
 if ($existing) {
   Assert-MicrosoftDriver $existing.Source
-  $versionOutput = & $existing.Source --version
-  if ($LASTEXITCODE -eq 0 -and $versionOutput -match 'MSEdgeDriver (\d+\.\d+\.\d+\.\d+)') {
-    $version = $Matches[1]
-    if ($version.Split('.')[0] -eq $major) {
-      @{ path = $existing.Source; version = $version } | ConvertTo-Json -Compress
-      exit 0
-    }
+  $version = $null
+  try { $version = & $readVersion $existing.Source } catch { [Console]::Error.WriteLine("ignoring PATH msedgedriver: $_") }
+  if ($version -and $version.Split('.')[0] -eq $major) {
+    @{ path = $existing.Source; version = $version } | ConvertTo-Json -Compress
+    exit 0
   }
+  if ($version) { [Console]::Error.WriteLine("ignoring PATH msedgedriver $version at $($existing.Source); WebView2 is $runtime") }
 }
 $architecture = & (Join-Path $PSScriptRoot 'edge-driver-architecture.ps1')
 $directory = Join-Path ([System.IO.Path]::GetTempPath()) ('oneharness-msedgedriver-' + [guid]::NewGuid())
@@ -50,9 +50,7 @@ try {
       Expand-Archive -Force -Path $archive -DestinationPath $directory
       $driver = Join-Path $directory 'msedgedriver.exe'
       Assert-MicrosoftDriver $driver
-      $versionOutput = & $driver --version
-      if ($LASTEXITCODE -ne 0 -or $versionOutput -notmatch 'MSEdgeDriver (\d+\.\d+\.\d+\.\d+)') { throw 'downloaded msedgedriver did not report its version' }
-      $installed = $Matches[1]
+      $installed = & $readVersion $driver
       if ($installed.Split('.')[0] -ne $major) { throw "msedgedriver $installed does not match WebView2 $runtime" }
       @{ path = $driver; version = $installed } | ConvertTo-Json -Compress
       exit 0
