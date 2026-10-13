@@ -46,6 +46,12 @@ async function freePort(): Promise<number> {
   return address.port;
 }
 
+// WDIO logs any other onPrepare error and starts sessions anyway; it stops the
+// run only for errors named SevereServiceError.
+export class DriverStartupError extends Error {
+  override name = "SevereServiceError";
+}
+
 // The release app has no WDIO plugin worker hooks.
 export class launcher {
   private process: ChildProcess | undefined;
@@ -56,17 +62,20 @@ export class launcher {
   }
 
   async onPrepare(_config: unknown, capabilities: TauriCapabilities[]) {
+    try {
+      await this.startDriver(capabilities);
+    } catch (error) {
+      throw new DriverStartupError(error instanceof Error ? error.message : String(error));
+    }
+  }
+
+  private async startDriver(capabilities: TauriCapabilities[]) {
     // WDIO hands the launcher its configured capabilities; check their shape
     // without copying them, because the session uses these same objects.
     if (!capabilityList.safeParse(capabilities).success) {
       throw new Error(
         "tauri-driver capabilities must be objects whose browserName is tauri, wry or unset",
       );
-    }
-    for (const capability of capabilities) {
-      // WDIO needs browserName to select the service; tauri-driver forwards it to
-      // WebKitWebDriver/msedgedriver, which reject the session on that name.
-      delete capability.browserName;
     }
     const nativeDriver = this.options.nativeDriverPath
       ? validateDriverExecutable(this.options.nativeDriverPath, "native WebDriver")
@@ -129,6 +138,9 @@ export class launcher {
               value.ready === true
             ) {
               for (const capability of capabilities) {
+                // WDIO needs browserName to select the service; tauri-driver forwards it to
+                // WebKitWebDriver/msedgedriver, which reject the session on that name.
+                delete capability.browserName;
                 capability.hostname = "127.0.0.1";
                 capability.port = port;
               }

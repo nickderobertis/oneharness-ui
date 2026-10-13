@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { execFileSync } from "node:child_process";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { z } from "zod";
 import {
+  findDriverExecutable,
   nativeDriverResult,
   prepareNativeDriver,
   validateDriverExecutable,
@@ -55,5 +58,40 @@ describe("Linux native WebDriver discovery", () => {
         await rm(root, { recursive: true, force: true });
       }
     },
+  );
+});
+
+const powershell = process.platform === "win32" ? "powershell.exe" : "pwsh";
+let hasPowerShell = true;
+try {
+  findDriverExecutable(powershell);
+} catch {
+  hasPowerShell = false;
+}
+
+describe("msedgedriver download architecture", () => {
+  test.skipIf(!hasPowerShell)(
+    "is resolved without the processor variables the journey's allowlisted environment omits",
+    () => {
+      // Mirrors deterministicDesktopEnvironment: PATH and SystemRoot reach the
+      // driver preparation, PROCESSOR_ARCHITECTURE does not.
+      const environment: Record<string, string> = { PATH: process.env.PATH ?? "" };
+      if (process.env.SystemRoot) environment.SystemRoot = process.env.SystemRoot;
+      const architecture = execFileSync(
+        powershell,
+        [
+          "-NoProfile",
+          "-NonInteractive",
+          "-ExecutionPolicy",
+          "Bypass",
+          "-File",
+          fileURLToPath(new URL("../src/edge-driver-architecture.ps1", import.meta.url)),
+        ],
+        { encoding: "utf8", env: environment, timeout: 60_000 },
+      ).trim();
+      const expected = { arm64: "arm64", ia32: "win32", x64: "win64" }[process.arch as string];
+      expect(architecture).toBe(expected ?? "unsupported");
+    },
+    70_000,
   );
 });

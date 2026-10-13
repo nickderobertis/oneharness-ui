@@ -145,6 +145,32 @@ as the upstream service does. The held-readiness test's driver rejects a session
 request carrying browserName; against the published launcher that request got
 HTTP 500 instead of 200, and it passes on the finished tree.
 
+The second publication failed `desktop-e2e (windows-2025)` job 115461460672 (run
+38445145650, head `d9716bf`) with the session error `No "browserName" defined in
+capabilities nor hostname or port found!`. Its artifact's `wdio.log` holds the
+real failure, 47.9 seconds into `onPrepare`: `prepare-edge-driver.ps1` threw
+`msedgedriver has no configured download for Windows architecture` with an empty
+architecture. The PATH msedgedriver did not match the WebView2 major, so the
+script reached its download branch, which read `PROCESSOR_ARCHITECTURE`; the
+journey runs under `deterministicDesktopEnvironment`'s allowlist in
+`apps/desktop-shell/tests/fixture.ts`, which does not pass that variable on. WDIO
+then logged the launcher's plain `Error` as `Continue...`, because
+`@wdio/cli` stops a run only for an error named `SevereServiceError`, and started
+a session from capabilities whose `browserName` the launcher had already removed.
+
+The finished tree resolves the download architecture in
+`packages/desktop-driver/src/edge-driver-architecture.ps1` from
+`RuntimeInformation.OSArchitecture`, using the processor variables only when the
+runtime cannot answer. The launcher reports every startup failure as
+`SevereServiceError`, so WDIO stops with the driver's own message. It removes
+`browserName` only together with setting the ready driver's host and port. A
+test runs the architecture script under PowerShell with only `PATH` and
+`SystemRoot`. It failed against the previous script, which threw with an empty
+architecture, and passes now. The withheld-readiness and absent-executable tests
+assert the `SevereServiceError` name and unchanged capabilities. They failed
+against the published launcher and pass now. The download itself and the
+Windows PowerShell 5.1 runtime remain for the merge path.
+
 The readiness regression seam replaces only the driver's readiness behavior;
 it invokes the real local launcher and its process, HTTP, error and cleanup
 boundaries. Its narrow `e2e_not_mocked` annotation documents this task's explicit

@@ -29,14 +29,7 @@ if ($existing) {
     }
   }
 }
-$processor = $env:PROCESSOR_ARCHITEW6432
-if (-not $processor) { $processor = $env:PROCESSOR_ARCHITECTURE }
-$architecture = switch ($processor) {
-  'AMD64' { 'win64' }
-  'ARM64' { 'arm64' }
-  'x86' { 'win32' }
-  default { throw "msedgedriver has no configured download for Windows architecture $processor" }
-}
+$architecture = & (Join-Path $PSScriptRoot 'edge-driver-architecture.ps1')
 $directory = Join-Path ([System.IO.Path]::GetTempPath()) ('oneharness-msedgedriver-' + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $directory | Out-Null
 try {

@@ -150,7 +150,7 @@ describe("native desktop WebDriver service", () => {
   test("withheld readiness fails with driver names, elapsed bound and observed status, and stops the child", async () => {
     const driver = await fixture(10_000);
     const capabilities: TauriCapabilities[] = [
-      { "tauri:options": { application: process.execPath } },
+      { browserName: "tauri", "tauri:options": { application: process.execPath } },
     ];
     try {
       const preparation = driver.launcher.onPrepare({ maxInstances: 1 }, capabilities);
@@ -159,7 +159,11 @@ describe("native desktop WebDriver service", () => {
       await expect(preparation).rejects.toThrow(
         /tauri-driver.*native WebDriver.*limit 10000ms.*HTTP 200; ready was not true/,
       );
+      // WDIO stops the run only for this name; any other onPrepare error is logged
+      // and a session is attempted against capabilities with no driver behind them.
+      await expect(preparation).rejects.toMatchObject({ name: "SevereServiceError" });
       expect(capabilities[0]?.port).toBeUndefined();
+      expect(capabilities[0]?.browserName).toBe("tauri");
       expect(await readFile(resolve(driver.root, "driver-startup.log"), "utf8")).toContain(
         "intermediary listening; native startup held",
       );
@@ -202,9 +206,13 @@ describe("native desktop WebDriver service", () => {
         logDir: root,
         nativeDriverPath: resolve(root, "missing-msedgedriver.exe"),
       });
-      await expect(launcher.onPrepare({ maxInstances: 1 }, [])).rejects.toThrow(
+      const capabilities: TauriCapabilities[] = [{ browserName: "tauri" }];
+      const preparation = launcher.onPrepare({ maxInstances: 1 }, capabilities);
+      await expect(preparation).rejects.toThrow(
         /native WebDriver executable is absent or not executable: .*missing-msedgedriver.exe.*before starting tauri-driver/,
       );
+      await expect(preparation).rejects.toMatchObject({ name: "SevereServiceError" });
+      expect(capabilities).toEqual([{ browserName: "tauri" }]);
     } finally {
       await rm(root, { recursive: true, force: true });
     }
