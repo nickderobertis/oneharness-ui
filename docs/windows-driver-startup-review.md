@@ -168,7 +168,7 @@ test runs the architecture script under PowerShell with only `PATH` and
 `SystemRoot`. It failed against the previous script, which threw with an empty
 architecture, and passes now. The withheld-readiness and absent-executable tests
 assert the `SevereServiceError` name and unchanged capabilities. A
-`desktop-shell-e2e` test runs the installed `@wdio/cli` `Launcher` with the
+`desktop-driver` test runs the installed `@wdio/cli` `Launcher` with the
 journey's service adapter and an absent native driver. It requires the run to
 stop with that driver error. Against the published launcher, the run resolved
 after starting a worker. All three tests failed there and pass now. The accepted

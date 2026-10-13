@@ -49,8 +49,8 @@ async function freePort(): Promise<number> {
 }
 
 // @wdio/cli logs any other onPrepare error and starts sessions anyway; it stops
-// the run only for errors named SevereServiceError. desktop-shell-e2e proves this
-// against the installed Launcher.
+// the run only for errors named SevereServiceError. test/wdio-launcher.test.ts
+// proves this against the installed Launcher.
 export class DriverStartupError extends Error {
   override name = "SevereServiceError";
 }
