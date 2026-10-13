@@ -104,9 +104,13 @@ packaged journey imports its launcher through the existing service adapter and
 depends on `desktop-driver` for affected selection; its inputs explicitly include
 `packages/desktop-driver/src/**/*`, including the Windows preparation script.
 The held-readiness success/failure tests and their ten-second real failure bound
-are preserved. Graph and real-selector tests verify that launcher changes select
+are preserved: nine driver tests and 18 product-specific helper tests pass. Graph and real-selector tests verify that launcher changes select
 both helper checks and the native journey, while product changes select the
-journey without selecting the driver helper tier. Formatting, lint, typecheck
+journey without selecting the driver helper tier. Deliberately adding a product
+dependency made the selector regression fail with `run=true` instead of
+`run=false`; restoring the independent graph made it pass. The relocated held
+readiness test was also observed failing against the dispatch-base launcher at
+`expect(prepared).toBe(false)` with `Received: true`. Formatting, lint, typecheck
 and tests run through the affected gate. Documentation version drift verification and its regression test pass.
 PowerShell's `Parser.ParseFile` reports no syntax errors. These local checks do
 not execute Windows registry, Authenticode or native-driver download operations.
