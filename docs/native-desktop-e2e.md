@@ -13,15 +13,29 @@ sudo apt-get install webkit2gtk-driver xvfb
 xvfb-run -a just test-desktop-e2e
 ```
 
-Windows uses WebView2; the pinned WebdriverIO Tauri service downloads the Edge
-driver matching the installed runtime. The session gives EdgeDriver and Tauri
+Windows uses WebView2. The local launcher first prepares `msedgedriver.exe`
+matching the installed WebView2 runtime's major version: it uses an existing
+matching PATH executable or downloads and verifies one from Microsoft's CDN.
+Before executing either an existing or downloaded driver, preparation requires a
+valid Microsoft Corporation Authenticode signature. It retries transient download
+failures three times, with a
+240-second subprocess bound, and fails before launch if no verified driver is
+available. It logs the chosen version and absolute path and passes that path
+explicitly to `tauri-driver`. The session gives EdgeDriver and Tauri
 the same isolated, writable WebView2 user-data folder through the driver
 capability and EdgeDriver's documented host-application argument channel. An
 automation-only Tauri window configuration validates that argument before use,
 so the driver can discover the application's DevTools endpoint without touching
-the user's normal application profile. Only the service's launcher runs:
-its worker APIs require the test-only Tauri WDIO plugin, while this journey uses
-standard WebDriver operations and keeps the release application uninstrumented.
+the user's normal application profile. The local launcher runs no plugin worker hooks; this journey uses standard
+WebDriver operations and keeps the release application uninstrumented.
+Readiness requires the proxied `/status` endpoint to return `value.ready: true`,
+which confirms the native driver is also ready. The poll has a 120-second bound
+instead of the upstream launcher's hard-coded 10 seconds: runner contention must
+not turn a healthy but late native process into an immediate failure. There is
+no fixed startup sleep and no assumption that a listening intermediary means
+its native driver is ready. A timeout or early exit names both executables,
+elapsed time, the limit, the last status observation and bounded driver output;
+failed preparation also reports the msedgedriver version/download error.
 Failure screenshots, driver logs, and an ordered `stages.log` stay under
 `test-results/desktop-e2e`; pre-session failures also record whether Tauri
 accepted the profile and whether WebView2 created `DevToolsActivePort`.
