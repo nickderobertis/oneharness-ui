@@ -4,6 +4,7 @@ import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { setImmediate } from "node:timers";
+import { fileURLToPath } from "node:url";
 import type { TauriCapabilities } from "@wdio/tauri-service";
 import * as service from "../src/tauri-launcher-service.ts";
 
@@ -171,6 +172,19 @@ describe("native desktop WebDriver service", () => {
       await driver.cleanup();
     }
   }, 20_000);
+  test("accepted browser names match @wdio/tauri-service's own validation", async () => {
+    const upstream = await readFile(
+      fileURLToPath(import.meta.resolve("@wdio/tauri-service")),
+      "utf8",
+    );
+    const validation = upstream.match(/if \(cap\.browserName && ([^)]*)\)/);
+    if (!validation?.[1]) throw new Error("@wdio/tauri-service browserName validation not found");
+    const accepted = [...validation[1].matchAll(/cap\.browserName !== '(\w+)'/g)].map(
+      (name) => name[1],
+    );
+    expect(accepted.toSorted()).toEqual(service.tauriBrowserNames.options.toSorted());
+  });
+
   test("a non-Tauri browserName is rejected before driver launch", async () => {
     const root = await mkdtemp(resolve(tmpdir(), "desktop-browser-name-"));
     try {

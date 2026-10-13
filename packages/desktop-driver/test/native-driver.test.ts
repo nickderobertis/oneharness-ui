@@ -89,8 +89,12 @@ describe("msedgedriver download architecture", () => {
         ],
         { encoding: "utf8", env: environment, timeout: 60_000 },
       ).trim();
-      const expected = { arm64: "arm64", ia32: "win32", x64: "win64" }[process.arch as string];
-      expect(architecture).toBe(expected ?? "unsupported");
+      const downloads = new Map([
+        ["arm64", "arm64"],
+        ["ia32", "win32"],
+        ["x64", "win64"],
+      ]);
+      expect(architecture).toBe(downloads.get(process.arch) ?? "unsupported");
     },
     70_000,
   );

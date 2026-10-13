@@ -167,8 +167,13 @@ runtime cannot answer. The launcher reports every startup failure as
 test runs the architecture script under PowerShell with only `PATH` and
 `SystemRoot`. It failed against the previous script, which threw with an empty
 architecture, and passes now. The withheld-readiness and absent-executable tests
-assert the `SevereServiceError` name and unchanged capabilities. They failed
-against the published launcher and pass now. The download itself and the
+assert the `SevereServiceError` name and unchanged capabilities. A
+`desktop-shell-e2e` test runs the installed `@wdio/cli` `Launcher` with the
+journey's service adapter and an absent native driver. It requires the run to
+stop with that driver error. Against the published launcher, the run resolved
+after starting a worker. All three tests failed there and pass now. The accepted
+`tauri`/`wry` browser names are reconciled with `@wdio/tauri-service`'s own
+validation. The download itself and the
 Windows PowerShell 5.1 runtime remain for the merge path.
 
 The readiness regression seam replaces only the driver's readiness behavior;

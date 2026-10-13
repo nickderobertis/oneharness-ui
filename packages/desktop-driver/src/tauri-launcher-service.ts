@@ -28,8 +28,10 @@ const launcherOptions = z.object({
   nativeDriverPath: absolutePath.optional(),
 });
 type LauncherOptions = z.infer<typeof launcherOptions>;
+// @wdio/tauri-service's launcher accepts these names; a test reconciles them with it.
+export const tauriBrowserNames = z.enum(["tauri", "wry"]);
 const capabilityList = z
-  .array(z.looseObject({ browserName: z.enum(["tauri", "wry"]).optional() }))
+  .array(z.looseObject({ browserName: tauriBrowserNames.optional() }))
   .max(64);
 
 async function freePort(): Promise<number> {
@@ -46,8 +48,9 @@ async function freePort(): Promise<number> {
   return address.port;
 }
 
-// WDIO logs any other onPrepare error and starts sessions anyway; it stops the
-// run only for errors named SevereServiceError.
+// @wdio/cli logs any other onPrepare error and starts sessions anyway; it stops
+// the run only for errors named SevereServiceError. desktop-shell-e2e proves this
+// against the installed Launcher.
 export class DriverStartupError extends Error {
   override name = "SevereServiceError";
 }
