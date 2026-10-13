@@ -2,7 +2,7 @@
 
 Reviewed read-only: every completed `desktop-e2e` workflow run created from
 2026-10-06T00:00:00Z through 2026-10-13T16:00:00Z, plus the explicitly required
-failed attempt 1 of run 38418554958. Its workflow was still running because of a
+failed attempt 1 of run 38418554958. At initial inspection its workflow was still running because of a
 manager-initiated retry; this dispatch did not re-run, cancel or modify CI.
 The inventory includes Windows jobs only. Successful native-journey commands
 prove the tests ran; selection-only successes do not. The original 11-of-13
@@ -32,6 +32,7 @@ workflow-success figure counted selection skips, so it was not a journey pass ra
 | 2026-10-13T12:26:41Z | [38397324626](https://github.com/nickderobertis/oneharness-ui/actions/runs/38397324626) | 115295762405 | Reached first test; native journey passed |
 | 2026-10-13T12:29:18Z | [38397642975](https://github.com/nickderobertis/oneharness-ui/actions/runs/38397642975) | 115296848060 | Skipped by affected selection; no native journey |
 | 2026-10-13T15:02:10Z | [38418554958](https://github.com/nickderobertis/oneharness-ui/actions/runs/38418554958) | 115369401264 | Failed before first test: msedgedriver download failed; service continued, then 10-second tauri-driver readiness timeout |
+| 2026-10-13T15:02:10Z | [38418554958, attempt 2](https://github.com/nickderobertis/oneharness-ui/actions/runs/38418554958) | 115406088574 | Reached first test; native journey passed on the unchanged PR head |
 
 The only pre-test startup failure found is job 115369401264. Its job log reports
 `SevereServiceError: Failed to start tauri-driver ... failed to become ready within
@@ -52,7 +53,10 @@ and its `DriverPool` delegated to `@wdio/native-core`'s hard-coded 10,000ms
 The finished tree replaces that re-export with local launcher lifecycle code in
 `apps/desktop-shell-e2e/tests/tauri-launcher-service.ts`, native discovery and
 validated subprocess output in `native-driver.ts`, and explicit Windows
-preparation in `prepare-edge-driver.ps1`. No product/journey assertion changed.
+preparation in `prepare-edge-driver.ps1`. No product/journey assertion changed. A local freshness gate reconciles both
+PowerShell result key sets and its version-match pattern with the Zod consumer;
+renaming the producer's `version` field to `driverVersion` made that gate fail,
+and restoring the producer made it pass.
 
 The Windows preparation selects a WebView2-major-matched PATH msedgedriver or
 retries CDN download three times and verifies the executable's reported version.
@@ -81,20 +85,20 @@ bounded failure identifying both executables and `HTTP 200; ready was not true`.
 With the launcher restored from dispatch base
 `2eb9a508b13e2e699ede2fb0070140e2f931c45a`, the held-step test failed at
 `expect(prepared).toBe(false)` with `Received: true`: the original launcher accepted
-an HTTP status response with `ready:false` before native readiness. The finished launcher passes it. The failure test advances an injected monotonic
-clock past its bound only after the child has served a held `ready:false` status,
-so the regression needs no timing sleep. Additional tests cover executable and
+an HTTP status response with `ready:false` before native readiness. The finished launcher passes it. The failure test holds native readiness while the real startup deadline expires;
+it uses a ten-second test bound and no timing sleep or injected clock. Additional tests cover executable and
 configuration validation, a missing native executable and an early driver exit.
 Native Windows execution and the Windows PowerShell preparation remain for the
 merge path; this host is Linux.
 
-At the final read-only observation, Windows attempt 2 job **115406088574** was
-still running; Ubuntu attempt 2 job 115406091573 had passed. This retry does not
-verify the dispatch's changed code.
+The final read-only observation found Windows attempt 2 job **115406088574**
+completed successfully; its log reports `native desktop journey: ok`. Ubuntu
+attempt 2 job 115406091573 also passed. This retry used the unchanged PR head
+and does not verify the dispatch's changed code.
 
 Final local validation uses the repository's affected command surface:
 `NX_BASE=2eb9a508b13e2e699ede2fb0070140e2f931c45a NX_HEAD=HEAD just check-affected`.
-The e2e helper suite has 25 passing tests; its formatting, lint and typecheck
+The e2e helper suite has 26 passing tests; its formatting, lint and typecheck
 also pass. Documentation version drift verification and its regression test pass.
 PowerShell's `Parser.ParseFile` reports no syntax errors. These local checks do
 not execute Windows registry, Authenticode or native-driver download operations.

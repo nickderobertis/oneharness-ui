@@ -7,7 +7,7 @@ import { setImmediate } from "node:timers";
 import type { TauriCapabilities } from "@wdio/tauri-service";
 import * as service from "./tauri-launcher-service.ts";
 
-async function fixture() {
+async function fixture(startTimeout = service.DRIVER_START_TIMEOUT) {
   const root = await mkdtemp(resolve(tmpdir(), "desktop-driver-test-"));
   let release: () => void = () => {};
   let requested: () => void = () => {};
@@ -44,7 +44,10 @@ const server = createServer((request, response) => {
   response.end(JSON.stringify({value: {ready}}));
   if (!notified) {
     notified = true;
-    fetch('http://127.0.0.1:${address.port}/held-native-startup').then(() => { ready = true; });
+    fetch('http://127.0.0.1:${address.port}/held-native-startup').then(async (response) => {
+      if (!response.ok || await response.text() !== 'release') throw new Error('invalid readiness release');
+      ready = true;
+    });
   }
 });
 server.listen(port, '127.0.0.1', () => {
@@ -54,21 +57,16 @@ server.listen(port, '127.0.0.1', () => {
 `,
     { mode: 0o700 },
   );
-  let elapsed = 0;
   const launcher = new service.launcher({
     logDir: root,
     driverProvider: "external",
     tauriDriverPath: process.platform === "win32" ? process.execPath : executable,
     driverArguments: process.platform === "win32" ? [executable] : [],
-    startTimeout: 1000,
+    startTimeout,
     nativeDriverPath: process.execPath,
-    now: () => elapsed,
   });
   return {
     launcher,
-    advancePastDeadline: () => {
-      elapsed = 1001;
-    },
     observed,
     release,
     root,
@@ -120,7 +118,7 @@ describe("native desktop WebDriver service", () => {
   });
 
   test("withheld readiness fails with driver names, elapsed bound and observed status, and stops the child", async () => {
-    const driver = await fixture();
+    const driver = await fixture(10_000);
     const capabilities: TauriCapabilities[] = [
       { "tauri:options": { application: process.execPath } },
     ];
@@ -128,9 +126,8 @@ describe("native desktop WebDriver service", () => {
       const preparation = driver.launcher.onPrepare({ maxInstances: 1 }, capabilities);
       await driver.observed;
       await new Promise<void>((resolve) => setImmediate(resolve));
-      driver.advancePastDeadline();
       await expect(preparation).rejects.toThrow(
-        /tauri-driver.*native WebDriver.*limit 1000ms.*HTTP 200; ready was not true/,
+        /tauri-driver.*native WebDriver.*limit 10000ms.*HTTP 200; ready was not true/,
       );
       expect(capabilities[0]?.port).toBeUndefined();
       expect(await readFile(resolve(driver.root, "driver-startup.log"), "utf8")).toContain(
@@ -139,7 +136,7 @@ describe("native desktop WebDriver service", () => {
     } finally {
       await driver.cleanup();
     }
-  });
+  }, 20_000);
   test("invalid launcher configuration is rejected before setup", () => {
     expect(() => new service.launcher({ logDir: "relative" })).toThrow("requires an absolute path");
     expect(() => new service.launcher({ logDir: tmpdir(), startTimeout: 0 })).toThrow();

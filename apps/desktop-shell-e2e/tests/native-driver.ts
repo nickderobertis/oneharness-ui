@@ -7,7 +7,7 @@ import { z } from "zod";
 
 const execute = promisify(execFile);
 const preparationTimeout = 240_000;
-const driverResult = z.object({
+export const nativeDriverResult = z.object({
   path: z.string().min(1),
   version: z.string().regex(/^\d+\.\d+\.\d+\.\d+$/),
 });
@@ -56,7 +56,7 @@ export async function prepareNativeDriver(): Promise<string> {
       ],
       { timeout: preparationTimeout, maxBuffer: 16_384 },
     );
-    const result = driverResult.parse(JSON.parse(stdout.trim()));
+    const result = nativeDriverResult.parse(JSON.parse(stdout.trim()));
     validateDriverExecutable(result.path, "msedgedriver");
     console.info(`Native WebDriver: msedgedriver ${result.version} at ${result.path}`);
     return result.path;

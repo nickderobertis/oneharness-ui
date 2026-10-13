@@ -29,10 +29,18 @@ if ($existing) {
     }
   }
 }
+$processor = $env:PROCESSOR_ARCHITEW6432
+if (-not $processor) { $processor = $env:PROCESSOR_ARCHITECTURE }
+$architecture = switch ($processor) {
+  'AMD64' { 'win64' }
+  'ARM64' { 'arm64' }
+  'x86' { 'win32' }
+  default { throw "msedgedriver has no configured download for Windows architecture $processor" }
+}
 $directory = Join-Path ([System.IO.Path]::GetTempPath()) ('oneharness-msedgedriver-' + [guid]::NewGuid())
 New-Item -ItemType Directory -Path $directory | Out-Null
 try {
-  # Retry transient registry/CDN failures; no journey can start without this file.
+  # Retry transient CDN failures; no journey can start without this file.
   for ($attempt = 1; $attempt -le 3; $attempt++) {
     try {
       $version = $runtime
@@ -45,7 +53,7 @@ try {
         if ($latest -match '^\d+\.\d+\.\d+\.\d+$' -and $latest.Split('.')[0] -eq $major) { $version = $latest }
       } catch { [Console]::Error.WriteLine("msedgedriver version lookup failed; trying WebView2 version $runtime") }
       $archive = Join-Path $directory 'driver.zip'
-      Invoke-WebRequest -UseBasicParsing -TimeoutSec 60 -Uri "https://msedgedriver.microsoft.com/$version/edgedriver_win64.zip" -OutFile $archive
+      Invoke-WebRequest -UseBasicParsing -TimeoutSec 60 -Uri "https://msedgedriver.microsoft.com/$version/edgedriver_$architecture.zip" -OutFile $archive
       Expand-Archive -Force -Path $archive -DestinationPath $directory
       $driver = Join-Path $directory 'msedgedriver.exe'
       Assert-MicrosoftDriver $driver

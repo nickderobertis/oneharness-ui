@@ -26,8 +26,6 @@ const launcherOptions = z.object({
   startTimeout: z.number().finite().positive().max(600_000).optional(),
   driverArguments: z.array(safeString).max(64).optional(),
   nativeDriverPath: absolutePath.optional(),
-  // The held-step regression advances a clock; production uses performance.now.
-  now: z.custom<() => number>((value) => typeof value === "function").optional(),
 });
 type LauncherOptions = z.infer<typeof launcherOptions>;
 
@@ -45,7 +43,7 @@ async function freePort(): Promise<number> {
   return address.port;
 }
 
-// Only the launcher is exported: the release app has no WDIO plugin worker hooks.
+// The release app has no WDIO plugin worker hooks.
 export class launcher {
   private process: ChildProcess | undefined;
   private output = "";
@@ -78,9 +76,7 @@ export class launcher {
     const log = resolve(this.options.logDir, "driver-startup.log");
     this.output = `tauri-driver: ${driver}; native WebDriver: ${nativeDriver}\n`;
     await writeFile(log, this.output);
-    const readClock = this.options.now ?? (() => performance.now());
-    const now = () => z.number().finite().nonnegative().parse(readClock());
-    const started = now();
+    const started = performance.now();
     const child = spawn(driver, args, { shell: false, stdio: ["ignore", "pipe", "pipe"] });
     this.process = child;
     let processError: string | undefined;
@@ -94,18 +90,20 @@ export class launcher {
     child.stdout?.on("data", capture);
     child.stderr?.on("data", capture);
     let observation = "no status response";
+    let lastHttpResponse = "no HTTP status response";
     let ready = false;
     try {
-      while (now() - started < timeout) {
+      while (performance.now() - started < timeout) {
         if (processError || child.exitCode !== null || child.signalCode !== null) {
           throw new Error(processError ?? `process exited (${child.exitCode ?? child.signalCode})`);
         }
         try {
           const response = await fetch(`http://127.0.0.1:${port}/status`, {
             signal: AbortSignal.timeout(
-              Math.max(1, Math.min(2000, Math.ceil(timeout - (now() - started)))),
+              Math.max(1, Math.min(2000, Math.ceil(timeout - (performance.now() - started)))),
             ),
           });
+          lastHttpResponse = `HTTP ${response.status}`;
           const status: unknown = await response.json();
           if (response.ok && typeof status === "object" && status !== null && "value" in status) {
             const value = status.value;
@@ -123,17 +121,18 @@ export class launcher {
               return;
             }
           }
-          observation = `HTTP ${response.status}; ready was not true`;
+          lastHttpResponse = `HTTP ${response.status}; ready was not true`;
+          observation = lastHttpResponse;
         } catch (error) {
           observation = error instanceof Error ? error.message : String(error);
         }
-        await pause(Math.min(100, Math.max(0, timeout - (now() - started))));
+        await pause(Math.min(100, Math.max(0, timeout - (performance.now() - started))));
       }
       throw new Error(`last status observation: ${observation}`);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       throw new Error(
-        `tauri-driver (${driver}), native WebDriver (${nativeDriver}) failed readiness after ${Math.round(now() - started)}ms (limit ${timeout}ms): ${detail}; driver output: ${this.output}; inspect ${log}`,
+        `tauri-driver (${driver}), native WebDriver (${nativeDriver}) failed readiness after ${Math.round(performance.now() - started)}ms (limit ${timeout}ms): ${detail}; last HTTP response: ${lastHttpResponse}; driver output: ${this.output}; inspect ${log}`,
       );
     } finally {
       try {
