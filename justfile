@@ -49,6 +49,10 @@ lint:
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "workflow lint" "Fix the reported workflow diagnostics, then rerun 'just lint'." -- uvx --from actionlint-py==1.7.12.24 actionlint .github/workflows/*.yml
     @if [ "${ONEHARNESS_QUIET:-}" != "1" ]; then echo "lint: ok"; fi
 
+# Nx uses cmd on Windows; let just's configured shell expand workflow paths.
+lint-workflows:
+    @./scripts/run-quiet.sh "workflow lint" "Fix the reported workflow diagnostics, then rerun 'just lint-workflows'." -- uvx --from actionlint-py==1.7.12.24 actionlint .github/workflows/*.yml
+
 typecheck:
     @./scripts/run-quiet.sh "typecheck" "Fix the reported TypeScript or Rust diagnostics, then rerun 'just typecheck'." -- env RUSTFLAGS="-D warnings" bunx nx run-many -t typecheck --all --outputStyle=static
 

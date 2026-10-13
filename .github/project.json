@@ -19,7 +19,7 @@
       "inputs": ["policy"],
       "command": "node .github/check-budgets.mjs"
     },
-    "lint": { "command": "uvx --from actionlint-py==1.7.12.24 actionlint .github/workflows/*.yml" },
+    "lint": { "command": "just lint-workflows" },
     "typecheck": { "command": "node .github/check-syntax.mjs && bunx tsc -p .github/tsconfig.json" }
   }
 }
