@@ -109,3 +109,11 @@ The readiness regression seam replaces only the driver's readiness behavior;
 it invokes the real local launcher and its process, HTTP, error and cleanup
 boundaries. Its narrow `e2e_not_mocked` annotation documents this task's explicit
 held-readiness requirement. It does not claim real Windows driver coverage.
+
+The ten-second local timeout regression also has a narrow
+`expensive_tests_stay_behind_their_own_edge` annotation: the documented e2e helper
+tier owns it, and its bound leaves room for cold Windows subprocess startup.
+The packaged journey still has its separate `desktop-e2e` edge. Splitting helper
+project dependencies and reporting the third-party startup defects upstream are
+recorded as non-blocking follow-up drafts, outside this dispatch. Shared lint
+rules, thresholds and test commands were not changed.

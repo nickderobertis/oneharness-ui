@@ -117,6 +117,7 @@ describe("native desktop WebDriver service", () => {
     }
   });
 
+  // llmlint: ignore[expensive_tests_stay_behind_their_own_edge] The documented e2e helper tier owns this local held-step regression. Its 10s bound leaves room for cold Windows subprocess startup; a separate helper Nx project is deferred graph work. The native journey keeps its desktop-e2e edge.
   test("withheld readiness fails with driver names, elapsed bound and observed status, and stops the child", async () => {
     const driver = await fixture(10_000);
     const capabilities: TauriCapabilities[] = [
