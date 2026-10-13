@@ -1,15 +1,30 @@
 import { readFileSync } from 'node:fs';
 import { options } from './options.mjs';
 import { pathToFileURL } from 'node:url';
+import { diffClass } from './release-diff.mjs';
+import { object, text } from './validation.mjs';
 
 const events = new Set(['pull_request', 'push', 'release', 'workflow_run', 'repository_dispatch', 'schedule', 'workflow_dispatch', 'workflow_call']);
-/** @param {{event_name?: unknown} | null | undefined} event @param {string} [_base] @param {string} [_head] */
-export function classify(event, _base, _head) {
-  // semantic-release publishes tags directly. No identity or release-PR branch
-  // is configured here, so even a bot-authored version-only PR needs Mac proof.
+/** @param {{event_name?: unknown, pull_request?: unknown, repository?: unknown} | null | undefined} event @param {string} base @param {string} head */
+export function classify(event, base, head) {
   const name = event?.event_name;
-  const macosRequired = typeof name !== 'string' || !events.has(name) || name === 'pull_request';
-  return { isReleaseOnly: false, macosRequired, reason: macosRequired ? 'This repository releases directly from tags; every PR requires Mac coverage' : 'Non-PR event: no automatic CI Mac lane' };
+  const isPr = typeof name !== 'string' || !events.has(name) || name === 'pull_request';
+  if (!isPr) return { isReleaseOnly: false, macosRequired: false, reason: 'Non-PR event: no automatic CI Mac lane' };
+  const diff = diffClass(base, head);
+  let authorized = false;
+  try {
+    const config = object(JSON.parse(readFileSync(new URL('./release-pr-policy.json', import.meta.url), 'utf8')), 'release PR policy');
+    if (!Array.isArray(config.automation)) throw new Error('Invalid automation configuration');
+    const pr = object(event?.pull_request, 'PR');
+    const user = object(pr.user, 'PR author'); const branch = object(pr.head, 'PR head');
+    const sameRepo = text(object(branch.repo, 'head repository').full_name, 'head repository name') === text(object(event?.repository, 'repository').full_name, 'repository name');
+    authorized = config.automation.some(entry => {
+      const rule = object(entry, 'automation identity/branch');
+      return sameRepo && user.login === text(rule.login, 'automation login') && branch.ref === text(rule.branch, 'automation branch');
+    });
+  } catch { authorized = false; }
+  const isReleaseOnly = name === 'pull_request' && authorized && diff === 'version-only';
+  return { isReleaseOnly, macosRequired: !isReleaseOnly, reason: `PR diff: ${diff}; ${isReleaseOnly ? 'configured release automation authorizes omission' : 'Mac coverage required'}` };
 }
 /** @param {string} policyResult @param {string} macResult @param {string} required */
 export function carrier(policyResult, macResult, required) {

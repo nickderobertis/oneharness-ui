@@ -48,6 +48,7 @@ test('classifier subprocess requires Mac for all PR identities/diffs and unreada
     for (const diff of Object.keys(h.heads)) for (const fork of [false, true]) for (const bot of [false, true]) {
       const result = classification(h.cwd, { ...pr(fork, bot), event_name: 'pull_request' }, h.base, h.heads[diff]);
       assert.equal(result.isReleaseOnly, false);
+      assert.match(result.reason, new RegExp(`PR diff: ${diff === 'version-only' ? 'version-only' : diff === 'dependency' ? 'source-or-dependency' : 'unknown-or-source'}`));
       assert.equal(result.macosRequired, !result.isReleaseOnly);
     }
     for (const altered of [

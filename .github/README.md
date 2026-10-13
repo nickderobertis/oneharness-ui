@@ -9,12 +9,19 @@ bridge `INVALID_REQUEST` JSON assertions. Linux carriers preserve the exact
 protected `check (macos-15)` and `macos-native-smoke` names and reject failed,
 cancelled, skipped or missing required work.
 
-The manager's task-specific ruling is that this repository tags releases directly
-with semantic-release and opens no release PR. There is no authorized release-PR
-identity or branch. Accordingly `isReleaseOnly` is always false: bot identity,
-release-shaped branch/title and version-only content cannot authorize omission.
-The classifier retains the agreed arguments without inventing an automation
-agreement. Non-PR events do not request the CI Mac lane. A manually opted-in
+This repository tags releases directly with semantic-release and opens no release
+PR. `release-pr-policy.json` therefore has an empty automation identity/branch
+set. The classifier parses the git diff and reports its class in `reason`, but
+`isReleaseOnly` is false for every real PR here. A version-only diff cannot
+authorize omission without a configured exact author/branch pair and same-repo
+ownership. Subprocess fixtures configure such a pair and prove authorized
+version/changelog-only routing as well as rejection of forged, mixed, malformed
+and dependency edits. Manifest and lockfile comparisons remove only the local
+release version fields, preserving all other parsed fields. TOML uses the existing
+locked Bun parser; Bun lockfiles use JSON parsing with generated trailing commas
+removed outside quoted strings.
+Unknown diff/input requires Mac coverage. Non-PR events request no CI Mac lane.
+A manually opted-in
 `macos_diagnostic` in `check.yml` is separate from the automatic lifecycle and
 its default is false. Automatic artifact dispatch supplies only `release_tag`.
 
