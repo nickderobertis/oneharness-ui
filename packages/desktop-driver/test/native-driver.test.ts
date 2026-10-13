@@ -135,7 +135,9 @@ async function readDriverVersion(stdout: string, exitCode = 0) {
       },
     ).trim();
   } catch (error) {
-    throw new Error(String((error as { stderr?: unknown }).stderr ?? error));
+    // execFileSync attaches the child's stderr, where the parser's message is.
+    const stderr = error instanceof Error && "stderr" in error ? error.stderr : undefined;
+    throw new Error(typeof stderr === "string" && stderr ? stderr : String(error));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
