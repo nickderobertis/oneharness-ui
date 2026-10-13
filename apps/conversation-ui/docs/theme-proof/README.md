@@ -59,4 +59,4 @@ surfaces.
 - `just visual` captures the real exported UI and bridge fixture.
 - `just test-e2e` drives theme persistence and the conversation workflows through accessible
   roles, labels, and keyboard focus.
-- `just gate` runs the complete deterministic pre-push gate.
+- `just gate` runs the deterministic checks manually; CI verifies them on the merge path.
