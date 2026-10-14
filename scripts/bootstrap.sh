@@ -64,6 +64,13 @@ install_cargo_tool deny cargo-deny 0.20.2
 install_cargo_tool machete cargo-machete 0.9.2
 install_cargo_tool llvm-cov cargo-llvm-cov 0.8.7
 
+# onevcs pool maintenance (onevcs.toml) runs this exact release through `just pool-maintenance`.
+readonly PRUNE_SUPERSEDED_VERSION=0.1.1
+if [ "$(cargo-prune-superseded --version 2>/dev/null || true)" != "cargo-prune-superseded $PRUNE_SUPERSEDED_VERSION" ]; then
+  cargo install --locked --quiet cargo-prune-superseded --version "$PRUNE_SUPERSEDED_VERSION" \
+    || fail "could not install cargo-prune-superseded $PRUNE_SUPERSEDED_VERSION; verify crates.io access, then rerun just bootstrap"
+fi
+
 case "$(uname -s)" in
   Linux | MINGW* | MSYS* | CYGWIN*)
     if ! cargo install --list | grep -Fxq "tauri-driver v2.0.6:"; then
