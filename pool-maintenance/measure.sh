@@ -55,7 +55,7 @@ build_tests "alternative-configuration" env CARGO_PROFILE_DEV_DEBUG=line-tables-
 list_entries >"$WORK/after-alternative.txt"
 LC_ALL=C comm -13 "$WORK/before-alternative.txt" "$WORK/after-alternative.txt" >"$WORK/alternative.txt"
 [ -s "$WORK/alternative.txt" ] \
-  || fail "the alternative-configuration build created no build entries, so the pass would have nothing superseded to remove"
+  || fail "the alternative-configuration build created no build entries, so the pass would have nothing superseded to remove; make sure .cargo/config.toml does not already set the dev profile's debug to line-tables-only, then rerun the budget"
 while IFS= read -r entry; do
   find "$entry" -exec touch -h -d '2000-01-01T00:00:00Z' {} +
 done <"$WORK/alternative.txt"
@@ -72,7 +72,7 @@ LC_ALL=C comm -12 "$WORK/alternative.txt" "$WORK/after-pass.txt" >"$WORK/alterna
 LC_ALL=C comm -23 "$WORK/ordinary-before.txt" "$WORK/after-pass.txt" >"$WORK/ordinary-lost.txt"
 if [ -s "$WORK/ordinary-lost.txt" ]; then
   cat "$WORK/ordinary-lost.txt" >&2
-  fail "the pass removed the ordinary build entries listed above; only the alternative configuration's builds are superseded"
+  fail "the pass removed the ordinary build entries listed above, superseded by a rebuild in the ordinary step; run 'cargo test --locked --workspace --all-features --no-run' and 'just pool-maintenance' once to settle the target dir, then rerun the budget"
 fi
 if [ -n "${POOL_MAINTENANCE_EVIDENCE_DIR:-}" ]; then
   mkdir -p "$POOL_MAINTENANCE_EVIDENCE_DIR"
