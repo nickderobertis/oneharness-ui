@@ -1,0 +1,15 @@
+{
+  "name": "pool-maintenance",
+  "$schema": "../node_modules/nx/schemas/project-schema.json",
+  "projectType": "library",
+  "sourceRoot": "pool-maintenance",
+  "tags": ["scope:tooling", "type:tool"],
+  "targets": {
+    "lint": {
+      "command": "uvx --from shellcheck-py==0.11.0.1 shellcheck pool-maintenance/measure.sh"
+    },
+    "budgets-host": {
+      "command": "bunx onebudgetspec check pool-maintenance/budgets.yaml --label host"
+    }
+  }
+}

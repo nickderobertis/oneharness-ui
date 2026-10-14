@@ -1,0 +1,19 @@
+schema_version: 1
+budgets:
+  - id: oneharness-ui-pool-maintenance-seconds
+    description: >-
+      Wall-clock seconds one steady-state pass of this repository's declared pool
+      maintenance (`just pool-maintenance`) takes, as cargo-prune-superseded reports
+      it: the pass after one ordinary run's worth of new superseded builds, with any
+      older backlog already cleared. Protects how long a regular post-run pass holds
+      one of this repository's warm pool slots out of service. Workload: an untimed
+      pass, the test targets built once under an alternative dev-profile debuginfo
+      level and backdated past the 2-day window, the ordinary gate test build, then
+      the timed pass. Measurement source: direct. Basis: estimate. Check runtime:
+      about 600 seconds, since it builds the test targets twice.
+    command: [./measure.sh]
+    measure: reported
+    direction: max
+    threshold: 20
+    unit: seconds
+    labels: [host]

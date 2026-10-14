@@ -120,6 +120,11 @@ dispatch-release:
 upload-release:
     @./scripts/run-quiet.sh "native release upload" "Prepare the canonical checksummed assets and verify the built-in GH_TOKEN, then rerun 'just upload-release'." -- ./scripts/upload-release.sh
 
+# Host-labelled budgets read this host's clock and really build or prune the tree, so neither
+# `check` nor `check-affected` selects them; run them here, on the host they describe.
+budgets:
+    @./scripts/run-quiet.sh "host budgets" "Inspect the failed budget's verdict or measurement error above, fix it, then rerun 'just budgets'." -- bunx nx run-many -t budgets-host --outputStyle=static
+
 # GHSA-vfj7-8cjw-p6xm (braces <=3.0.3) has no patched release; braces is reached only through dev tooling
 # (semantic-release's commit-analyzer > micromatch, @wdio/cli and mocha-framework) on repo-authored glob patterns.
 # Remove the bun audit ignore once a fixed braces release exists.
@@ -174,6 +179,13 @@ macos-proof-result:
 
 verify-macos-artifact:
     @bash "{{justfile_directory()}}/scripts/verify-macos-artifact.sh"
+
+# onevcs runs this in idle warm-pool slots (onevcs.toml). It removes each unit's superseded
+# cargo builds older than 2 days and keeps its newest build; `target` is the one target-dir
+# .cargo/config.toml sets. `just bootstrap` installs the pinned pruner.
+pool-maintenance:
+    @command -v cargo-prune-superseded >/dev/null 2>&1 || { echo "pool maintenance: cargo-prune-superseded is missing; run 'just bootstrap', then rerun 'just pool-maintenance'" >&2; exit 1; }
+    @cargo-prune-superseded --keep-within 2d target || { status=$?; echo "pool maintenance: the pruner's error is printed above; fix it, then rerun 'just pool-maintenance'" >&2; exit "$status"; }
 
 checkout-release:
     @./scripts/run-quiet.sh "release source checkout" "Repair the verified release tag or token as reported above, then rerun just checkout-release." -- ./scripts/checkout-release.sh
