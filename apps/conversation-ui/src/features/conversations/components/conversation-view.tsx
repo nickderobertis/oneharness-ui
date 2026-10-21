@@ -6,7 +6,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useInfiniteScroll } from "../hooks/use-infinite-scroll";
 import { useTimelineScrollSync } from "../hooks/use-timeline-scroll-sync";
-import type { Conversation } from "../presentational-types";
+import type { Conversation, ConversationFocus } from "../presentational-types";
 import { ConversationTimeline } from "./conversation-timeline-view";
 import { ReplyForm } from "./reply-form";
 import { StatusBadge } from "./status-badge";
@@ -42,6 +42,7 @@ function LiveIndicator() {
 export function ConversationView({
   conversation,
   continueError,
+  focus,
   hasMoreTurns,
   live = false,
   loadMoreTurnsError,
@@ -54,6 +55,7 @@ export function ConversationView({
 }: {
   conversation: Conversation;
   continueError: Error | null;
+  focus?: ConversationFocus;
   hasMoreTurns: boolean;
   live?: boolean;
   loadMoreTurnsError: Error | null;
@@ -127,6 +129,7 @@ export function ConversationView({
         <div className="sticky top-0 z-1 mx-auto mb-8 max-w-[850px] bg-background/95 py-2 backdrop-blur">
           <ConversationTimeline
             {...(scrollSync.cursor === undefined ? {} : { cursor: scrollSync.cursor })}
+            {...(focus ? { focus } : {})}
             onSelectTurn={scrollSync.scrollTo}
             turns={conversation.turns}
           />
@@ -142,7 +145,7 @@ export function ConversationView({
         </p>
         {conversation.turns.map((turn) => (
           <div key={turn.id} ref={(element) => scrollSync.register(turn.id, element)}>
-            <TurnCard turn={turn} />
+            <TurnCard {...(focus?.turnId === turn.id ? { focus } : {})} turn={turn} />
           </div>
         ))}
         <div className="mx-auto max-w-[850px] text-center">

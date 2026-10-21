@@ -3,6 +3,7 @@ import type { ConversationToolEvent } from "./presentational-types";
 const toolResultKind = "tool_result";
 
 export interface ToolInvocation {
+  eventIndices: readonly number[];
   durationMs: number | null;
   finishedAt: string | null;
   id: string;
@@ -37,6 +38,9 @@ function toInvocation({ call, result }: Pair): ToolInvocation {
   const anchor = call ?? result;
   const kind = anchor?.kind ?? toolResultKind;
   return {
+    eventIndices: [call?.index, result?.index].filter(
+      (index): index is number => index !== undefined,
+    ),
     durationMs: firstReported(call?.durationMs, result?.durationMs),
     finishedAt: firstReported(call?.finishedAt, result?.finishedAt),
     id: `tool-${anchor?.index ?? 0}`,

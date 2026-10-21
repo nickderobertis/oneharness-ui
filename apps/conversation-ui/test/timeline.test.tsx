@@ -197,3 +197,54 @@ describe("Timeline", () => {
     expect(screen.getByText("No timeline events recorded.")).toBeTruthy();
   });
 });
+
+test("round ticks respect measured spacing over three hours and crosshair reads time", () => {
+  const start = Date.parse("2026-08-04T12:00:00Z");
+  const end = start + 3 * 3_600_000;
+  const original = HTMLElement.prototype.getBoundingClientRect;
+  HTMLElement.prototype.getBoundingClientRect = () => ({
+    width: 1200,
+    left: 0,
+    right: 1200,
+    top: 0,
+    bottom: 100,
+    height: 100,
+    x: 0,
+    y: 0,
+    toJSON() {},
+  });
+  try {
+    const { rerender } = render(
+      <Timeline
+        axis={{ origin: start }}
+        items={[{ id: "run", label: "Run", payload: {}, start, end }]}
+        ticks={{ minSpacingPx: 100 }}
+      />,
+    );
+    const values = [
+      ...screen.getByTestId("timeline-axis").querySelectorAll("[data-tick-time]"),
+    ].map((element) => Number(element.getAttribute("data-tick-time")));
+    expect(values.length).toBeGreaterThan(2);
+    for (const [index, value] of values.entries()) {
+      expect(value % 60_000).toBe(0);
+      const previous = values[index - 1];
+      if (previous !== undefined)
+        expect(((value - previous) / (end - start)) * 1200).toBeGreaterThanOrEqual(100);
+    }
+    const plot = screen.getByLabelText("Timeline plot. Scroll to zoom or drag to select a range.");
+    fireEvent.pointerMove(plot, { clientX: 600 });
+    expect(screen.getByLabelText("Timeline crosshair").textContent).toBe(
+      "2026-08-04T13:30:00.000Z +90.0 min",
+    );
+    expect(screen.getByLabelText("Timeline crosshair").style.left).toBe("50%");
+    fireEvent.pointerLeave(plot);
+    expect(screen.queryByLabelText("Timeline crosshair")).toBeNull();
+    rerender(
+      <Timeline crosshair={false} items={[{ id: "run", label: "Run", payload: {}, start, end }]} />,
+    );
+    fireEvent.pointerMove(plot, { clientX: 600 });
+    expect(screen.queryByLabelText("Timeline crosshair")).toBeNull();
+  } finally {
+    HTMLElement.prototype.getBoundingClientRect = original;
+  }
+});

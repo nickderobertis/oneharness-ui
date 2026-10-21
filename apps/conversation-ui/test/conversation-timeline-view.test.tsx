@@ -34,3 +34,43 @@ describe("ConversationTimeline", () => {
     expect(selected).toEqual(["turn-1"]);
   });
 });
+
+test("focus selects and scrolls the tool locally, including paired result indices", () => {
+  const scrolled: Element[] = [];
+  const original = Element.prototype.scrollIntoView;
+  Element.prototype.scrollIntoView = function () {
+    scrolled.push(this);
+  };
+  const turns = [
+    {
+      ...turn,
+      tools: [
+        { index: 0, kind: "tool_call", name: "Read" },
+        { index: 3, kind: "tool_result", output: "Done" },
+      ],
+    },
+  ];
+  try {
+    const { rerender } = render(
+      <ConversationTimeline
+        focus={{ turnId: turn.id, eventIndex: 3 }}
+        onSelectTurn={() => {}}
+        turns={turns}
+      />,
+    );
+    const tool = screen.getByRole("button", { name: "Read, point event" });
+    expect(tool.getAttribute("aria-current")).toBe("true");
+    expect(tool.getAttribute("data-event-index")).toBe("0");
+    expect(scrolled).toContain(tool);
+    expect(screen.getAllByTestId("timeline-lane")).toHaveLength(2);
+    rerender(
+      <ConversationTimeline focus={{ turnId: turn.id }} onSelectTurn={() => {}} turns={turns} />,
+    );
+    expect(tool.hasAttribute("aria-current")).toBe(false);
+    expect(
+      screen.getByRole("button", { name: "worker turn, point event" }).getAttribute("aria-current"),
+    ).toBe("true");
+  } finally {
+    Element.prototype.scrollIntoView = original;
+  }
+});

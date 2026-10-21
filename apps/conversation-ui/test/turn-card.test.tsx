@@ -27,7 +27,7 @@ function turnWith(tools: ConversationToolEvent[]): ConversationTurn {
 }
 
 describe("TurnCard tool invocations", () => {
-  test("keeps default rendered markup byte-for-byte compatible", async () => {
+  test("keeps the default transcript markup with a turn locator and collapse control", async () => {
     const expected = await readFile(
       resolve(import.meta.dir, "goldens/turn-card-default.html"),
       "utf8",

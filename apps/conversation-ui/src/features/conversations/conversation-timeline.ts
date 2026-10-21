@@ -44,6 +44,7 @@ export function conversationTimeline(
     const finished = instant(turn.finishedAt);
     items.push({
       ...(duration !== undefined ? { duration } : finished !== null ? { end: finished } : {}),
+      turnId: turn.id,
       id: turn.id,
       kind: "turn",
       label: `${turn.harness} turn`,
@@ -95,6 +96,9 @@ export function conversationTimeline(
           : invocationEnd !== null
             ? { end: invocationEnd }
             : {}),
+        turnId: turn.id,
+        ...(invocation.toolCallId === null ? {} : { toolCallId: invocation.toolCallId }),
+        eventIndex: Number(invocation.id.slice(5)),
         id: `${turn.id}-${invocation.id}`,
         kind: invocation.kind,
         label: invocation.name,
