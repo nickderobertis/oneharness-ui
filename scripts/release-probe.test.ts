@@ -24,7 +24,7 @@ test("declared npm target probes registry truth and distinguishes absent from un
     },
   });
   async function probe(id = target.id) {
-    const child = Bun.spawn([`./${declaration.probe}`, id], {
+    const child = Bun.spawn(["node", declaration.probe, id], {
       env: { ...process.env, NPM_CONFIG_REGISTRY: server.url.toString() },
       stdout: "pipe",
       stderr: "pipe",
