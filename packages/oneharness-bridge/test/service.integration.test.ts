@@ -505,6 +505,80 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     expect(result.ok).toBe(false);
   });
 
+  // llmlint: ignore-block[tests_mirror_real_usage] Direct BridgeService requests isolate this boundary while preserving the real SDK, CLI, provider, and persisted history.
+  test("saves labels on a session whose first run is still going", async () => {
+    const live = await startHeldRun(
+      {
+        bins: { "claude-code": provider },
+        env: { ONEHARNESS_HISTORY_LABELS: "{}" },
+        harnesses: ["claude-code"],
+        history: true,
+        historyDir,
+        historyName: "label-while-running",
+        mode: "bypass",
+        prompt: "Keep going while I label this",
+      },
+      {
+        after: ['{"type":"result","result":"Done","session_id":"native-label-live"}'],
+        before: ['{"type":"assistant","message":{"content":[{"type":"text","text":"Working."}]}}'],
+        ...(cliOverride ? { executable: cliOverride } : {}),
+      },
+    );
+    try {
+      let summary: ConversationSummary | undefined;
+      for (const deadline = Date.now() + 20_000; Date.now() < deadline; ) {
+        const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
+        summary =
+          listed.ok && listed.data.kind === "list" ? listed.data.conversations[0] : undefined;
+        if (summary?.running) break;
+        await new Promise((wake) => setTimeout(wake, 50));
+      }
+      expect(summary).toMatchObject({ name: "label-while-running", running: true });
+      const sessionId = summary?.id ?? "";
+
+      const saved = await service().handle(
+        { kind: "set-labels", labels: ["triage", "frontend"], sessionId },
+        TEST_AUTHORIZATION,
+      );
+      expect(saved).toEqual({
+        data: { kind: "set-labels", labels: ["frontend", "triage"], sessionId },
+        ok: true,
+      });
+      const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
+      expect(
+        listed.ok && listed.data.kind === "list"
+          ? listed.data.conversations.find(({ id }) => id === sessionId)
+          : undefined,
+      ).toMatchObject({ id: sessionId, labels: ["frontend", "triage"], running: true });
+    } finally {
+      await live.release();
+    }
+  });
+
+  test("still refuses labels for a session that is neither readable nor running", async () => {
+    await seed("present-session", '{"result":"Here","session_id":"present"}');
+    const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
+    if (!listed.ok || listed.data.kind !== "list") throw new Error("session listing failed");
+    const presentSessionId = listed.data.conversations[0]?.id ?? "";
+    const saved = await service().handle(
+      { kind: "set-labels", labels: ["keep"], sessionId: presentSessionId },
+      TEST_AUTHORIZATION,
+    );
+    expect(saved.ok).toBe(true);
+    const labelFile = resolve(historyDir, ".oneharness-ui-labels.json");
+    const before = await readFile(labelFile, "utf8");
+    expect(before).toContain('"keep"');
+    const sessionId = "absent-session-20260101T000000Z-1";
+    const result = await service().handle(
+      { kind: "set-labels", labels: ["orphan"], sessionId },
+      TEST_AUTHORIZATION,
+    );
+    expect(result.ok).toBe(false);
+    expect(await readFile(labelFile, "utf8")).toBe(before);
+  });
+
+  // llmlint: ignore-end[tests_mirror_real_usage]
+
   test("continues a labeled session and returns the new history selection", async () => {
     const report = await seed(
       "continue-me",
