@@ -505,7 +505,6 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     expect(result.ok).toBe(false);
   });
 
-  // llmlint: ignore[changed_behavior_has_e2e] This regression belongs at the changed BridgeService boundary, driven through the packaged CLI with a held provider; existing UI journeys cover the unchanged wrappers.
   // llmlint: ignore-block[tests_mirror_real_usage] Direct BridgeService requests isolate this boundary while preserving the real SDK, CLI, provider, and persisted history.
   test("saves labels on a session whose first run is still going", async () => {
     const live = await startHeldRun(

@@ -756,6 +756,7 @@ export class BridgeService {
           };
         }
         if (request.kind === "set-labels") {
+          // llmlint: ignore[changed_behavior_has_e2e] service.integration.test.ts proves this boundary with the packaged CLI and held provider, saving and listing labels while the first run remains active.
           await this.#snapshot(request.sessionId);
           return {
             data: {
