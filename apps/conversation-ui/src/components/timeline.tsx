@@ -5,6 +5,8 @@ import {
   type PointerEvent,
   type ReactNode,
   type RefObject,
+  useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
@@ -18,6 +20,9 @@ export interface TimelineLane {
 }
 
 export interface TimelineItem<Payload = unknown> {
+  turnId?: string;
+  toolCallId?: string;
+  eventIndex?: number;
   duration?: number | null;
   end?: number | null;
   id: string;
@@ -44,6 +49,8 @@ export interface TimelineMarker<Payload = unknown> {
 export interface TimelineProps<Payload> {
   axis?: { origin: number };
   cursor?: number | null;
+  crosshair?: boolean;
+  ticks?: { minSpacingPx?: number };
   expanded?: boolean;
   getFailureExcerpt?: (item: TimelineItem<Payload>) => string | null | undefined;
   items: readonly TimelineItem<Payload>[];
@@ -200,6 +207,8 @@ function useTimelineView(
 export function Timeline<Payload>({
   axis: axisOptions,
   cursor,
+  crosshair = true,
+  ticks,
   expanded = false,
   getFailureExcerpt,
   items,
@@ -212,6 +221,9 @@ export function Timeline<Payload>({
   range: controlledRange,
   selectedId,
 }: TimelineProps<Payload>) {
+  const instanceId = useId();
+  const [plotWidth, setPlotWidth] = useState(1_000);
+  const [hoverRatio, setHoverRatio] = useState<number | null>(null);
   const [active, setActive] = useState<string | null>(null);
   const validItems = useMemo(() => items.filter((item) => Number.isFinite(item.start)), [items]);
   const validMarkers = useMemo(
@@ -235,10 +247,46 @@ export function Timeline<Payload>({
   }, [validItems, validMarkers]);
   const timelineView = useTimelineView(fullRange, controlledRange, onRangeChange);
   const { axis, range } = timelineView;
+  const hasEvents = validItems.length > 0 || validMarkers.length > 0;
+  useEffect(() => {
+    if (!hasEvents) return;
+    const element = axis.current;
+    if (!element) return;
+    const measure = () => setPlotWidth(element.getBoundingClientRect().width || 1_000);
+    measure();
+    if (typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [axis, hasEvents]);
+  useEffect(() => {
+    if (selectedId)
+      axis.current?.querySelector('[data-selected="true"]')?.scrollIntoView?.({ block: "nearest" });
+  }, [axis, selectedId]);
   const rangeDuration = Math.max(1, range.end - range.start);
   const position = (value: number) => ((value - range.start) / rangeDuration) * 100;
   const rows = expanded ? renderedLanes : [{ id: "overlay", label: "All events" }];
   const origin = axisOptions?.origin ?? fullRange.start;
+
+  const spacing = ticks?.minSpacingPx;
+  const minSpacing =
+    spacing !== undefined && Number.isFinite(spacing) && spacing > 0 ? spacing : 80;
+  const minimumInterval = (rangeDuration * minSpacing) / plotWidth;
+  const intervals = [
+    1_000, 2_000, 5_000, 10_000, 15_000, 30_000, 60_000, 120_000, 300_000, 600_000, 900_000,
+    1_800_000, 3_600_000,
+  ];
+  const interval =
+    intervals.find((value) => value >= minimumInterval) ??
+    Math.ceil(minimumInterval / 3_600_000) * 3_600_000;
+  const tickValues: number[] = [];
+  for (
+    let value = Math.ceil(range.start / interval) * interval;
+    value <= range.end;
+    value += interval
+  )
+    tickValues.push(value);
+  const hoverTime = hoverRatio === null ? null : range.start + hoverRatio * rangeDuration;
 
   const renderItem = (item: TimelineItem<Payload>) => {
     const end = itemEnd(item);
@@ -246,7 +294,7 @@ export function Timeline<Payload>({
     const left = Math.max(0, position(Math.max(item.start, range.start)));
     const width = Math.max(0.8, position(Math.min(end, range.end)) - left);
     const point = end <= item.start;
-    const tooltipId = `timeline-detail-${item.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+    const tooltipId = `timeline-detail-${instanceId}-${item.id.replace(/[^a-zA-Z0-9_-]/g, "-")}`;
     const color = timelineLaneColor(itemLane(item));
     return (
       <div className="absolute inset-y-0" key={item.id} style={{ left: `${left}%` }}>
@@ -254,6 +302,10 @@ export function Timeline<Payload>({
           aria-describedby={tooltipId}
           aria-label={`${item.label}, ${point ? "point event" : "span"}`}
           aria-pressed={selectedId === item.id}
+          aria-current={selectedId === item.id ? "true" : undefined}
+          data-turn-id={item.turnId}
+          data-tool-call-id={item.toolCallId}
+          data-event-index={item.eventIndex}
           className={cn(
             "absolute top-0 h-5 border-2 border-card shadow-sm hover:opacity-80 focus-visible:z-20",
             point ? "w-5 -translate-x-1/2 rounded-full" : "min-w-1 rounded-md",
@@ -342,7 +394,14 @@ export function Timeline<Payload>({
       ) : (
         <div
           aria-label="Timeline plot. Scroll to zoom or drag to select a range."
-          className="relative touch-none select-none overflow-hidden rounded-lg border bg-muted/40 px-2 pb-3 pt-7"
+          className="relative touch-none select-none overflow-hidden rounded-lg border bg-muted/40 pb-3 pt-7"
+          onPointerMove={(event) => {
+            const bounds = event.currentTarget.getBoundingClientRect();
+            setHoverRatio(
+              Math.min(1, Math.max(0, (event.clientX - bounds.left) / (bounds.width || 1_000))),
+            );
+          }}
+          onPointerLeave={() => setHoverRatio(null)}
           onPointerDown={(event: PointerEvent<HTMLDivElement>) =>
             timelineView.brushStart(event.clientX)
           }
@@ -355,6 +414,20 @@ export function Timeline<Payload>({
           }}
           ref={axis}
         >
+          {crosshair && hoverTime !== null ? (
+            <div
+              aria-label="Timeline crosshair"
+              className="pointer-events-none absolute inset-y-0 z-30 border-l border-foreground"
+              style={{ left: `${(hoverRatio ?? 0) * 100}%` }}
+            >
+              <span
+                className="absolute top-0 whitespace-nowrap bg-popover text-[10px] text-popover-foreground"
+                style={{ transform: (hoverRatio ?? 0) > 0.5 ? "translateX(-100%)" : undefined }}
+              >
+                {formatTime(hoverTime)} {formatElapsed(hoverTime - origin)}
+              </span>
+            </div>
+          ) : null}
           <div className="relative grid gap-2" style={{ containerType: "inline-size" }}>
             {rows.map((lane) => (
               <div
@@ -414,12 +487,23 @@ export function Timeline<Payload>({
             ) : null}
           </div>
           <div
-            className="mt-2 flex justify-between font-mono text-[9px] text-subtle"
+            className="relative mt-2 h-4 font-mono text-[9px] text-subtle"
             data-testid="timeline-axis"
             data-timeline-axis
           >
-            <span>{formatTick(range.start, origin)}</span>
-            <span>{formatTick(range.end, origin)}</span>
+            {tickValues.map((value) => (
+              <span
+                key={value}
+                data-tick-time={value}
+                className="absolute"
+                style={{
+                  left: `${position(value)}%`,
+                  transform: value === range.end ? "translateX(-100%)" : undefined,
+                }}
+              >
+                {formatTick(value, origin)}
+              </span>
+            ))}
           </div>
         </div>
       )}

@@ -1,0 +1,9 @@
+schema_version = 1
+probe = "scripts/release-probe.mjs"
+
+[[target]]
+id = "npm:@oneharness/ui"
+name = "npm"
+what = "Presentational React conversation and timeline components."
+manifest = "packages/ui/package.json"
+published_by = ".github/workflows/check.yml — version job, Compute, tag, and publish release step (just publish-release); .releaserc.json invokes scripts/publish-ui.mjs."

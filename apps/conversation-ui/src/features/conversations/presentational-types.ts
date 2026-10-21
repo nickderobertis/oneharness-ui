@@ -77,3 +77,10 @@ export interface ConversationSummary {
   startedAt: string;
   turnCount: number;
 }
+
+/** A location within one conversation; toolCallId takes precedence over eventIndex. */
+export interface ConversationFocus {
+  turnId: string;
+  toolCallId?: string;
+  eventIndex?: number;
+}

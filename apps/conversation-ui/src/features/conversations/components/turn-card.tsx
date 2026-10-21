@@ -1,5 +1,7 @@
+"use client";
+
 import { Terminal } from "lucide-react";
-import type { ReactNode } from "react";
+import { type ReactNode, useEffect, useRef, useState } from "react";
 import {
   Accordion,
   AccordionContent,
@@ -8,7 +10,7 @@ import {
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/components/utils";
-import type { ConversationTurn } from "../presentational-types";
+import type { ConversationFocus, ConversationTurn } from "../presentational-types";
 import { pairToolEvents, type ToolInvocation } from "../tool-invocations";
 import { compactJsonText, JsonCode, parseJsonText } from "./json-code";
 import { Message, MessageAvatar, MessageContent } from "./message";
@@ -100,13 +102,25 @@ function ToolSection({ children, title }: { children: ReactNode; title: string }
   );
 }
 
-function ToolInvocationBlock({ invocation }: { invocation: ToolInvocation }) {
+function ToolInvocationBlock({
+  invocation,
+  current,
+}: {
+  invocation: ToolInvocation;
+  current: boolean;
+}) {
   const duration = formatDuration(invocation.durationMs);
   const preview = previewOf(invocation);
   const hasInput = invocation.input !== undefined && invocation.input !== null;
   const outputJson = invocation.output === null ? undefined : parseJsonText(invocation.output);
   return (
-    <AccordionItem className="rounded-[10px] border bg-card px-3" value={invocation.id}>
+    <AccordionItem
+      aria-current={current ? "true" : undefined}
+      data-tool-call-id={invocation.toolCallId ?? undefined}
+      data-event-index={invocation.id.slice(5)}
+      className="rounded-[10px] border bg-card px-3"
+      value={invocation.id}
+    >
       <AccordionTrigger
         aria-label={`${invocation.name} tool details`}
         className="items-center gap-2 py-1.5 text-xs text-muted-foreground"
@@ -229,100 +243,157 @@ export interface TurnAuthor {
   label: string;
 }
 
-export function TurnCard({ author, turn }: { author?: TurnAuthor; turn: Turn }) {
+export function TurnCard({
+  author,
+  focus,
+  turn,
+}: {
+  author?: TurnAuthor;
+  focus?: ConversationFocus;
+  turn: Turn;
+}) {
+  const root = useRef<HTMLElement>(null);
+  const [collapsed, setCollapsed] = useState(false);
+  const [openTools, setOpenTools] = useState<string[]>([]);
+  const focused = focus?.turnId === turn.id;
+  const target = focused
+    ? pairToolEvents(turn.tools).find((invocation) =>
+        focus.toolCallId !== undefined
+          ? invocation.toolCallId === focus.toolCallId
+          : focus.eventIndex !== undefined && invocation.eventIndices.includes(focus.eventIndex),
+      )
+    : undefined;
+  const targetId = target?.id;
+  const focusKey = focused ? JSON.stringify(focus) : undefined;
+  useEffect(() => {
+    if (!focusKey) return;
+    setCollapsed(false);
+    if (targetId)
+      setOpenTools((values) => (values.includes(targetId) ? values : [...values, targetId]));
+  }, [focusKey, targetId]);
+  useEffect(() => {
+    if (!focusKey || collapsed || (targetId && !openTools.includes(targetId))) return;
+    root.current?.scrollIntoView?.({ block: "nearest" });
+    root.current?.querySelector('[aria-current="true"]')?.scrollIntoView?.({ block: "nearest" });
+  }, [focusKey, collapsed, openTools, targetId]);
   const hasUnknown = Object.keys(turn.unknown).length > 0;
   const invocations = pairToolEvents(turn.tools);
   const inFlight = turn.status === "running";
   return (
     <article
+      ref={root}
+      data-turn-id={turn.id}
+      aria-current={focused && !target ? "true" : undefined}
       aria-label={`Turn ${turn.id} from ${turn.harness}`}
       className="mx-auto mb-10.5 max-w-[850px]"
     >
-      <Message from="user">
-        <MessageContent className="mb-8 ml-auto max-w-[min(680px,88%)] rounded-[22px_22px_5px_22px] border bg-popover px-5 py-4.5">
-          <div className="text-[10px] font-bold uppercase tracking-[.08em] text-subtle">You</div>
-          {inFlight && !turn.user ? (
-            <p className="text-[13px] italic text-muted-foreground">
-              The prompt is recorded when this run finishes.
-            </p>
-          ) : (
-            <MessageResponse label="User message">{turn.user}</MessageResponse>
-          )}
-        </MessageContent>
-      </Message>
-      <Message from="assistant">
-        <MessageAvatar {...(author?.avatar ? { src: author.avatar } : {})}>
-          {author ? author.label.slice(0, 2).toUpperCase() : "OH"}
-        </MessageAvatar>
-        <MessageContent className="pt-1">
-          <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.08em] text-subtle">
-            <span>{author?.label ?? turn.harness}</span>
-            {turn.model ? (
-              <Badge variant="secondary" className="font-medium normal-case tracking-normal">
-                {turn.model}
-              </Badge>
-            ) : null}
-          </div>
-          {turn.reasoning ? (
-            <Accordion className="mt-2.5" collapsible type="single">
-              <AccordionItem
-                className="rounded-[10px] border border-dashed bg-card px-3"
-                value="reasoning"
-              >
-                <AccordionTrigger className="text-xs text-muted-foreground">
-                  Reasoning
-                </AccordionTrigger>
-                <AccordionContent className="whitespace-pre-wrap text-[13px] leading-relaxed text-muted-foreground">
-                  {turn.reasoning}
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          ) : null}
-          {turn.agentEvents?.length ? <AgentActivity events={turn.agentEvents} /> : null}
-          {invocations.length > 0 ? (
-            <section aria-label="Tool calls" className="my-3">
-              <Accordion className="space-y-1" type="multiple">
-                {invocations.map((invocation) => (
-                  <ToolInvocationBlock invocation={invocation} key={invocation.id} />
-                ))}
+      <button
+        className="mb-2 text-[10px] text-muted-foreground hover:text-foreground"
+        type="button"
+        aria-expanded={!collapsed}
+        onClick={() => setCollapsed(!collapsed)}
+      >
+        {collapsed ? "Expand" : "Collapse"} turn {turn.id}
+      </button>
+      <div hidden={collapsed}>
+        <Message from="user">
+          <MessageContent className="mb-8 ml-auto max-w-[min(680px,88%)] rounded-[22px_22px_5px_22px] border bg-popover px-5 py-4.5">
+            <div className="text-[10px] font-bold uppercase tracking-[.08em] text-subtle">You</div>
+            {inFlight && !turn.user ? (
+              <p className="text-[13px] italic text-muted-foreground">
+                The prompt is recorded when this run finishes.
+              </p>
+            ) : (
+              <MessageResponse label="User message">{turn.user}</MessageResponse>
+            )}
+          </MessageContent>
+        </Message>
+        <Message from="assistant">
+          <MessageAvatar {...(author?.avatar ? { src: author.avatar } : {})}>
+            {author ? author.label.slice(0, 2).toUpperCase() : "OH"}
+          </MessageAvatar>
+          <MessageContent className="pt-1">
+            <div className="flex items-center gap-2 text-[10px] font-bold uppercase tracking-[.08em] text-subtle">
+              <span>{author?.label ?? turn.harness}</span>
+              {turn.model ? (
+                <Badge variant="secondary" className="font-medium normal-case tracking-normal">
+                  {turn.model}
+                </Badge>
+              ) : null}
+            </div>
+            {turn.reasoning ? (
+              <Accordion className="mt-2.5" collapsible type="single">
+                <AccordionItem
+                  className="rounded-[10px] border border-dashed bg-card px-3"
+                  value="reasoning"
+                >
+                  <AccordionTrigger className="text-xs text-muted-foreground">
+                    Reasoning
+                  </AccordionTrigger>
+                  <AccordionContent className="whitespace-pre-wrap text-[13px] leading-relaxed text-muted-foreground">
+                    {turn.reasoning}
+                  </AccordionContent>
+                </AccordionItem>
               </Accordion>
-            </section>
-          ) : null}
-          {turn.assistant ? (
-            <MessageResponse label="Assistant message">{turn.assistant}</MessageResponse>
-          ) : inFlight ? (
-            <p className="text-[13px] italic text-muted-foreground" role="status">
-              Still running. Its final answer appears when the run finishes.
-            </p>
-          ) : (
-            <p className="text-[13px] italic text-muted-foreground">
-              No assistant text was captured for this run.
-            </p>
-          )}
-          {turn.failureKind ? (
-            <p
-              aria-label={`Failure: ${turn.failureKind}`}
-              className="border-l-2 border-destructive pl-2.5 text-xs text-destructive"
-              role="note"
-            >
-              Failure: {turn.failureKind}
-            </p>
-          ) : null}
-          <Usage usage={turn.usage} />
-          {hasUnknown ? (
-            <Accordion className="mt-2.5" collapsible type="single">
-              <AccordionItem className="rounded-[10px] border bg-card px-3" value="unknown">
-                <AccordionTrigger className="text-xs text-muted-foreground">
-                  Additional upstream data
-                </AccordionTrigger>
-                <AccordionContent className="-mx-3 border-t p-0">
-                  <StructuredDetail label="Additional upstream data detail" value={turn.unknown} />
-                </AccordionContent>
-              </AccordionItem>
-            </Accordion>
-          ) : null}
-        </MessageContent>
-      </Message>
+            ) : null}
+            {turn.agentEvents?.length ? <AgentActivity events={turn.agentEvents} /> : null}
+            {invocations.length > 0 ? (
+              <section aria-label="Tool calls" className="my-3">
+                <Accordion
+                  className="space-y-1"
+                  type="multiple"
+                  value={openTools}
+                  onValueChange={setOpenTools}
+                >
+                  {invocations.map((invocation) => (
+                    <ToolInvocationBlock
+                      current={target?.id === invocation.id}
+                      invocation={invocation}
+                      key={invocation.id}
+                    />
+                  ))}
+                </Accordion>
+              </section>
+            ) : null}
+            {turn.assistant ? (
+              <MessageResponse label="Assistant message">{turn.assistant}</MessageResponse>
+            ) : inFlight ? (
+              <p className="text-[13px] italic text-muted-foreground" role="status">
+                Still running. Its final answer appears when the run finishes.
+              </p>
+            ) : (
+              <p className="text-[13px] italic text-muted-foreground">
+                No assistant text was captured for this run.
+              </p>
+            )}
+            {turn.failureKind ? (
+              <p
+                aria-label={`Failure: ${turn.failureKind}`}
+                className="border-l-2 border-destructive pl-2.5 text-xs text-destructive"
+                role="note"
+              >
+                Failure: {turn.failureKind}
+              </p>
+            ) : null}
+            <Usage usage={turn.usage} />
+            {hasUnknown ? (
+              <Accordion className="mt-2.5" collapsible type="single">
+                <AccordionItem className="rounded-[10px] border bg-card px-3" value="unknown">
+                  <AccordionTrigger className="text-xs text-muted-foreground">
+                    Additional upstream data
+                  </AccordionTrigger>
+                  <AccordionContent className="-mx-3 border-t p-0">
+                    <StructuredDetail
+                      label="Additional upstream data detail"
+                      value={turn.unknown}
+                    />
+                  </AccordionContent>
+                </AccordionItem>
+              </Accordion>
+            ) : null}
+          </MessageContent>
+        </Message>
+      </div>
     </article>
   );
 }
