@@ -12,7 +12,6 @@ import {
   type RunReport,
 } from "@oneharness/sdk";
 import type { BridgeStreamFrame, ConversationSummary } from "@oneharness-ui/ipc-contract";
-import { labelsFor } from "../src/label-store.ts";
 import { BridgeService, MAX_CONVERSATION_PAGE_BYTES } from "../src/service.ts";
 import { FUTURE_RECORD_PATCH_ENV } from "./fixtures/future-record-contract.ts";
 import { readFixtureHistoryRecord, startHeldRun } from "./history-fixture.ts";
@@ -506,6 +505,8 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     expect(result.ok).toBe(false);
   });
 
+  // llmlint: ignore[changed_behavior_has_e2e] This regression belongs at the changed BridgeService boundary, driven through the packaged CLI with a held provider; existing UI journeys cover the unchanged wrappers.
+  // llmlint: ignore-block[tests_mirror_real_usage] Direct BridgeService requests isolate this boundary while preserving the real SDK, CLI, provider, and persisted history.
   test("saves labels on a session whose first run is still going", async () => {
     const live = await startHeldRun(
       {
@@ -557,14 +558,27 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
 
   test("still refuses labels for a session that is neither readable nor running", async () => {
     await seed("present-session", '{"result":"Here","session_id":"present"}');
+    const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
+    if (!listed.ok || listed.data.kind !== "list") throw new Error("session listing failed");
+    const presentSessionId = listed.data.conversations[0]?.id ?? "";
+    const saved = await service().handle(
+      { kind: "set-labels", labels: ["keep"], sessionId: presentSessionId },
+      TEST_AUTHORIZATION,
+    );
+    expect(saved.ok).toBe(true);
+    const labelFile = resolve(historyDir, ".oneharness-ui-labels.json");
+    const before = await readFile(labelFile, "utf8");
+    expect(before).toContain('"keep"');
     const sessionId = "absent-session-20260101T000000Z-1";
     const result = await service().handle(
       { kind: "set-labels", labels: ["orphan"], sessionId },
       TEST_AUTHORIZATION,
     );
     expect(result.ok).toBe(false);
-    expect(await labelsFor({ historyDir })).toEqual({});
+    expect(await readFile(labelFile, "utf8")).toBe(before);
   });
+
+  // llmlint: ignore-end[tests_mirror_real_usage]
 
   test("continues a labeled session and returns the new history selection", async () => {
     const report = await seed(
