@@ -756,7 +756,7 @@ export class BridgeService {
           };
         }
         if (request.kind === "set-labels") {
-          await this.#history(request.sessionId);
+          await this.#snapshot(request.sessionId);
           return {
             data: {
               kind: "set-labels",
