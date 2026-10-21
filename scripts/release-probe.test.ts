@@ -24,8 +24,11 @@ test("declared npm target probes registry truth and distinguishes absent from un
     },
   });
   async function probe(id = target.id) {
+    const env = { ...process.env, NPM_CONFIG_REGISTRY: server.url.toString() };
+    // Nx forces color; keep the host's NO_COLOR without Node's conflicting-flags warning.
+    delete env.FORCE_COLOR;
     const child = Bun.spawn(["node", declaration.probe, id], {
-      env: { ...process.env, NPM_CONFIG_REGISTRY: server.url.toString() },
+      env,
       stdout: "pipe",
       stderr: "pipe",
     });
