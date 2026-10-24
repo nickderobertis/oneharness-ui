@@ -58,8 +58,13 @@ test('classifier subprocess requires Mac for all PR identities/diffs and unreada
     ]) assert.equal(classification(h.cwd, { ...altered, event_name: 'pull_request' }, h.base, h.heads['version-only']).macosRequired, true);
     assert.equal(classification(h.cwd, { ...pr(false, true), event_name: 'pull_request' }, 'unknown', h.heads['version-only']).macosRequired, true);
     writeFileSync(resolve(h.cwd, 'bad.json'), '{');
-    const malformed = spawnSync(process.execPath, [policy, 'classify', '--event', resolve(h.cwd, 'bad.json'), '--base', h.base, '--head', h.heads['version-only']], { cwd: h.cwd, encoding: 'utf8' });
-    assert.equal(JSON.parse(malformed.stdout).macosRequired, true);
+    // The runner's GITHUB_EVENT_NAME, not this host's, decides an unreadable event: macos-policy runs only on
+    // pull_request, and a default-branch push sets GITHUB_EVENT_NAME=push for this test's own process.
+    const { GITHUB_EVENT_NAME: _host, ...unset } = process.env;
+    for (const env of [{ ...unset, GITHUB_EVENT_NAME: 'pull_request' }, unset]) {
+      const malformed = spawnSync(process.execPath, [policy, 'classify', '--event', resolve(h.cwd, 'bad.json'), '--base', h.base, '--head', h.heads['version-only']], { cwd: h.cwd, encoding: 'utf8', env });
+      assert.equal(JSON.parse(malformed.stdout).macosRequired, true, `unreadable event with GITHUB_EVENT_NAME=${env.GITHUB_EVENT_NAME ?? '(unset)'}`);
+    }
     for (const [, event] of events.filter(([,event]) => event !== 'pull_request')) {
       assert.equal(classification(h.cwd, { event_name: event }, 'unknown', 'unknown').macosRequired, false);
     }
