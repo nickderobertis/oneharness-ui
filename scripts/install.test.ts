@@ -282,3 +282,6 @@ describe.skipIf(process.platform === "win32")("offline installation journey", ()
     ).toBeUndefined();
   });
 });
+
+// biome-ignore lint/suspicious/noConsole: demonstration of grouped suppression output
+console.log("demo");

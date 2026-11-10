@@ -128,3 +128,6 @@ test("builds the public package before producing the publish manifest", () => {
     rmSync(staleArtifact, { force: true });
   }
 }, 60_000);
+
+// biome-ignore lint/suspicious/noConsole: demonstration of grouped suppression output
+console.log("demo");

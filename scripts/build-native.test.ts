@@ -61,3 +61,6 @@ test.skipIf(process.platform !== "linux")(
     }
   },
 );
+
+// biome-ignore lint/suspicious/noConsole: demonstration of grouped suppression output
+console.log("demo");
