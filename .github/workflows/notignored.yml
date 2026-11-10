@@ -1,8 +1,8 @@
 # Comments on every pull request with the lint and type-check suppressions it
-# adds, each with its rule, stated reason, and line link, so a high-level review
-# sees every bypass. It is a review artifact, not a gate: no required context
-# needs it, and it skips fork pull requests, whose read-only token cannot upsert
-# the comment.
+# adds, each with its rule and stated reason, listed once with a link to every
+# line that repeats it, so a high-level review sees every bypass. It is a review
+# artifact, not a gate: no required context needs it, and it skips fork pull
+# requests, whose read-only token cannot upsert the comment.
 
 name: notignored
 
@@ -27,4 +27,4 @@ jobs:
         with:
           # The scan diffs against the base branch, which a shallow checkout omits.
           fetch-depth: 0
-      - uses: nickderobertis/notignored@f95c0286d327803acdabd8a0e56fa3f94438e1b9 # v0.1.17
+      - uses: nickderobertis/notignored@83992ae6a8804e19eda71834b8e008acd4ede0db # v0.2.0
