@@ -5,8 +5,15 @@
 # cargo-prune-superseded over this repository's cargo target dir: it removes each
 # unit's superseded builds older than 2 days and keeps each unit's newest build
 # plus every build modified within those 2 days.
-schema_version = 1
+schema_version = 2
 
 [pool.maintain]
 command = ["just", "pool-maintenance"]
 timeout = "30m"
+
+[policy]
+publication = "change-auto"
+approvals = "none"
+
+[policy.checks]
+wait_seconds = 14700  # recorded max 11607 s (run 38455397883) + 25% margin
