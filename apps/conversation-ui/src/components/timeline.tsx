@@ -12,6 +12,7 @@ import {
   useState,
   type WheelEvent,
 } from "react";
+import { crosshairReadout, timelineAxisTicks } from "./timeline-axis";
 import { cn } from "./utils";
 
 export interface TimelineLane {
@@ -112,21 +113,9 @@ function formatDuration(value: number): string {
   return `${(value / 60_000).toFixed(1)} min`;
 }
 
-function formatElapsed(value: number): string {
-  return `+${formatDuration(value)}`;
-}
-
 function formatTime(value: number): string {
   const date = new Date(value);
   return Number.isNaN(date.valueOf()) ? String(value) : date.toISOString();
-}
-
-function formatTick(value: number, origin: number): string {
-  const date = new Date(value);
-  const local = Number.isNaN(date.valueOf())
-    ? String(value)
-    : date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
-  return `${local} ${formatElapsed(value - origin)}`;
 }
 
 function detailText<Payload>(item: TimelineItem<Payload>, failure?: string | null): string {
@@ -269,24 +258,21 @@ export function Timeline<Payload>({
   const origin = axisOptions?.origin ?? fullRange.start;
 
   const spacing = ticks?.minSpacingPx;
-  const minSpacing =
-    spacing !== undefined && Number.isFinite(spacing) && spacing > 0 ? spacing : 80;
-  const minimumInterval = (rangeDuration * minSpacing) / plotWidth;
-  const intervals = [
-    1_000, 2_000, 5_000, 10_000, 15_000, 30_000, 60_000, 120_000, 300_000, 600_000, 900_000,
-    1_800_000, 3_600_000,
-  ];
-  const interval =
-    intervals.find((value) => value >= minimumInterval) ??
-    Math.ceil(minimumInterval / 3_600_000) * 3_600_000;
-  const tickValues: number[] = [];
-  for (
-    let value = Math.ceil(range.start / interval) * interval;
-    value <= range.end;
-    value += interval
-  )
-    tickValues.push(value);
+  const minSpacingPx =
+    spacing !== undefined && Number.isFinite(spacing) && spacing > 0 ? spacing : 0;
+  const axisTicks = useMemo(
+    () =>
+      timelineAxisTicks({
+        minSpacingPx,
+        origin,
+        range: { end: range.end, start: range.start },
+        width: plotWidth,
+      }),
+    [minSpacingPx, origin, plotWidth, range.end, range.start],
+  );
   const hoverTime = hoverRatio === null ? null : range.start + hoverRatio * rangeDuration;
+  const readout =
+    hoverTime === null ? null : crosshairReadout(hoverTime, origin, rangeDuration / plotWidth);
 
   const renderItem = (item: TimelineItem<Payload>) => {
     const end = itemEnd(item);
@@ -414,17 +400,18 @@ export function Timeline<Payload>({
           }}
           ref={axis}
         >
-          {crosshair && hoverTime !== null ? (
+          {crosshair && readout !== null ? (
             <div
               aria-label="Timeline crosshair"
               className="pointer-events-none absolute inset-y-0 z-30 border-l border-foreground"
               style={{ left: `${(hoverRatio ?? 0) * 100}%` }}
             >
               <span
-                className="absolute top-0 whitespace-nowrap bg-popover text-[10px] text-popover-foreground"
+                className="absolute top-0 flex flex-col items-center whitespace-nowrap bg-popover px-1 text-[10px] leading-3 text-popover-foreground"
                 style={{ transform: (hoverRatio ?? 0) > 0.5 ? "translateX(-100%)" : undefined }}
               >
-                {formatTime(hoverTime)} {formatElapsed(hoverTime - origin)}
+                <span>{readout.clock}</span>
+                <span>{readout.offset}</span>
               </span>
             </div>
           ) : null}
@@ -486,25 +473,30 @@ export function Timeline<Payload>({
               />
             ) : null}
           </div>
-          <div
-            className="relative mt-2 h-4 font-mono text-[9px] text-subtle"
+          <ol
+            aria-label="Timeline axis"
+            className="relative m-0 mt-2 h-6 list-none p-0 font-mono text-[9px] leading-3 text-subtle"
             data-testid="timeline-axis"
             data-timeline-axis
           >
-            {tickValues.map((value) => (
-              <span
-                key={value}
-                data-tick-time={value}
-                className="absolute"
-                style={{
-                  left: `${position(value)}%`,
-                  transform: value === range.end ? "translateX(-100%)" : undefined,
-                }}
+            {axisTicks.map((tick) => (
+              <li
+                className="absolute top-0 flex flex-col items-center whitespace-nowrap"
+                data-tick-time={tick.value}
+                key={tick.value}
+                style={
+                  tick.alignment === "start"
+                    ? { left: 0 }
+                    : tick.alignment === "end"
+                      ? { right: 0 }
+                      : { left: `${position(tick.value)}%`, transform: "translateX(-50%)" }
+                }
               >
-                {formatTick(value, origin)}
-              </span>
+                <span>{tick.clock}</span>
+                <span>{tick.offset}</span>
+              </li>
             ))}
-          </div>
+          </ol>
         </div>
       )}
     </section>

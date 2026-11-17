@@ -203,37 +203,89 @@ function Usage({ usage }: { usage: Turn["usage"] }) {
   );
 }
 
-/** The agent's own messages and reasoning, in recorded order, kept apart from its tool calls. */
-function AgentActivity({ events }: { events: NonNullable<Turn["agentEvents"]> }) {
-  const ordered = [...events].sort((left, right) => left.index - right.index);
+function ReasoningBlock({ text, value }: { text: string; value: string }) {
   return (
-    <section aria-label="Agent activity" className="my-3 space-y-2">
-      {ordered.map((event) =>
-        event.kind === "reasoning" ? (
-          <Accordion collapsible key={`reasoning-${event.index}`} type="single">
-            <AccordionItem
-              className="rounded-[10px] border border-dashed bg-card px-3"
-              value={`reasoning-${event.index}`}
+    <Accordion collapsible type="single">
+      <AccordionItem className="rounded-[10px] border border-dashed bg-card px-3" value={value}>
+        <AccordionTrigger className="py-1.5 text-xs text-muted-foreground">
+          Reasoning
+        </AccordionTrigger>
+        <AccordionContent className="whitespace-pre-wrap text-[13px] leading-relaxed text-muted-foreground">
+          {text}
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  );
+}
+
+type ActivityEntry =
+  | { at: number; event: NonNullable<Turn["agentEvents"]>[number]; type: "agent" }
+  | { at: number; invocation: ToolInvocation; type: "tool" };
+
+/**
+ * The agent's text, reasoning and tool calls as one stream in recorded order: `index` is the
+ * run-wide position agent events share with tool events, and a call sits where it was made.
+ */
+function activityStream(
+  events: NonNullable<Turn["agentEvents"]>,
+  invocations: readonly ToolInvocation[],
+): ActivityEntry[] {
+  return [
+    ...events.map((event): ActivityEntry => ({ at: event.index, event, type: "agent" })),
+    ...invocations.map(
+      (invocation): ActivityEntry => ({
+        at: invocation.eventIndices[0] ?? Number.POSITIVE_INFINITY,
+        invocation,
+        type: "tool",
+      }),
+    ),
+  ].sort((left, right) => left.at - right.at);
+}
+
+function AgentActivity({
+  current,
+  entries,
+  onOpenToolsChange,
+  openTools,
+}: {
+  current: string | undefined;
+  entries: readonly ActivityEntry[];
+  onOpenToolsChange: (value: string[]) => void;
+  openTools: string[];
+}) {
+  return (
+    <section aria-label="Agent activity" className="my-3">
+      <Accordion
+        className="space-y-2"
+        onValueChange={onOpenToolsChange}
+        type="multiple"
+        value={openTools}
+      >
+        {entries.map((entry) =>
+          entry.type === "tool" ? (
+            <ToolInvocationBlock
+              current={current === entry.invocation.id}
+              invocation={entry.invocation}
+              key={entry.invocation.id}
+            />
+          ) : entry.event.kind === "reasoning" ? (
+            <ReasoningBlock
+              key={`reasoning-${entry.event.index}`}
+              text={entry.event.text}
+              value={`reasoning-${entry.event.index}`}
+            />
+          ) : (
+            <div
+              aria-label="Agent message"
+              className="border-l-2 border-primary pl-3"
+              key={`message-${entry.event.index}`}
+              role="group"
             >
-              <AccordionTrigger className="py-1.5 text-xs text-muted-foreground">
-                Reasoning
-              </AccordionTrigger>
-              <AccordionContent className="whitespace-pre-wrap text-[13px] leading-relaxed text-muted-foreground">
-                {event.text}
-              </AccordionContent>
-            </AccordionItem>
-          </Accordion>
-        ) : (
-          <div
-            aria-label="Agent message"
-            className="border-l-2 border-primary pl-3"
-            key={`message-${event.index}`}
-            role="group"
-          >
-            <MessageResponse label="Agent message">{event.text}</MessageResponse>
-          </div>
-        ),
-      )}
+              <MessageResponse label="Agent message">{entry.event.text}</MessageResponse>
+            </div>
+          ),
+        )}
+      </Accordion>
     </section>
   );
 }
@@ -278,6 +330,10 @@ export function TurnCard({
   }, [focusKey, collapsed, openTools, targetId]);
   const hasUnknown = Object.keys(turn.unknown).length > 0;
   const invocations = pairToolEvents(turn.tools);
+  const activity = turn.agentEvents?.length ? activityStream(turn.agentEvents, invocations) : null;
+  const streamReasons = activity?.some(
+    (entry) => entry.type === "agent" && entry.event.kind === "reasoning",
+  );
   const inFlight = turn.status === "running";
   return (
     <article
@@ -321,7 +377,7 @@ export function TurnCard({
                 </Badge>
               ) : null}
             </div>
-            {turn.reasoning ? (
+            {turn.reasoning && !streamReasons ? (
               <Accordion className="mt-2.5" collapsible type="single">
                 <AccordionItem
                   className="rounded-[10px] border border-dashed bg-card px-3"
@@ -336,8 +392,14 @@ export function TurnCard({
                 </AccordionItem>
               </Accordion>
             ) : null}
-            {turn.agentEvents?.length ? <AgentActivity events={turn.agentEvents} /> : null}
-            {invocations.length > 0 ? (
+            {activity ? (
+              <AgentActivity
+                current={target?.id}
+                entries={activity}
+                onOpenToolsChange={setOpenTools}
+                openTools={openTools}
+              />
+            ) : invocations.length > 0 ? (
               <section aria-label="Tool calls" className="my-3">
                 <Accordion
                   className="space-y-1"

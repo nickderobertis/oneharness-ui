@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { Timeline, type TimelineItem, type TimelineMarker } from "../src/components/timeline";
@@ -102,10 +102,16 @@ describe("Timeline", () => {
         range={[1_000, 5_000]}
       />,
     );
-    const axis = screen.getByTestId("timeline-axis");
-    expect(axis.textContent).toContain("+1.0 s");
-    expect(axis.textContent).toContain("+5.0 s");
-    expect(axis.textContent).toMatch(/1970|12:00/);
+    const ticks = within(screen.getByRole("list", { name: "Timeline axis" }))
+      .getAllByRole("listitem")
+      .map((tick) => [...tick.children].map((line) => line.textContent));
+    // Each tick reads its wall-clock time over its offset, which carries only the decimals it needs.
+    expect(ticks.map(([, offset]) => offset)).toContain("+1 s");
+    expect(ticks.map(([, offset]) => offset)).toContain("+1.5 s");
+    for (const [clock, offset] of ticks) {
+      expect(clock).toMatch(/^\d\d:\d\d(:\d\d(\.5)?)?$/);
+      expect(offset).not.toMatch(/\.\d*0 s$/);
+    }
     expect(screen.getByTestId("timeline-cursor").style.left).toBe("50%");
   });
 
@@ -233,9 +239,11 @@ test("round ticks respect measured spacing over three hours and crosshair reads 
     }
     const plot = screen.getByLabelText("Timeline plot. Scroll to zoom or drag to select a range.");
     fireEvent.pointerMove(plot, { clientX: 600 });
-    expect(screen.getByLabelText("Timeline crosshair").textContent).toBe(
-      "2026-08-04T13:30:00.000Z +90.0 min",
-    );
+    const [clock, offset] = [
+      ...(screen.getByLabelText("Timeline crosshair").firstElementChild?.children ?? []),
+    ].map((line) => line.textContent);
+    expect(clock).toMatch(/^\d\d:\d\d$/);
+    expect(offset).toBe("+1 h 30 min");
     expect(screen.getByLabelText("Timeline crosshair").style.left).toBe("50%");
     fireEvent.pointerLeave(plot);
     expect(screen.queryByLabelText("Timeline crosshair")).toBeNull();

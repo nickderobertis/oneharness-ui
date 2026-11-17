@@ -51,32 +51,63 @@ describe("TurnCard tool invocations", () => {
     expect(screen.queryByText("claude-code")).toBeNull();
   });
 
-  test("shows the agent's messages and reasoning in recorded order, apart from its tool calls", async () => {
+  test("interleaves the agent's messages, reasoning and tool calls in recorded order", async () => {
     const user = userEvent.setup();
     render(
       <TurnCard
         turn={{
-          ...turnWith([{ index: 1, input: { command: "pwd" }, kind: "tool_call", name: "Bash" }]),
+          ...turnWith([
+            {
+              index: 1,
+              input: { command: "pwd" },
+              kind: "tool_call",
+              name: "Bash",
+              toolCallId: "t1",
+            },
+            { index: 2, kind: "tool_result", output: "/repo", toolCallId: "t1" },
+          ]),
           agentEvents: [
-            { index: 2, kind: "message", text: "The repository is at **/repo**." },
+            { index: 3, kind: "message", text: "The repository is at **/repo**." },
             { index: 0, kind: "reasoning", text: "Check the working directory first." },
           ],
+          reasoning: "Check the working directory first.",
         }}
       />,
     );
     const activity = screen.getByRole("region", { name: "Agent activity" });
     const reasoning = within(activity).getByRole("button", { name: "Reasoning" });
+    const tool = within(activity).getByRole("button", { name: "Bash tool details" });
     const message = within(activity).getByRole("group", { name: "Agent message" });
-    expect(
-      reasoning.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING,
-    ).toBeTruthy();
+    const follows = (earlier: Element, later: Element) =>
+      Boolean(earlier.compareDocumentPosition(later) & Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(follows(reasoning, tool)).toBe(true);
+    expect(follows(tool, message)).toBe(true);
+    // The stream carries the reasoning, so the turn draws no second copy above it.
+    expect(screen.getAllByRole("button", { name: "Reasoning" })).toHaveLength(1);
+    expect(screen.queryByRole("region", { name: "Tool calls" })).toBeNull();
     expect(message.querySelector("strong")?.textContent).toBe("/repo");
     await user.click(reasoning);
     expect(within(activity).getByText("Check the working directory first.")).toBeTruthy();
-    const tools = screen.getByRole("region", { name: "Tool calls" });
-    expect(within(tools).getAllByRole("button")).toHaveLength(1);
-    expect(within(tools).getByLabelText("Bash tool details")).toBeTruthy();
-    expect(within(activity).queryByLabelText("Bash tool details")).toBeNull();
+    await user.click(tool);
+    expect(within(activity).getByLabelText("Bash tool output").textContent).toBe("/repo");
+  });
+
+  test("keeps the turn's reasoning above the stream when no reasoning event carries it", () => {
+    render(
+      <TurnCard
+        turn={{
+          ...turnWith([]),
+          agentEvents: [{ index: 0, kind: "message", text: "Looking now." }],
+          reasoning: "Recorded only on the run.",
+        }}
+      />,
+    );
+    const reasoning = screen.getByRole("button", { name: "Reasoning" });
+    const activity = screen.getByRole("region", { name: "Agent activity" });
+    expect(activity.contains(reasoning)).toBe(false);
+    expect(
+      reasoning.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
   });
 
   test("says a running turn's prompt and answer are still to come", () => {

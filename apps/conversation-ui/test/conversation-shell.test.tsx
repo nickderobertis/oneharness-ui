@@ -914,17 +914,19 @@ describe("ConversationShell", () => {
     expect(await screen.findByRole("status", { name: "Live updates on" })).toBeTruthy();
 
     const activity = await screen.findByRole("region", { name: "Agent activity" });
-    expect(await screen.findByLabelText("Grep tool details")).toBeTruthy();
-    expect(within(activity).getByRole("group", { name: "Agent message" }).textContent).toContain(
-      "Looking at the redirect.",
-    );
-    expect(within(activity).getAllByRole("button", { name: "Reasoning" })).toHaveLength(1);
-    expect(within(activity).queryByLabelText("Grep tool details")).toBeNull();
+    const tool = await within(activity).findByLabelText("Grep tool details");
+    const message = within(activity).getByRole("group", { name: "Agent message" });
+    expect(message.textContent).toContain("Looking at the redirect.");
+    const [reasoningButton, ...duplicates] = within(activity).getAllByRole("button", {
+      name: "Reasoning",
+    });
+    expect(duplicates).toHaveLength(0);
+    // Streamed events land in recorded order: reasoning, then the message, then the call.
     expect(
-      within(screen.getByRole("region", { name: "Tool calls" })).queryByText(
-        "Looking at the redirect.",
-      ),
-    ).toBeNull();
+      reasoningButton?.compareDocumentPosition(message) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(message.compareDocumentPosition(tool) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "Tool calls" })).toBeNull();
     expect(screen.getByText("The prompt is recorded when this run finishes.")).toBeTruthy();
     expect(
       screen.getByText("Still running. Its final answer appears when the run finishes."),

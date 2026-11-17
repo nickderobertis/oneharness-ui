@@ -255,33 +255,69 @@ test("marks ineligible sessions and recovers from a recorded provider failure", 
   await expect(page.getByText("Completed", { exact: true }).last()).toBeVisible();
 });
 
-test("shows the agent's messages and reasoning apart from its tool calls", async ({ page }) => {
+test("shows the agent's words, reasoning and tool calls in the order it produced them", async ({
+  page,
+}) => {
   await seedNarratedE2eSession();
   await page.goto("/");
   await page.getByRole("button", { name: /narrated-session/i }).click();
   await expect(page.getByRole("heading", { name: "narrated-session" })).toBeFocused();
 
-  const activity = page.getByRole("region", { name: "Agent activity" });
-  const message = activity.getByRole("group", { name: "Agent message" });
-  await expect(message).toContainText("I will look at the workspace first.");
-  await expect(message.getByText("workspace", { exact: true })).toHaveJSProperty(
+  const turn = page.getByRole("article", { name: /from claude-code/ }).last();
+  const activity = turn.getByRole("region", { name: "Agent activity" });
+  const messages = activity.getByRole("group", { name: "Agent message" });
+  const reasoning = activity.getByRole("button", { name: "Reasoning" });
+  // The recorded run wrote text at events 0, 4 and 7, reasoned at 3, and called tools at 1 and
+  // 5 (their results at 2 and 6): the card draws exactly that sequence as one stream.
+  const stream = [
+    messages.nth(0),
+    activity.getByRole("button", { name: "Bash tool details" }),
+    reasoning,
+    messages.nth(1),
+    activity.getByRole("button", { name: "Read tool details" }),
+    messages.nth(2),
+  ];
+  await expect(messages).toHaveCount(3);
+  await expect(messages.nth(0)).toContainText("I will look at the workspace first.");
+  await expect(messages.nth(1)).toContainText("Now I will list what it holds.");
+  await expect(messages.nth(2)).toContainText("The workspace holds the product README.");
+  for (const [index, item] of stream.slice(1).entries()) {
+    const previous = await stream[index]?.elementHandle();
+    expect(
+      await item.evaluate(
+        (node, earlier) =>
+          Boolean(
+            earlier && earlier.compareDocumentPosition(node) & Node.DOCUMENT_POSITION_FOLLOWING,
+          ),
+        previous,
+      ),
+    ).toBe(true);
+  }
+  const tops = await Promise.all(
+    stream.map(async (item) => (await item.boundingBox())?.y ?? Number.NaN),
+  );
+  expect(tops.every((top, index) => index === 0 || top > (tops[index - 1] ?? Number.NaN))).toBe(
+    true,
+  );
+  await expect(messages.nth(0).getByText("workspace", { exact: true })).toHaveJSProperty(
     "tagName",
     "STRONG",
   );
-  const reasoning = activity.getByRole("button", { name: "Reasoning" });
-  await expect(page.getByText("Check the working directory before answering.")).toBeHidden();
-  await reasoning.click();
-  await expect(activity.getByText("Check the working directory before answering.")).toBeVisible();
 
-  // Tool activity is still presented as before, and holds nothing but tools.
-  const tools = page.getByRole("region", { name: "Tool calls" });
-  await expect(tools.getByRole("button")).toHaveCount(1);
-  await tools.getByRole("button", { name: "Bash tool details" }).click();
-  await expect(page.getByLabel("Bash tool output")).toHaveText("/workspace/product");
-  await expect(tools).not.toContainText("I will look at the workspace first.");
-  await expect(tools).not.toContainText("Check the working directory before answering.");
-  await expect(activity.getByRole("button", { name: "Bash tool details" })).toHaveCount(0);
-  await expect(page.getByText("Narrated inspection complete")).toBeVisible();
+  // The reasoning sits in the stream, not in a section of its own above it.
+  await expect(turn.getByRole("button", { name: "Reasoning" })).toHaveCount(1);
+  await expect(turn.getByRole("region", { name: "Tool calls" })).toHaveCount(0);
+  await expect(page.getByText("Check what the directory holds before answering.")).toBeHidden();
+  await reasoning.click();
+  await expect(
+    activity.getByText("Check what the directory holds before answering."),
+  ).toBeVisible();
+
+  await activity.getByRole("button", { name: "Bash tool details" }).click();
+  await expect(activity.getByLabel("Bash tool output")).toHaveText("/workspace/product");
+  await activity.getByRole("button", { name: "Read tool details" }).click();
+  await expect(activity.getByLabel("Read tool output")).toHaveText("# Product");
+  await expect(turn.getByText("Narrated inspection complete")).toBeVisible();
 });
 
 test("shows a session whose run is still going as running, with its events so far", async ({
@@ -306,11 +342,18 @@ test("shows a session whose run is still going as running, with its events so fa
     );
     await activity.getByRole("button", { name: "Reasoning" }).click();
     await expect(activity.getByText("Plan the inspection.")).toBeVisible();
-    await expect(
-      page.getByRole("region", { name: "Tool calls" }).getByRole("button", {
-        name: "Bash tool details",
-      }),
-    ).toBeVisible();
+    // The live run reasoned, wrote, then called Bash, and its stream shows them in that order.
+    const liveTool = activity.getByRole("button", { name: "Bash tool details" });
+    await expect(liveTool).toBeVisible();
+    const liveTops = await Promise.all(
+      [
+        activity.getByRole("button", { name: "Reasoning" }),
+        activity.getByRole("group", { name: "Agent message" }),
+        liveTool,
+      ].map(async (item) => (await item.boundingBox())?.y ?? Number.NaN),
+    );
+    expect(liveTops).toEqual([...liveTops].sort((first, second) => first - second));
+    await expect(page.getByRole("region", { name: "Tool calls" })).toHaveCount(0);
     await expect(
       page.getByText("Still running. Its final answer appears when the run finishes."),
     ).toBeVisible();

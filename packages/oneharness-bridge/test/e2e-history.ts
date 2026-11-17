@@ -1,9 +1,9 @@
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { OneHarness, type RunOptions } from "@oneharness/sdk";
 import { e2eProject } from "./e2e-configuration.ts";
-import { type HeldRun, startHeldRun } from "./history-fixture.ts";
+import { type HeldRun, readFixtureHistoryRecord, startHeldRun } from "./history-fixture.ts";
 
 // Resolved from the module URL rather than a Bun-only global: the e2e web
 // server loads this under Bun and the browser journeys load it under the
@@ -128,20 +128,50 @@ function providerRun(name: string, prompt: string, env: Record<string, string>):
   };
 }
 
-/// Record a finished run whose agent reasoned and wrote to the user between
-/// its tool calls. A journey adds it on its own so the shared baseline, which
-/// the visual captures also read, stays as it is.
+/// Record a finished run whose agent wrote to the user and reasoned between
+/// its tool calls: text at event 0, 4 and 7, reasoning at 3, and tool calls
+/// with their results at 1–2 and 5–6. A journey adds it on its own so the
+/// shared baseline, which the visual captures also read, stays as it is.
 export async function seedNarratedE2eSession(): Promise<void> {
   await new OneHarness().run(
     providerRun("narrated-session", "Narrate the inspection", {
       MOCK_STDOUT: [
-        '{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"Check the working directory before answering."}]}}',
         '{"type":"assistant","message":{"content":[{"type":"text","text":"I will look at the **workspace** first."}]}}',
         '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"pwd"}}]}}',
         '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"/workspace/product"}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"thinking","thinking":"Check what the directory holds before answering."}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"Now I will list what it holds."}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t2","name":"Read","input":{"file_path":"README.md"}}]}}',
+        '{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t2","content":"# Product"}]}}',
+        '{"type":"assistant","message":{"content":[{"type":"text","text":"The workspace holds the product README."}]}}',
         '{"type":"result","result":"Narrated inspection complete","session_id":"e2e-native-narrated"}',
       ].join("\n"),
     }),
+  );
+}
+
+/// Record a finished run, then re-time its run record to start at `startedAt`
+/// and last `durationMs`, as a run that long would have recorded it. A test
+/// cannot wait out a five-hour run, and the timeline draws only these two
+/// fields of a run without events, so every other byte is the CLI's own.
+export async function seedTimedE2eSession({
+  durationMs,
+  name,
+  startedAt,
+}: {
+  durationMs: number;
+  name: string;
+  startedAt: string;
+}): Promise<void> {
+  const report = await new OneHarness().run(
+    providerRun(name, "Work for the whole span", {
+      MOCK_STDOUT: `{"result":"Finished the ${name} run","session_id":"e2e-native-timed"}`,
+    }),
+  );
+  const fixture = await readFixtureHistoryRecord(e2eHistoryDir, report);
+  await writeFile(
+    fixture.historyFile,
+    `${fixture.historyLines({ ...fixture.record, duration_ms: durationMs, timestamp: startedAt })}\n`,
   );
 }
 
