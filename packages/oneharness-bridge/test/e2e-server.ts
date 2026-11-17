@@ -38,7 +38,7 @@ delete process.env.ONEHARNESS_HISTORY_LABELS;
 await seedE2eHistory({
   cwd: visualMode ? visualProject : e2eProject,
   provider,
-  ...(visualMode ? { settleMs: 1_100 } : {}),
+  ...(visualMode ? { recordedFrom: "2026-07-24T16:00:00Z", settleMs: 1_100 } : {}),
 });
 
 process.env.ONEHARNESS_UI_HISTORY_DIR = e2eHistoryDir;

@@ -1,7 +1,7 @@
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { OneHarness, type RunOptions } from "@oneharness/sdk";
+import { HistoryRecordSchema, OneHarness, type RunOptions, type RunReport } from "@oneharness/sdk";
 import { e2eProject } from "./e2e-configuration.ts";
 import { type HeldRun, readFixtureHistoryRecord, startHeldRun } from "./history-fixture.ts";
 
@@ -22,19 +22,26 @@ export const e2eProviderBin = resolve(
 /// Continuing a conversation appends a record, so a suite that runs more than
 /// once against one server — as the browser target does, once per engine —
 /// reseeds before its first journey instead of inheriting the previous run.
+///
+/// `recordedFrom` re-times each seeded run to start one minute after the one
+/// before it, from that instant, with fixed durations and tool times, so
+/// screenshots of the timeline do not depend on when or how fast it ran.
 export async function seedE2eHistory({
   cwd = e2eProject,
   provider = e2eProviderBin,
+  recordedFrom,
   settleMs = 0,
 }: {
   cwd?: string;
   provider?: string;
+  recordedFrom?: string;
   settleMs?: number;
 } = {}): Promise<void> {
   await mkdir(cwd, { recursive: true });
   await rm(e2eHistoryDir, { force: true, recursive: true });
   await mkdir(e2eHistoryDir, { recursive: true });
   const sdk = new OneHarness();
+  let seeded = 0;
 
   async function seed({
     exit = 0,
@@ -62,6 +69,10 @@ export async function seedE2eHistory({
       prompt,
       cwd,
     });
+    if (recordedFrom !== undefined) {
+      await retimeRecordedRun(result, Date.parse(recordedFrom) + seeded * 60_000, seededDurationMs);
+    }
+    seeded += 1;
     // The visual journeys need each record to land in its own second so the
     // captured history list keeps a stable order.
     if (settleMs > 0) await new Promise((wake) => setTimeout(wake, settleMs));
@@ -150,10 +161,45 @@ export async function seedNarratedE2eSession(): Promise<void> {
   );
 }
 
-/// Record a finished run, then re-time its run record to start at `startedAt`
-/// and last `durationMs`, as a run that long would have recorded it. A test
-/// cannot wait out a five-hour run, and the timeline draws only these two
-/// fields of a run without events, so every other byte is the CLI's own.
+/** How long every re-timed seeded run lasts; its tool calls run in its second half. */
+const seededDurationMs = 4_000;
+
+/// Rewrite a recorded run so it starts at `startedAt` and lasts `durationMs`,
+/// and give each timed tool event a fixed slot inside it, as a run recorded at
+/// that moment would have. Every other byte stays the CLI's own.
+async function retimeRecordedRun(
+  report: RunReport,
+  startedAt: number,
+  durationMs: number,
+): Promise<void> {
+  const fixture = await readFixtureHistoryRecord(e2eHistoryDir, report);
+  const instant = (offsetMs: number) => new Date(startedAt + offsetMs).toISOString();
+  const events = fixture.record.events?.map((event) =>
+    event.started_at
+      ? {
+          ...event,
+          duration_ms: 300,
+          finished_at: instant(durationMs / 2 + 300),
+          started_at: instant(durationMs / 2),
+        }
+      : event,
+  );
+  await writeFile(
+    fixture.historyFile,
+    `${fixture.historyLines(
+      HistoryRecordSchema.parse({
+        ...fixture.record,
+        ...(events ? { events } : {}),
+        duration_ms: durationMs,
+        timestamp: instant(0).replace(/\.\d{3}Z$/, "Z"),
+      }),
+    )}\n`,
+  );
+}
+
+/// Record a finished run, then re-time it to start at `startedAt` and last
+/// `durationMs`, as a run that long would have recorded it. A test cannot wait
+/// out a five-hour run.
 export async function seedTimedE2eSession({
   durationMs,
   name,
@@ -168,11 +214,7 @@ export async function seedTimedE2eSession({
       MOCK_STDOUT: `{"result":"Finished the ${name} run","session_id":"e2e-native-timed"}`,
     }),
   );
-  const fixture = await readFixtureHistoryRecord(e2eHistoryDir, report);
-  await writeFile(
-    fixture.historyFile,
-    `${fixture.historyLines({ ...fixture.record, duration_ms: durationMs, timestamp: startedAt })}\n`,
-  );
+  await retimeRecordedRun(report, Date.parse(startedAt), durationMs);
 }
 
 /// Start a real streamed run whose provider holds after its first events, so
