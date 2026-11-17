@@ -25,11 +25,13 @@ const shots: Array<{
   toggles: { theme: string; viewport: string };
 }> = [];
 
+// The collapse-turn label names the session, whose id embeds when and by which process it was
+// recorded, so captures hide that text and keep its box, as they hide the wall-clock axis.
 async function settle(page: Page, preserveFocus = false) {
   await page.emulateMedia({ reducedMotion: "reduce" });
   await page.addStyleTag({
     content:
-      "*,*::before,*::after{animation:none!important;caret-color:transparent!important;transition:none!important}[data-timeline-axis]{visibility:hidden!important}",
+      "*,*::before,*::after{animation:none!important;caret-color:transparent!important;transition:none!important}[data-timeline-axis]{visibility:hidden!important}article[data-turn-id]>button[aria-expanded]{color:transparent!important}",
   });
   await page.evaluate(async () => await document.fonts.ready);
   await page.evaluate(async (keepFocus) => {

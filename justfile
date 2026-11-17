@@ -128,6 +128,8 @@ budgets:
 # GHSA-vfj7-8cjw-p6xm (braces <=3.0.3) has no patched release; braces is reached only through dev tooling
 # (semantic-release's commit-analyzer > micromatch, @wdio/cli and mocha-framework) on repo-authored glob patterns.
 # Remove the bun audit ignore once a fixed braces release exists.
+# GHSA-fc5q-39xc-vjpf (picomatch <=4.0.7 ReDoS) has no patched release; picomatch is reached only through
+# build and test tools (tsdown, semantic-release, @wdio). Drop its bun audit ignore once a fixed picomatch ships.
 # Dependency policy and audit run once per commit in CI's Linux-only supply-chain job, not in check or check-affected.
 supply-chain:
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "Rust dependency policy" "Resolve the reported license, advisory, source, or ban finding, then rerun 'just supply-chain'." -- cargo deny check --hide-inclusion-graph
@@ -136,7 +138,7 @@ supply-chain:
     @if [ "${ONEHARNESS_QUIET:-}" != "1" ]; then echo "supply-chain: ok"; fi
 
 audit-javascript:
-    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "JavaScript dependency audit" "Upgrade or replace the vulnerable dependency, then rerun 'just supply-chain'." -- bun audit --audit-level=high --ignore=GHSA-vfj7-8cjw-p6xm
+    @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "JavaScript dependency audit" "Upgrade or replace the vulnerable dependency, then rerun 'just supply-chain'." -- bun audit --audit-level=high --ignore=GHSA-vfj7-8cjw-p6xm --ignore=GHSA-fc5q-39xc-vjpf
 
 upgrade:
     @ONEHARNESS_QUIET=1 ./scripts/run-quiet.sh "JavaScript dependency upgrade" "Resolve the package conflict, then rerun 'just upgrade'." -- bun update
