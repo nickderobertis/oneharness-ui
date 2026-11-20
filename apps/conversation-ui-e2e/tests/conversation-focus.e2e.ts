@@ -48,13 +48,24 @@ async function expectBelowFold(element: Locator, container: Locator) {
   expect(inner.y).toBeGreaterThan(outer.y + outer.height);
 }
 
-/** The focused item as a user finds it: the agent message group, or the item behind a trigger. */
-function item(turn: Locator, kind: FocusKind): Locator {
-  if (kind === "message") return turn.getByRole("group", { name: "Agent message" });
-  const trigger = turn.page().getByRole("button", {
-    name: kind === "reasoning" ? "Reasoning" : "Bash tool details",
-  });
-  return turn.locator("[data-event-index]").filter({ has: trigger });
+const triggerNames = { reasoning: "Reasoning", tool: "Bash tool details" } as const;
+
+/** How a user finds each kind of item in a turn: the agent message group or the item's trigger. */
+function handle(turn: Locator, kind: FocusKind): Locator {
+  return kind === "message"
+    ? turn.getByRole("group", { name: "Agent message" })
+    : turn.getByRole("button", { name: triggerNames[kind] });
+}
+
+/** Exactly one transcript item is current: the `kind` item of `turn`, with its event index. */
+async function expectCurrent(page: Page, turn: Locator, kind: FocusKind): Promise<Locator> {
+  const current = transcriptCurrent(page);
+  await expect(current).toHaveCount(1);
+  await expect(turn.locator('[aria-current="true"]')).toHaveCount(1);
+  if (kind === "message") await expect(handle(turn, kind)).toHaveAttribute("aria-current", "true");
+  else await expect(current.getByRole("button", { name: triggerNames[kind] })).toHaveCount(1);
+  await expect(current).toHaveAttribute("data-event-index", String(focusEventIndex[kind]));
+  return current;
 }
 
 /**
@@ -162,14 +173,11 @@ for (const view of ["turn-list", "conversation"] as const) {
     for (const kind of kinds) unfocused.set(kind, await structure(list.turn(kind)));
     for (const kind of kinds) {
       await test.step(`focused on its ${kind}`, async () => {
-        const target = item(list.turn(kind), kind);
+        const target = handle(list.turn(kind), kind);
         await expect(target).toHaveCount(1);
         await expectBelowFold(target, list.container);
         await list.focusOn(kind);
-        const current = transcriptCurrent(page);
-        await expect(current).toHaveCount(1);
-        await expect(target).toHaveAttribute("aria-current", "true");
-        await expect(current).toHaveAttribute("data-event-index", String(focusEventIndex[kind]));
+        const current = await expectCurrent(page, list.turn(kind), kind);
         await expectWithin(current, list.container);
         expect(await structure(list.turn(kind))).toEqual(
           unfocused
@@ -189,8 +197,10 @@ for (const view of ["turn-list", "conversation"] as const) {
     for (const kind of kinds) {
       await test.step(`recoloured by a consumer's token on its ${kind}`, async () => {
         await themed.focusOn(kind);
-        await expect(item(themed.turn(kind), kind)).toHaveAttribute("aria-current", "true");
-        await expectHighlightIn(transcriptCurrent(page), consumerHighlight);
+        await expectHighlightIn(
+          await expectCurrent(page, themed.turn(kind), kind),
+          consumerHighlight,
+        );
       });
     }
   });
@@ -204,8 +214,7 @@ for (const theme of ["light", "dark"] as const) {
     for (const kind of kinds) {
       await test.step(kind, async () => {
         await conversation.focusOn(kind);
-        const current = transcriptCurrent(page);
-        await expect(item(conversation.turn(kind), kind)).toHaveAttribute("aria-current", "true");
+        const current = await expectCurrent(page, conversation.turn(kind), kind);
         await expectWithin(current, conversation.container);
         const style = await expectHighlightIn(current, (await highlight(current)).primary);
         const foreground = paintedColor(style.outlineColor, "focus indicator");

@@ -11,6 +11,8 @@ import {
 import { timelineRangeSeconds } from "./support/fixtures.ts";
 
 type Row = "agent" | "markers" | "tools";
+
+const entryName = /, (span|point event|marker)$/;
 type Reading = { id: string; label: string };
 
 const plan = { id: "plan", label: "Plan the run, span" };
@@ -68,7 +70,14 @@ async function openTimeline(page: Page, theme: "dark" | "light") {
   };
   return {
     crosshair: timeline.getByLabel("Timeline crosshair"),
-    hovered: plot.locator('[data-timeline-hovered="true"]'),
+    /** Which entries carry `data-timeline-hovered="true"`, read off every bar and glyph. */
+    hovered: async () => {
+      const marked: string[] = [];
+      for (const entry of await timeline.getByRole("button", { name: entryName }).all())
+        if ((await entry.getAttribute("data-timeline-hovered")) === "true")
+          marked.push((await entry.getAttribute("aria-label")) ?? "unlabelled");
+      return marked;
+    },
     plot,
     point: (seconds: number, row: Row) => ({
       x: area.left + (seconds / timelineRangeSeconds) * area.width,
@@ -101,8 +110,7 @@ test("reports the entry nearest the pointer anywhere on the plot and a crosshair
         `${position.reading.id} · ${position.reading.label}`,
       );
       await expect(timeline.reports).toHaveText(String(reports));
-      await expect(timeline.hovered).toHaveCount(1);
-      await expect(timeline.hovered).toHaveAttribute("aria-label", position.reading.label);
+      expect(await timeline.hovered()).toEqual([position.reading.label]);
       await expect(timeline.crosshair).toBeVisible();
       await expect.poll(() => centre(timeline.crosshair)).toBeGreaterThanOrEqual(x - 1);
       expect(await centre(timeline.crosshair)).toBeLessThanOrEqual(x + 1);
@@ -114,7 +122,7 @@ test("reports the entry nearest the pointer anywhere on the plot and a crosshair
     await page.mouse.move(timeline.area.left + timeline.area.width / 2, timeline.area.bottom + 80);
     await expect(timeline.reading).toHaveText("none");
     await expect(timeline.reports).toHaveText(String(reports + 1));
-    await expect(timeline.hovered).toHaveCount(0);
+    expect(await timeline.hovered()).toEqual([]);
     await expect(timeline.crosshair).toHaveCount(0);
   });
 });
@@ -127,16 +135,19 @@ for (const theme of ["light", "dark"] as const) {
     const { x, y } = timeline.point(50, "tools");
     await page.mouse.move(x, y);
     await expect(timeline.crosshair).toBeVisible();
-    const readout = timeline.crosshair.locator(":scope > *");
+    const clock = timeline.crosshair.getByText(/^\d\d:\d\d(:\d\d(\.\d{1,3})?)?$/);
     const styles = await Promise.all([
       timeline.crosshair.evaluate((element) => getComputedStyle(element).backgroundColor),
-      readout.evaluate((element) => {
-        const style = getComputedStyle(element);
-        return { background: style.backgroundColor, text: style.color };
-      }),
+      // The readout's box, which holds both its lines, paints the background behind the text.
+      clock.evaluate((element) => ({
+        background: element.parentElement
+          ? getComputedStyle(element.parentElement).backgroundColor
+          : "transparent",
+        text: getComputedStyle(element).color,
+      })),
     ]);
     const [lineColor, readoutStyle] = styles;
-    // The crosshair is the readout's parent, so the plot behind both is read from the line.
+    // The readout sits inside the crosshair, so the plot behind both is read from the line.
     const plotBackground = await backgroundBehind(timeline.crosshair);
     const line = paintedColor(lineColor, "crosshair line");
     const readoutBackground = composite(parseColor(readoutStyle.background), plotBackground);
