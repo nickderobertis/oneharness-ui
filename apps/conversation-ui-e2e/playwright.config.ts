@@ -3,6 +3,7 @@ import { e2eWebOrigin } from "@oneharness-ui/bridge/test/e2e-configuration.ts";
 import { bridgeWebUser } from "@oneharness-ui/ipc-contract";
 import { defineConfig, devices } from "@playwright/test";
 import { z } from "zod";
+import { harnessOrigin } from "./harness/configuration.ts";
 
 const webAccessToken = z
   .string()
@@ -14,6 +15,7 @@ process.env.ONEHARNESS_UI_TEST_WEB_ACCESS_TOKEN = webAccessToken;
 export default defineConfig({
   expect: { timeout: 5_000 },
   fullyParallel: false,
+  globalSetup: "./tests/support/telemetry-setup.ts",
   outputDir: "test-results/playwright",
   reporter: [["list"]],
   retries: 0,
@@ -36,6 +38,13 @@ export default defineConfig({
       cwd: "../..",
       env: { ONEHARNESS_UI_TEST_WEB_ACCESS_TOKEN: webAccessToken },
       url: `${e2eWebOrigin}/health`,
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
+    {
+      command: "bun apps/conversation-ui-e2e/harness/server.ts",
+      cwd: "../..",
+      url: `${harnessOrigin}/health`,
       reuseExistingServer: false,
       timeout: 120_000,
     },

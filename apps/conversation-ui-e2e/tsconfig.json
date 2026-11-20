@@ -1,8 +1,15 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "types": ["bun", "node"]
+    "types": ["bun", "node"],
+    "jsx": "react-jsx"
   },
-  "include": ["playwright.config.ts", "tests/**/*.ts"],
+  "include": [
+    "playwright.config.ts",
+    "contrast-telemetry.ts",
+    "harness/**/*.ts",
+    "harness/**/*.tsx",
+    "tests/**/*.ts"
+  ],
   "exclude": ["node_modules"]
 }

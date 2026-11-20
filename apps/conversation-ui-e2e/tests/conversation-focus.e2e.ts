@@ -1,0 +1,225 @@
+import { expect, type Locator, type Page, test } from "@playwright/test";
+import { harnessOrigin } from "../harness/configuration.ts";
+import {
+  backgroundBehind,
+  contrastRatio,
+  paintedColor,
+  parseColor,
+  type Rgba,
+  recordReading,
+} from "./support/contrast.ts";
+import { type FocusKind, focusEventIndex, focusedTurnIds } from "./support/fixtures.ts";
+
+type Theme = "dark" | "light";
+type View = "conversation" | "turn-list";
+
+/** Each view's scroll container, by the accessible name the package or harness gives it. */
+const scrollContainers: Record<View, string> = {
+  conversation: "Conversation turns",
+  "turn-list": "Turn list",
+};
+const kinds: readonly FocusKind[] = ["message", "reasoning", "tool"];
+/** Only the transcript's items: the conversation view's timeline marks its own selection too. */
+const transcriptCurrent = (page: Page) =>
+  page.locator('article[aria-current="true"], article [aria-current="true"]');
+/** A consumer accent nowhere in the package's themes. */
+const consumerHighlight = "#b4235a";
+
+async function open(page: Page, view: View, theme: Theme, highlight?: string) {
+  const query = new URLSearchParams({ theme, view, ...(highlight ? { highlight } : {}) });
+  const url = `${harnessOrigin}/?${query}`;
+  await page.goto(url);
+  const container = page.getByRole("region", { name: scrollContainers[view], exact: true });
+  const turn = (kind: FocusKind) =>
+    container.getByRole("article", { name: `Turn ${focusedTurnIds[kind]} from claude-code` });
+  await expect(turn("tool")).toBeAttached();
+  return {
+    container,
+    /** Changes the focus in place, the way a consumer re-renders with a new `focus`. */
+    focusOn: async (kind: FocusKind) => await page.goto(`${url}#${kind}`),
+    /** The turn holding `kind`'s focus target. */
+    turn,
+  };
+}
+
+async function expectBelowFold(element: Locator, container: Locator) {
+  const [inner, outer] = await Promise.all([element.boundingBox(), container.boundingBox()]);
+  if (!inner || !outer) throw new Error("expected the item and its list rendered");
+  expect(inner.y).toBeGreaterThan(outer.y + outer.height);
+}
+
+/** The focused item as a user finds it: the agent message group, or the item behind a trigger. */
+function item(turn: Locator, kind: FocusKind): Locator {
+  if (kind === "message") return turn.getByRole("group", { name: "Agent message" });
+  const trigger = turn.page().getByRole("button", {
+    name: kind === "reasoning" ? "Reasoning" : "Bash tool details",
+  });
+  return turn.locator("[data-event-index]").filter({ has: trigger });
+}
+
+/**
+ * The turn's structure as the package renders it — its collapse header, YOU and agent blocks,
+ * avatar, model chip, activity items, tool rows and token chips — with each part's labels and
+ * horizontal layout. Opened accordion content is left out: focusing a tool call has always
+ * opened its details, and that content is not part of the turn's structure.
+ */
+async function structure(turn: Locator) {
+  return await turn.evaluate((article) => {
+    const origin = article.getBoundingClientRect();
+    const parts = article.querySelectorAll<HTMLElement>(
+      [
+        "button",
+        '[role="group"]',
+        "[data-message-author]",
+        "[data-event-index]",
+        '[data-slot="avatar"]',
+        '[data-slot="badge"]',
+        'dl[aria-label="Usage"] > div',
+      ].join(","),
+    );
+    return [...parts]
+      .filter((part) => !part.closest('[role="region"]'))
+      .map((part) => {
+        const style = getComputedStyle(part);
+        const bounds = part.getBoundingClientRect();
+        const focused = part.getAttribute("aria-current") === "true";
+        return {
+          author: part.dataset.messageAuthor ?? null,
+          background: focused ? "focus tint" : style.backgroundColor,
+          border: `${style.borderLeftWidth} ${style.borderLeftStyle} ${style.borderLeftColor}`,
+          color: style.color,
+          display: style.display,
+          eventIndex: part.dataset.eventIndex ?? null,
+          fontSize: style.fontSize,
+          label: part.getAttribute("aria-label"),
+          left: Math.round(bounds.left - origin.left),
+          padding: style.paddingLeft,
+          role: part.getAttribute("role") ?? part.tagName.toLowerCase(),
+          slot: part.dataset.slot ?? null,
+          text: part.matches(
+            'button, [data-slot="avatar"], [data-slot="badge"], dl[aria-label="Usage"] > div',
+          )
+            ? (part.textContent ?? "").trim()
+            : null,
+          width: Math.round(bounds.width),
+        };
+      });
+  });
+}
+
+async function highlight(element: Locator) {
+  return await element.evaluate((node) => {
+    const style = getComputedStyle(node);
+    return {
+      background: style.backgroundColor,
+      outlineColor: style.outlineColor,
+      outlineStyle: style.outlineStyle,
+      outlineWidth: style.outlineWidth,
+      primary: getComputedStyle(document.documentElement).getPropertyValue("--primary"),
+      token: style.getPropertyValue("--conversation-focus-highlight"),
+    };
+  });
+}
+
+function expectSameColor(actual: Rgba, expected: Rgba) {
+  for (const channel of ["red", "green", "blue"] as const)
+    expect(Math.abs(actual[channel] - expected[channel])).toBeLessThanOrEqual(1);
+}
+
+/** The indicator is drawn in the token's colour; any tint is that colour at 15% or less. */
+async function expectHighlightIn(element: Locator, expected: string) {
+  const style = await highlight(element);
+  const token = parseColor(style.token);
+  expectSameColor(token, parseColor(expected));
+  expect(style.outlineStyle).toBe("solid");
+  expect(style.outlineWidth).toBe("2px");
+  expectSameColor(paintedColor(style.outlineColor, "focus indicator"), token);
+  const tint = parseColor(style.background);
+  if (tint.alpha > 0) {
+    expectSameColor(tint, token);
+    expect(tint.alpha).toBeLessThanOrEqual(0.15);
+  }
+  return style;
+}
+
+async function expectWithin(element: Locator, container: Locator) {
+  await expect
+    .poll(async () => {
+      const [inner, outer] = await Promise.all([element.boundingBox(), container.boundingBox()]);
+      if (!inner || !outer) return false;
+      return inner.y >= outer.y - 0.5 && inner.y + inner.height <= outer.y + outer.height + 0.5;
+    })
+    .toBe(true);
+}
+
+for (const view of ["turn-list", "conversation"] as const) {
+  test(`${view} focused on each item kind below the fold shows it in place and highlighted`, async ({
+    page,
+  }) => {
+    const list = await open(page, view, "light");
+    await expect(transcriptCurrent(page)).toHaveCount(0);
+    const unfocused = new Map<FocusKind, Awaited<ReturnType<typeof structure>>>();
+    for (const kind of kinds) unfocused.set(kind, await structure(list.turn(kind)));
+    for (const kind of kinds) {
+      await test.step(`focused on its ${kind}`, async () => {
+        const target = item(list.turn(kind), kind);
+        await expect(target).toHaveCount(1);
+        await expectBelowFold(target, list.container);
+        await list.focusOn(kind);
+        const current = transcriptCurrent(page);
+        await expect(current).toHaveCount(1);
+        await expect(target).toHaveAttribute("aria-current", "true");
+        await expect(current).toHaveAttribute("data-event-index", String(focusEventIndex[kind]));
+        await expectWithin(current, list.container);
+        expect(await structure(list.turn(kind))).toEqual(
+          unfocused
+            .get(kind)
+            ?.map((part) =>
+              part.eventIndex === String(focusEventIndex[kind]) && part.role !== "button"
+                ? { ...part, background: "focus tint" }
+                : part,
+            ),
+        );
+        const style = await expectHighlightIn(current, (await highlight(current)).primary);
+        expectSameColor(parseColor(style.token), parseColor(style.primary));
+      });
+    }
+
+    const themed = await open(page, view, "light", consumerHighlight);
+    for (const kind of kinds) {
+      await test.step(`recoloured by a consumer's token on its ${kind}`, async () => {
+        await themed.focusOn(kind);
+        await expect(item(themed.turn(kind), kind)).toHaveAttribute("aria-current", "true");
+        await expectHighlightIn(transcriptCurrent(page), consumerHighlight);
+      });
+    }
+  });
+}
+
+for (const theme of ["light", "dark"] as const) {
+  test(`records each focus highlight's contrast against its card in the ${theme} theme`, async ({
+    page,
+  }) => {
+    const conversation = await open(page, "conversation", theme);
+    for (const kind of kinds) {
+      await test.step(kind, async () => {
+        await conversation.focusOn(kind);
+        const current = transcriptCurrent(page);
+        await expect(item(conversation.turn(kind), kind)).toHaveAttribute("aria-current", "true");
+        await expectWithin(current, conversation.container);
+        const style = await expectHighlightIn(current, (await highlight(current)).primary);
+        const foreground = paintedColor(style.outlineColor, "focus indicator");
+        const background = await backgroundBehind(current);
+        await recordReading({
+          background,
+          browser: test.info().project.name,
+          foreground,
+          kind,
+          part: "focus-highlight",
+          ratio: contrastRatio(foreground, background),
+          theme,
+        });
+      });
+    }
+  });
+}
