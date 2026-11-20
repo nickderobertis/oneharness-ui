@@ -71,8 +71,9 @@ async function expectCurrent(page: Page, turn: Locator, kind: FocusKind): Promis
 /**
  * The turn's structure as the package renders it — its collapse header, YOU and agent blocks,
  * avatar, model chip, activity items, tool rows and token chips — with each part's labels and
- * horizontal layout. Opened accordion content is left out: focusing a tool call has always
- * opened its details, and that content is not part of the turn's structure.
+ * horizontal layout. Opened accordion content inside the turn is left out: focusing a tool call
+ * has always opened its details, and that content is not part of the turn's structure. Only
+ * content within this article is excluded, so a region around the list cannot empty the capture.
  */
 async function structure(turn: Locator) {
   return await turn.evaluate((article) => {
@@ -89,7 +90,10 @@ async function structure(turn: Locator) {
       ].join(","),
     );
     return [...parts]
-      .filter((part) => !part.closest('[role="region"]'))
+      .filter((part) => {
+        const content = part.closest('[data-slot="accordion-content"]');
+        return !(content && article.contains(content));
+      })
       .map((part) => {
         const style = getComputedStyle(part);
         const bounds = part.getBoundingClientRect();
@@ -107,6 +111,7 @@ async function structure(turn: Locator) {
           padding: style.paddingLeft,
           role: part.getAttribute("role") ?? part.tagName.toLowerCase(),
           slot: part.dataset.slot ?? null,
+          tokenChip: part.matches('dl[aria-label="Usage"] > div'),
           text: part.matches(
             'button, [data-slot="avatar"], [data-slot="badge"], dl[aria-label="Usage"] > div',
           )
@@ -116,6 +121,28 @@ async function structure(turn: Locator) {
         };
       });
   });
+}
+
+type TurnStructure = Awaited<ReturnType<typeof structure>>;
+
+/**
+ * The capture holds every part a turn must render, so a comparison of two captures can never
+ * pass by comparing nothing.
+ */
+function expectTurnStructure(parts: TurnStructure, turnId: string) {
+  const has = (description: string, matches: (part: TurnStructure[number]) => boolean) =>
+    expect(parts.some(matches), `the turn renders ${description}`).toBe(true);
+  expect(parts.length).toBeGreaterThan(0);
+  has("its collapsible turn header", (part) => part.text === `Collapse turn ${turnId}`);
+  has("its YOU block", (part) => part.author === "user");
+  has("its agent block", (part) => part.author === "assistant");
+  has("the agent avatar", (part) => part.slot === "avatar" && part.text === "OH");
+  has("the model chip", (part) => part.slot === "badge" && part.text === "fixture-model");
+  has("its tool-call row", (part) => part.label === "Bash tool details");
+  has("its reasoning row", (part) => part.text === "Reasoning");
+  has("its agent message", (part) => part.label === "Agent message");
+  has("its input token chip", (part) => part.tokenChip && /^Input\d/.test(part.text ?? ""));
+  has("its output token chip", (part) => part.tokenChip && /^Output\d/.test(part.text ?? ""));
 }
 
 async function highlight(element: Locator) {
@@ -169,8 +196,12 @@ for (const view of ["turn-list", "conversation"] as const) {
   }) => {
     const list = await open(page, view, "light");
     await expect(transcriptCurrent(page)).toHaveCount(0);
-    const unfocused = new Map<FocusKind, Awaited<ReturnType<typeof structure>>>();
-    for (const kind of kinds) unfocused.set(kind, await structure(list.turn(kind)));
+    const unfocused = new Map<FocusKind, TurnStructure>();
+    for (const kind of kinds) {
+      const captured = await structure(list.turn(kind));
+      expectTurnStructure(captured, focusedTurnIds[kind]);
+      unfocused.set(kind, captured);
+    }
     for (const kind of kinds) {
       await test.step(`focused on its ${kind}`, async () => {
         const target = handle(list.turn(kind), kind);
@@ -179,7 +210,9 @@ for (const view of ["turn-list", "conversation"] as const) {
         await list.focusOn(kind);
         const current = await expectCurrent(page, list.turn(kind), kind);
         await expectWithin(current, list.container);
-        expect(await structure(list.turn(kind))).toEqual(
+        const focusedStructure = await structure(list.turn(kind));
+        expectTurnStructure(focusedStructure, focusedTurnIds[kind]);
+        expect(focusedStructure).toEqual(
           unfocused
             .get(kind)
             ?.map((part) =>
