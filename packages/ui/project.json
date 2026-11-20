@@ -8,7 +8,8 @@
   "targets": {
     "build": {
       "command": "bun run --cwd packages/ui build",
-      "outputs": ["{projectRoot}/dist"]
+      "outputs": ["{projectRoot}/dist"],
+      "inputs": ["production", "^production", "{workspaceRoot}/apps/conversation-ui/src/**/*"]
     },
     "test": {
       "command": "bun test --preload @oneharness-ui/browser-test-env/src/preload.ts --coverage --coverage-dir coverage/ui packages/ui/test",
