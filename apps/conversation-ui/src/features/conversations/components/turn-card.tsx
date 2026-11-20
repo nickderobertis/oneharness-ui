@@ -360,8 +360,15 @@ export function TurnCard({
   }, [focusKey, targetId]);
   useEffect(() => {
     if (!focusKey || collapsed || (targetId && !openTools.includes(targetId))) return;
-    root.current?.scrollIntoView?.({ block: "nearest" });
-    root.current?.querySelector('[aria-current="true"]')?.scrollIntoView?.({ block: "nearest" });
+    const element = root.current;
+    const reveal = () => {
+      element?.scrollIntoView?.({ block: "nearest" });
+      element?.querySelector('[aria-current="true"]')?.scrollIntoView?.({ block: "nearest" });
+    };
+    reveal();
+    // An opened tool call's details animate to full height after this runs; reveal it again then.
+    element?.addEventListener("animationend", reveal, { once: true });
+    return () => element?.removeEventListener("animationend", reveal);
   }, [focusKey, collapsed, openTools, targetId]);
   const hasUnknown = Object.keys(turn.unknown).length > 0;
   const invocations = pairToolEvents(turn.tools);
