@@ -1,7 +1,7 @@
 "use client";
 
 import { ArrowLeft } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { useInfiniteScroll } from "../hooks/use-infinite-scroll";
@@ -11,6 +11,9 @@ import { ConversationTimeline } from "./conversation-timeline-view";
 import { ReplyForm } from "./reply-form";
 import { StatusBadge } from "./status-badge";
 import { TurnCard } from "./turn-card";
+
+/** Only the focused turn's props change with `focus`, so the other turns skip re-rendering. */
+const MemoizedTurnCard = memo(TurnCard);
 
 function ConversationTitle({ name }: { name: string }) {
   const title = useRef<HTMLHeadingElement>(null);
@@ -145,7 +148,7 @@ export function ConversationView({
         </p>
         {conversation.turns.map((turn) => (
           <div key={turn.id} ref={(element) => scrollSync.register(turn.id, element)}>
-            <TurnCard {...(focus?.turnId === turn.id ? { focus } : {})} turn={turn} />
+            <MemoizedTurnCard {...(focus?.turnId === turn.id ? { focus } : {})} turn={turn} />
           </div>
         ))}
         <div className="mx-auto max-w-[850px] text-center">
