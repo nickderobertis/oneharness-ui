@@ -225,7 +225,10 @@ for (const view of ["turn-list", "conversation"] as const) {
         expectSameColor(parseColor(style.token), parseColor(style.primary));
       });
     }
+  });
 
+  // Its own test, so each journey loads the 200-turn list once and stays inside the per-test timeout.
+  test(`${view} focus highlight follows a consumer's token on each item kind`, async ({ page }) => {
     const themed = await open(page, view, "light", consumerHighlight);
     for (const kind of kinds) {
       await test.step(`recoloured by a consumer's token on its ${kind}`, async () => {
