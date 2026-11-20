@@ -38,7 +38,8 @@
       "command": "bunx biome format --write apps/conversation-ui-e2e"
     },
     "typecheck": {
-      "command": "bunx tsc -p apps/conversation-ui-e2e/tsconfig.json --noEmit"
+      "command": "bunx tsc -p apps/conversation-ui-e2e/tsconfig.json --noEmit",
+      "dependsOn": ["ui:build"]
     },
     "format-check": {
       "command": "bunx biome format apps/conversation-ui-e2e"
