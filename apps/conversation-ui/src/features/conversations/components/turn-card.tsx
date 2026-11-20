@@ -20,6 +20,8 @@ type Turn = ConversationTurn;
 
 const previewMaxLength = 200;
 const payloadClassName = "mt-0 max-h-72 whitespace-pre-wrap rounded-none border-0 text-[11px]";
+/** The class that draws a focused item's highlight in `--conversation-focus-highlight`. */
+const focusHighlightClassName = "conversation-focus-highlight";
 const statusTones: Readonly<Record<string, string>> = {
   completed: "text-success",
   failed: "text-destructive",
@@ -118,7 +120,7 @@ function ToolInvocationBlock({
       aria-current={current ? "true" : undefined}
       data-tool-call-id={invocation.toolCallId ?? undefined}
       data-event-index={invocation.id.slice(5)}
-      className="rounded-[10px] border bg-card px-3"
+      className={cn("rounded-[10px] border px-3", current ? focusHighlightClassName : "bg-card")}
       value={invocation.id}
     >
       <AccordionTrigger
@@ -203,10 +205,28 @@ function Usage({ usage }: { usage: Turn["usage"] }) {
   );
 }
 
-function ReasoningBlock({ text, value }: { text: string; value: string }) {
+function ReasoningBlock({
+  current,
+  eventIndex,
+  text,
+  value,
+}: {
+  current: boolean;
+  eventIndex: number;
+  text: string;
+  value: string;
+}) {
   return (
     <Accordion collapsible type="single">
-      <AccordionItem className="rounded-[10px] border border-dashed bg-card px-3" value={value}>
+      <AccordionItem
+        aria-current={current ? "true" : undefined}
+        className={cn(
+          "rounded-[10px] border border-dashed px-3",
+          current ? focusHighlightClassName : "bg-card",
+        )}
+        data-event-index={eventIndex}
+        value={value}
+      >
         <AccordionTrigger className="py-1.5 text-xs text-muted-foreground">
           Reasoning
         </AccordionTrigger>
@@ -217,6 +237,9 @@ function ReasoningBlock({ text, value }: { text: string; value: string }) {
     </Accordion>
   );
 }
+
+/** The focused item's key: a paired tool invocation's id, or `agent-<index>` for its text. */
+const agentEventKey = (index: number) => `agent-${index}`;
 
 type ActivityEntry =
   | { at: number; event: NonNullable<Turn["agentEvents"]>[number]; type: "agent" }
@@ -270,14 +293,21 @@ function AgentActivity({
             />
           ) : entry.event.kind === "reasoning" ? (
             <ReasoningBlock
+              current={current === agentEventKey(entry.event.index)}
+              eventIndex={entry.event.index}
               key={`reasoning-${entry.event.index}`}
               text={entry.event.text}
               value={`reasoning-${entry.event.index}`}
             />
           ) : (
             <div
+              aria-current={current === agentEventKey(entry.event.index) ? "true" : undefined}
               aria-label="Agent message"
-              className="border-l-2 border-primary pl-3"
+              className={cn(
+                "border-l-2 border-primary pl-3",
+                current === agentEventKey(entry.event.index) && focusHighlightClassName,
+              )}
+              data-event-index={entry.event.index}
               key={`message-${entry.event.index}`}
               role="group"
             >
@@ -316,6 +346,11 @@ export function TurnCard({
       )
     : undefined;
   const targetId = target?.id;
+  const agentTarget =
+    focused && !target && focus.toolCallId === undefined && focus.eventIndex !== undefined
+      ? turn.agentEvents?.find((event) => event.index === focus.eventIndex)
+      : undefined;
+  const currentKey = targetId ?? (agentTarget ? agentEventKey(agentTarget.index) : undefined);
   const focusKey = focused ? JSON.stringify(focus) : undefined;
   useEffect(() => {
     if (!focusKey) return;
@@ -339,7 +374,7 @@ export function TurnCard({
     <article
       ref={root}
       data-turn-id={turn.id}
-      aria-current={focused && !target ? "true" : undefined}
+      aria-current={focused && !currentKey ? "true" : undefined}
       aria-label={`Turn ${turn.id} from ${turn.harness}`}
       className="mx-auto mb-10.5 max-w-[850px]"
     >
@@ -394,7 +429,7 @@ export function TurnCard({
             ) : null}
             {activity ? (
               <AgentActivity
-                current={target?.id}
+                current={currentKey}
                 entries={activity}
                 onOpenToolsChange={setOpenTools}
                 openTools={openTools}

@@ -51,6 +51,9 @@
   --spectrum-blue: #527cbd;
   --spectrum-indigo: #665fa5;
   --spectrum-violet: #96609e;
+  /* A consumer recolours the focused-item highlight by setting this on any ancestor of the
+     conversation; `.dark` re-declares it so a dark subtree resolves its own primary. */
+  --conversation-focus-highlight: var(--primary);
   color-scheme: light;
 }
 
@@ -99,6 +102,7 @@
   --spectrum-blue: #6f96d1;
   --spectrum-indigo: #817abb;
   --spectrum-violet: #aa74b1;
+  --conversation-focus-highlight: var(--primary);
   color-scheme: dark;
 }
 
@@ -176,6 +180,11 @@
 }
 
 @layer components {
+  .conversation-focus-highlight {
+    outline: 2px solid var(--conversation-focus-highlight);
+    outline-offset: 2px;
+    background-color: color-mix(in srgb, var(--conversation-focus-highlight) 10%, transparent);
+  }
   .message-markdown {
     @apply mt-3 min-w-0 text-[15px];
   }

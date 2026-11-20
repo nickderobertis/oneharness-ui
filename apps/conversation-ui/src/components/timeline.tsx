@@ -5,6 +5,7 @@ import {
   type PointerEvent,
   type ReactNode,
   type RefObject,
+  useCallback,
   useEffect,
   useId,
   useMemo,
@@ -47,6 +48,12 @@ export interface TimelineMarker<Payload = unknown> {
   status?: string | null;
 }
 
+/** What the pointer resolves to over the plot, and that entry's rendered bar or marker glyph. */
+export interface TimelineHover<Payload = unknown> {
+  element: HTMLElement;
+  entry: TimelineItem<Payload> | TimelineMarker<Payload>;
+}
+
 export interface TimelineProps<Payload> {
   axis?: { origin: number };
   cursor?: number | null;
@@ -59,6 +66,12 @@ export interface TimelineProps<Payload> {
   lanes?: readonly TimelineLane[];
   markers?: readonly TimelineMarker<Payload>[];
   onExpandedChange?: (expanded: boolean) => void;
+  /**
+   * Called whenever the entry the pointer resolves to over the plot changes: the item or marker
+   * under the pointer, otherwise the one nearest it horizontally. Called with `null` once the
+   * pointer leaves the plot.
+   */
+  onHover?: (hover: TimelineHover<Payload> | null) => void;
   onRangeChange?: (range: [number, number]) => void;
   onSelect?: (entry: TimelineItem<Payload> | TimelineMarker<Payload>) => void;
   range?: readonly [number, number];
@@ -134,6 +147,81 @@ function detailText<Payload>(item: TimelineItem<Payload>, failure?: string | nul
   return parts.join(" · ");
 }
 
+type HoverCandidate<Payload> = {
+  distance: number;
+  entry: TimelineItem<Payload> | TimelineMarker<Payload>;
+  key: string;
+  marker: boolean;
+};
+
+const itemKey = (item: TimelineItem) => `item:${item.id}`;
+const markerKey = (marker: TimelineMarker) => `marker:${marker.id}`;
+
+/**
+ * Resolves the pointer to one rendered entry and reports changes through `onHover`. An entry
+ * directly under the pointer wins; otherwise the nearest in time does, and on a tie markers win
+ * over the marker row (where their glyphs sit) and bars win everywhere else.
+ */
+function useTimelineHover<Payload>(
+  items: readonly TimelineItem<Payload>[],
+  markers: readonly TimelineMarker<Payload>[],
+  range: Range,
+  onHover: ((hover: TimelineHover<Payload> | null) => void) | undefined,
+) {
+  const elements = useRef(new Map<string, HTMLElement>());
+  const resolvedKey = useRef<string | null>(null);
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+  const register = useCallback((key: string, element: HTMLElement | null) => {
+    if (element) elements.current.set(key, element);
+    else elements.current.delete(key);
+  }, []);
+  const report = (key: string | null, entry: TimelineHover<Payload>["entry"] | null) => {
+    if (key === resolvedKey.current) return;
+    resolvedKey.current = key;
+    setHoveredKey(key);
+    const element = key === null ? undefined : elements.current.get(key);
+    onHover?.(entry && element ? { element, entry } : null);
+  };
+  const resolve = (time: number, target: EventTarget, inMarkerRow: boolean) => {
+    const candidates: HoverCandidate<Payload>[] = [
+      ...items.flatMap((item) => {
+        const end = itemEnd(item);
+        if (end < range.start || item.start > range.end) return [];
+        const distance = time < item.start ? item.start - time : time > end ? time - end : 0;
+        return [{ distance, entry: item, key: itemKey(item), marker: false }];
+      }),
+      ...markers.flatMap((marker) =>
+        marker.at < range.start || marker.at > range.end
+          ? []
+          : [
+              {
+                distance: Math.abs(marker.at - time),
+                entry: marker,
+                key: markerKey(marker),
+                marker: true,
+              },
+            ],
+      ),
+    ];
+    const under =
+      target instanceof Element ? target.closest<HTMLElement>("[data-timeline-entry]") : null;
+    const direct = candidates.find((candidate) => elements.current.get(candidate.key) === under);
+    const nearest = candidates.reduce<HoverCandidate<Payload> | null>((best, candidate) => {
+      if (!best || candidate.distance < best.distance) return candidate;
+      if (
+        candidate.distance === best.distance &&
+        candidate.marker === inMarkerRow &&
+        best.marker !== inMarkerRow
+      )
+        return candidate;
+      return best;
+    }, null);
+    const chosen = direct ?? nearest;
+    report(chosen?.key ?? null, chosen?.entry ?? null);
+  };
+  return { hoveredKey, leave: () => report(null, null), register, resolve };
+}
+
 function useTimelineView(
   fullRange: Range,
   controlledRange: readonly [number, number] | undefined,
@@ -205,6 +293,7 @@ export function Timeline<Payload>({
   lanes,
   markers = [],
   onExpandedChange,
+  onHover,
   onRangeChange,
   onSelect,
   range: controlledRange,
@@ -236,6 +325,8 @@ export function Timeline<Payload>({
   }, [validItems, validMarkers]);
   const timelineView = useTimelineView(fullRange, controlledRange, onRangeChange);
   const { axis, range } = timelineView;
+  const hover = useTimelineHover(validItems, validMarkers, range, onHover);
+  const grid = useRef<HTMLDivElement>(null);
   const hasEvents = validItems.length > 0 || validMarkers.length > 0;
   useEffect(() => {
     if (!hasEvents) return;
@@ -292,6 +383,8 @@ export function Timeline<Payload>({
           data-turn-id={item.turnId}
           data-tool-call-id={item.toolCallId}
           data-event-index={item.eventIndex}
+          data-timeline-entry=""
+          data-timeline-hovered={hover.hoveredKey === itemKey(item) ? "true" : undefined}
           className={cn(
             "absolute top-0 h-5 border-2 border-card shadow-sm hover:opacity-80 focus-visible:z-20",
             point ? "w-5 -translate-x-1/2 rounded-full" : "min-w-1 rounded-md",
@@ -310,6 +403,7 @@ export function Timeline<Payload>({
           onFocus={() => setActive(item.id)}
           onMouseEnter={() => setActive(item.id)}
           onMouseLeave={() => setActive(null)}
+          ref={(element) => hover.register(itemKey(item), element)}
           style={{ width: point ? undefined : `${width}cqw` }}
           type="button"
         >
@@ -382,12 +476,29 @@ export function Timeline<Payload>({
           aria-label="Timeline plot. Scroll to zoom or drag to select a range."
           className="relative touch-none select-none overflow-hidden rounded-lg border bg-muted/40 pb-3 pt-7"
           onPointerMove={(event) => {
-            const bounds = event.currentTarget.getBoundingClientRect();
-            setHoverRatio(
-              Math.min(1, Math.max(0, (event.clientX - bounds.left) / (bounds.width || 1_000))),
+            // Ratios are of the padding box, which the crosshair's `left` and the bars share.
+            const plot = event.currentTarget;
+            const bounds = plot.getBoundingClientRect();
+            const ratio = Math.min(
+              1,
+              Math.max(
+                0,
+                (event.clientX - bounds.left - plot.clientLeft) /
+                  (plot.clientWidth || bounds.width || 1_000),
+              ),
+            );
+            setHoverRatio(ratio);
+            const gridTop = grid.current?.getBoundingClientRect().top ?? bounds.top;
+            hover.resolve(
+              range.start + ratio * rangeDuration,
+              event.target,
+              event.clientY < gridTop,
             );
           }}
-          onPointerLeave={() => setHoverRatio(null)}
+          onPointerLeave={() => {
+            setHoverRatio(null);
+            hover.leave();
+          }}
           onPointerDown={(event: PointerEvent<HTMLDivElement>) =>
             timelineView.brushStart(event.clientX)
           }
@@ -403,11 +514,11 @@ export function Timeline<Payload>({
           {crosshair && readout !== null ? (
             <div
               aria-label="Timeline crosshair"
-              className="pointer-events-none absolute inset-y-0 z-30 border-l border-foreground"
+              className="pointer-events-none absolute inset-y-0 z-30 w-0.5 -translate-x-1/2 bg-foreground shadow-[0_0_0_1px_var(--card)]"
               style={{ left: `${(hoverRatio ?? 0) * 100}%` }}
             >
               <span
-                className="absolute top-0 flex flex-col items-center whitespace-nowrap bg-popover px-1 text-[10px] leading-3 text-popover-foreground"
+                className="absolute top-0 flex flex-col items-center whitespace-nowrap rounded-sm border bg-popover px-1 text-[10px] leading-3 text-popover-foreground shadow-sm"
                 style={{ transform: (hoverRatio ?? 0) > 0.5 ? "translateX(-100%)" : undefined }}
               >
                 <span>{readout.clock}</span>
@@ -415,7 +526,7 @@ export function Timeline<Payload>({
               </span>
             </div>
           ) : null}
-          <div className="relative grid gap-2" style={{ containerType: "inline-size" }}>
+          <div className="relative grid gap-2" ref={grid} style={{ containerType: "inline-size" }}>
             {rows.map((lane) => (
               <div
                 className="relative h-6 border-b border-border/60"
@@ -450,10 +561,15 @@ export function Timeline<Payload>({
                       selectedId === marker.id && "ring-2 ring-foreground",
                     )}
                     data-selected={selectedId === marker.id ? "true" : "false"}
+                    data-timeline-entry=""
+                    data-timeline-hovered={
+                      hover.hoveredKey === markerKey(marker) ? "true" : undefined
+                    }
                     onClick={(event) => {
                       event.stopPropagation();
                       onSelect?.(marker);
                     }}
+                    ref={(element) => hover.register(markerKey(marker), element)}
                     type="button"
                   >
                     {marker.icon ?? <MapPin aria-hidden="true" className="size-3" />}
