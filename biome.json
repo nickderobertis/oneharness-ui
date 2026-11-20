@@ -3,6 +3,7 @@
   "files": {
     "includes": [
       "**",
+      "!!apps/conversation-ui-e2e/telemetry",
       "!!apps/desktop-shell/binaries",
       "!!apps/desktop-shell/gen",
       "!!**/.cache",
