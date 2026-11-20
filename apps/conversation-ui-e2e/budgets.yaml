@@ -1,0 +1,42 @@
+schema_version: 1
+budgets:
+  - id: oneharness-ui-crosshair-line-contrast
+    description: >-
+      Crosshair line contrast, both themes: the lowest WCAG contrast ratio, across
+      the light and dark themes and every browser project the suite runs, of the
+      timeline crosshair's line against the plot background behind it, as the
+      person moving the pointer sees it. WCAG 2.2 success criterion 1.4.11
+      (non-text contrast) sets 3:1 for a graphical object a user needs to
+      understand the content. Measurement source: telemetry. Basis: published docs.
+    command: [node, contrast-budget.mjs, --metric, crosshair-line, --telemetry, telemetry/contrast.json]
+    measure: reported
+    direction: min
+    threshold: 3
+    unit: ratio
+  - id: oneharness-ui-crosshair-readout-contrast
+    description: >-
+      Crosshair time readout contrast, both themes: the lowest WCAG contrast ratio,
+      across the light and dark themes and every browser project the suite runs, of
+      the crosshair's time readout text against the background rendered behind it,
+      as the person moving the pointer reads it. WCAG 2.2 success criterion 1.4.3
+      (contrast, minimum) sets 4.5:1 for text below large-scale size. Measurement
+      source: telemetry. Basis: published docs.
+    command: [node, contrast-budget.mjs, --metric, crosshair-readout, --telemetry, telemetry/contrast.json]
+    measure: reported
+    direction: min
+    threshold: 4.5
+    unit: ratio
+  - id: oneharness-ui-focus-highlight-contrast
+    description: >-
+      Focused conversation item highlight contrast: the lowest WCAG contrast ratio,
+      across the light and dark themes, every browser project the suite runs and the
+      agent message, reasoning and tool call item kinds, of a focused item's
+      highlight against the card around it, as the person opening an event sees it.
+      WCAG 2.2 success criterion 1.4.11 (non-text contrast) sets 3:1 for a visual
+      indicator a user needs to identify a state. Measurement source: telemetry.
+      Basis: published docs.
+    command: [node, contrast-budget.mjs, --metric, focus-highlight, --telemetry, telemetry/contrast.json]
+    measure: reported
+    direction: min
+    threshold: 3
+    unit: ratio

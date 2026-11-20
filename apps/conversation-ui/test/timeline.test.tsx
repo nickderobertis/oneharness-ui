@@ -256,3 +256,73 @@ test("round ticks respect measured spacing over three hours and crosshair reads 
     HTMLElement.prototype.getBoundingClientRect = original;
   }
 });
+
+test("onHover resolves the entry under or nearest the pointer and clears when it leaves", () => {
+  const original = HTMLElement.prototype.getBoundingClientRect;
+  HTMLElement.prototype.getBoundingClientRect = () => ({
+    width: 1000,
+    left: 0,
+    right: 1000,
+    top: 0,
+    bottom: 100,
+    height: 100,
+    x: 0,
+    y: 0,
+    toJSON() {},
+  });
+  const hovers: (string | null)[] = [];
+  try {
+    render(
+      <Timeline
+        items={[
+          { id: "early", label: "Early", payload: {}, start: 0, end: 100 },
+          { id: "late", label: "Late", payload: {}, start: 400, end: 500 },
+        ]}
+        markers={[
+          { at: 450, id: "inside", label: "Inside", payload: {} },
+          { at: 1000, id: "after", label: "After", payload: {} },
+        ]}
+        onHover={(hover) => {
+          hovers.push(
+            hover ? `${hover.entry.id}:${hover.element.getAttribute("aria-label")}` : null,
+          );
+        }}
+      />,
+    );
+    const plot = screen.getByLabelText("Timeline plot. Scroll to zoom or drag to select a range.");
+    const hovered = () =>
+      [...plot.querySelectorAll('[data-timeline-hovered="true"]')].map((element) =>
+        element.getAttribute("aria-label"),
+      );
+    fireEvent.pointerMove(plot, { clientX: 50, clientY: 50 });
+    expect(hovered()).toEqual(["Early, span"]);
+    fireEvent.pointerMove(plot, { clientX: 60, clientY: 50 });
+    fireEvent.pointerMove(plot, { clientX: 300, clientY: 50 });
+    // A tie between a bar and a marker goes to the bar below the marker row.
+    fireEvent.pointerMove(plot, { clientX: 450, clientY: 50 });
+    expect(hovered()).toEqual(["Late, span"]);
+    // Over the marker row the same tie goes to the marker.
+    fireEvent.pointerMove(plot, { clientX: 450, clientY: -10 });
+    expect(hovered()).toEqual(["Inside, marker"]);
+    fireEvent.pointerMove(plot, { clientX: 1000, clientY: 50 });
+    expect(hovered()).toEqual(["After, marker"]);
+    // The entry under the pointer wins over the nearer one.
+    fireEvent.pointerMove(screen.getByRole("button", { name: "Late, span" }), {
+      clientX: 900,
+      clientY: 50,
+    });
+    expect(hovered()).toEqual(["Late, span"]);
+    fireEvent.pointerLeave(plot);
+    expect(hovered()).toEqual([]);
+    expect(hovers).toEqual([
+      "early:Early, span",
+      "late:Late, span",
+      "inside:Inside, marker",
+      "after:After, marker",
+      "late:Late, span",
+      null,
+    ]);
+  } finally {
+    HTMLElement.prototype.getBoundingClientRect = original;
+  }
+});

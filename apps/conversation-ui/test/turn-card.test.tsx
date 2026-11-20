@@ -92,6 +92,38 @@ describe("TurnCard tool invocations", () => {
     expect(within(activity).getByLabelText("Bash tool output").textContent).toBe("/repo");
   });
 
+  test("focuses an agent message, a reasoning item or a tool call by event index", () => {
+    const turn: ConversationTurn = {
+      ...turnWith([{ index: 1, kind: "tool_call", name: "Bash", toolCallId: "t1" }]),
+      agentEvents: [
+        { index: 0, kind: "reasoning", text: "Plan first." },
+        { index: 2, kind: "message", text: "Done." },
+      ],
+    };
+    const { rerender } = render(<TurnCard turn={turn} />);
+    const activity = screen.getByRole("region", { name: "Agent activity" });
+    const current = () =>
+      [...document.querySelectorAll('[aria-current="true"]')].map((element) => [
+        element.getAttribute("data-event-index"),
+        element.classList.contains("conversation-focus-highlight"),
+      ]);
+    expect(current()).toEqual([]);
+    expect(within(activity).getByRole("group", { name: "Agent message" }).dataset.eventIndex).toBe(
+      "2",
+    );
+    for (const [eventIndex, kind] of [
+      [2, "message"],
+      [0, "reasoning"],
+      [1, "tool call"],
+    ] as const) {
+      rerender(<TurnCard focus={{ eventIndex, turnId: turn.id }} turn={turn} />);
+      expect({ current: current(), kind }).toEqual({ current: [[String(eventIndex), true]], kind });
+    }
+    rerender(<TurnCard focus={{ eventIndex: 9, turnId: turn.id }} turn={turn} />);
+    expect(screen.getByRole("article").getAttribute("aria-current")).toBe("true");
+    expect(document.querySelectorAll(".conversation-focus-highlight")).toHaveLength(0);
+  });
+
   test("keeps the turn's reasoning above the stream when no reasoning event carries it", () => {
     render(
       <TurnCard

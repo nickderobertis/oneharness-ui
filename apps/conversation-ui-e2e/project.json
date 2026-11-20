@@ -4,14 +4,15 @@
   "projectType": "application",
   "sourceRoot": "apps/conversation-ui-e2e/tests",
   "tags": ["scope:ui", "type:e2e"],
-  "implicitDependencies": ["conversation-ui", "ipc-contract", "oneharness-bridge"],
+  "implicitDependencies": ["conversation-ui", "ipc-contract", "oneharness-bridge", "ui"],
   "targets": {
     "test": {
       "cache": true,
       "command": "bun run --cwd apps/conversation-ui-e2e test:e2e",
-      "dependsOn": ["conversation-ui:build"],
+      "dependsOn": ["conversation-ui:build", "ui:build"],
       "inputs": [
         "default",
+        "!{projectRoot}/telemetry/**/*",
         "testRunners",
         {
           "dependentTasksOutputFiles": "**/*"
@@ -24,7 +25,11 @@
         "{workspaceRoot}/packages/oneharness-bridge/test/history-fixture.ts",
         "{workspaceRoot}/packages/oneharness-bridge/test/fixtures/**/*"
       ],
-      "outputs": []
+      "outputs": ["{projectRoot}/telemetry"]
+    },
+    "budgets": {
+      "dependsOn": ["test"],
+      "command": "bunx onebudgetspec check apps/conversation-ui-e2e/budgets.yaml"
     },
     "lint": {
       "command": "bunx biome check --error-on-warnings apps/conversation-ui-e2e"
