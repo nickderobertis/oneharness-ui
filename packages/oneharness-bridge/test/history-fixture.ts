@@ -20,10 +20,19 @@ export type FixtureHistory = {
   record: HistoryRecord;
 };
 
-export async function readFixtureHistoryRecord(
+export type FixtureHistoryFile = {
+  historyFile: string;
+  /// The file's lines exactly as the packaged CLI wrote them, each validated by
+  /// the SDK's line schema.
+  lines: HistoryLine[];
+};
+
+/// Read the one-record history file a fixture run wrote, without the extra
+/// `history show` subprocess `readFixtureHistoryRecord` spends to aggregate it.
+export async function readFixtureHistoryFile(
   historyDir: string,
   report: RunReport,
-): Promise<FixtureHistory> {
+): Promise<FixtureHistoryFile> {
   if (!report.history_file) throw new Error("fixture run did not write history");
   const [historyRoot, historyFile] = await Promise.all([
     realpath(historyDir),
@@ -45,6 +54,14 @@ export async function readFixtureHistoryRecord(
   if (lines.filter((line) => line.type === "run").length !== 1) {
     throw new Error("fixture history must contain one record");
   }
+  return { historyFile, lines };
+}
+
+export async function readFixtureHistoryRecord(
+  historyDir: string,
+  report: RunReport,
+): Promise<FixtureHistory> {
+  const { historyFile, lines } = await readFixtureHistoryFile(historyDir, report);
   const eventLineVersion = writtenEventLineVersion(lines);
   const records = await new OneHarness().history({
     allProjects: true,
@@ -58,6 +75,31 @@ export async function readFixtureHistoryRecord(
     historyLines: (written) => historyLines(written, eventLineVersion),
     record,
   };
+}
+
+/// Serialize the CLI-written lines as another session's history file: the run
+/// line takes the given identity and its event lines follow it by run id, so
+/// every other field stays as the packaged CLI wrote it.
+export function copiedSessionLines(
+  lines: readonly HistoryLine[],
+  identity: { historyId: string; name: string; session: string; timestamp?: string },
+): string {
+  return lines
+    .map((line) =>
+      HistoryLineSchema.parse(
+        line.type === "run"
+          ? {
+              ...line,
+              history_id: identity.historyId,
+              name: identity.name,
+              session: identity.session,
+              ...(identity.timestamp ? { timestamp: identity.timestamp } : {}),
+            }
+          : { ...line, run_id: identity.historyId },
+      ),
+    )
+    .map((line) => JSON.stringify(line))
+    .join("\n");
 }
 
 /// The event-line schema version the pinned CLI stamped on this file, taken

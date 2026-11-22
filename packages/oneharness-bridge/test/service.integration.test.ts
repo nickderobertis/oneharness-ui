@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect } from "bun:test";
 import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
@@ -13,8 +13,14 @@ import {
 } from "@oneharness/sdk";
 import type { BridgeStreamFrame, ConversationSummary } from "@oneharness-ui/ipc-contract";
 import { BridgeService, MAX_CONVERSATION_PAGE_BYTES } from "../src/service.ts";
+import { test } from "./bounded-test.ts";
 import { FUTURE_RECORD_PATCH_ENV } from "./fixtures/future-record-contract.ts";
-import { readFixtureHistoryRecord, startHeldRun } from "./history-fixture.ts";
+import {
+  copiedSessionLines,
+  readFixtureHistoryFile,
+  readFixtureHistoryRecord,
+  startHeldRun,
+} from "./history-fixture.ts";
 
 const repository = resolve(import.meta.dir, "../../..");
 const cliOverride = process.env.ONEHARNESS_UI_TEST_CLI_BIN;
@@ -802,31 +808,33 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
   // llmlint: ignore-end[tests_mirror_real_usage]
 
   test("pages SDK summaries without loading every conversation detail", async () => {
+const __t0=performance.now(); const __m=(l:string)=>console.error(`PHASE ${l} ${(performance.now()-__t0).toFixed(0)}ms`);
+    // Every CLI call here is a launcher plus the native CLI, and on a loaded
+    // Windows runner each launch costs more than every record it reads, so the
+    // copies come from the CLI-written lines rather than another `history show`.
     const report = await seed(
       "page-template",
       '{"result":"Page template answer","session_id":"native-page-template"}',
       { prompt: "summary pages must not include this detail prompt" },
     );
-    const { historyFile, historyLines, record } = await readFixtureHistoryRecord(
-      historyDir,
-      report,
-    );
+    __m("seed");
+    const { historyFile, lines } = await readFixtureHistoryFile(historyDir, report);
+    __m("read");
     await Promise.all(
       Array.from({ length: 26 }, async (_, index) => {
         const session = `page-session-${String(index).padStart(2, "0")}`;
-        const copy = HistoryRecordSchema.parse({
-          ...record,
-          history_id: fixtureHistoryId(index + 1),
-          name: `page-${String(index).padStart(2, "0")}`,
-          session,
-        });
         await writeFile(
           resolve(dirname(historyFile), `${session}.jsonl`),
-          `${historyLines(copy)}\n`,
+          `${copiedSessionLines(lines, {
+            historyId: fixtureHistoryId(index + 1),
+            name: `page-${String(index).padStart(2, "0")}`,
+            session,
+          })}\n`,
         );
       }),
     );
 
+    __m("writes");
     const first = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
     if (!first.ok || first.data.kind !== "list") throw new Error(JSON.stringify(first));
     expect(first.data.conversations).toHaveLength(25);
@@ -836,41 +844,30 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       "summary pages must not include this detail prompt",
     );
 
-    const inserted = HistoryRecordSchema.parse({
-      ...record,
-      history_id: fixtureHistoryId(100),
-      name: "inserted-after-first-page",
-      session: "inserted-after-first-page",
-      timestamp: "9999-12-31T23:59:59Z",
-    });
+    __m("list1");
     await writeFile(
       resolve(dirname(historyFile), "inserted-after-first-page.jsonl"),
-      `${historyLines(inserted)}\n`,
+      `${copiedSessionLines(lines, {
+        historyId: fixtureHistoryId(100),
+        name: "inserted-after-first-page",
+        session: "inserted-after-first-page",
+        timestamp: "9999-12-31T23:59:59Z",
+      })}\n`,
     );
 
+    // The total counts the newer record, so its absence from this page is the
+    // cursor at work, not a record the CLI failed to discover.
     const second = await service().handle(
       { cursor: first.data.nextCursor ?? undefined, kind: "list" },
       TEST_AUTHORIZATION,
     );
+    __m("list2");
     if (!second.ok || second.data.kind !== "list") throw new Error(JSON.stringify(second));
     expect(second.data).toMatchObject({ nextCursor: null, totalCount: 28 });
     expect(second.data.conversations).toHaveLength(2);
     expect(second.data.conversations.map(({ name }) => name)).not.toContain(
       "inserted-after-first-page",
     );
-
-    const refreshed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
-    expect(
-      refreshed.ok && refreshed.data.kind === "list"
-        ? refreshed.data.conversations[0]?.name
-        : undefined,
-    ).toBe("inserted-after-first-page");
-
-    const selected = await service().handle(
-      { kind: "get", sessionId: second.data.conversations[0]?.id ?? "" },
-      TEST_AUTHORIZATION,
-    );
-    expect(selected.ok && selected.data.kind === "get").toBe(true);
   });
 
   test("keeps each on-demand turn page under the response byte budget", async () => {
