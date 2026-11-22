@@ -17,6 +17,7 @@ import { test } from "./bounded-test.ts";
 import { FUTURE_RECORD_PATCH_ENV } from "./fixtures/future-record-contract.ts";
 import {
   copiedSessionLines,
+  packagedNativeCli,
   readFixtureHistoryFile,
   readFixtureHistoryRecord,
   startHeldRun,
@@ -36,6 +37,9 @@ for (const [name, value] of [
     throw new Error(`${name} must be an existing absolute executable path`);
   }
 }
+// The binary itself rather than the package's launcher, so every process a
+// test starts is one its budget can stop (see `packagedNativeCli`).
+const cli = cliOverride ?? packagedNativeCli();
 const provider =
   providerOverride ??
   resolve(
@@ -99,7 +103,7 @@ async function seed(
     stderr?: string;
   } = {},
 ): Promise<RunReport> {
-  const report = await new OneHarness(cliOverride ? { executable: cliOverride } : {}).run({
+  const report = await new OneHarness({ executable: cli }).run({
     bins: { "claude-code": provider },
     env: {
       MOCK_EXIT: String(options.exit ?? 0),
@@ -123,7 +127,7 @@ async function seed(
 function service(): BridgeService {
   return new BridgeService(
     {
-      ...(cliOverride ? { executable: cliOverride } : {}),
+      executable: cli,
       historyDir,
       providerBin: provider,
       providerHarness: "claude-code",
@@ -408,7 +412,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
           '{"type":"assistant","message":{"content":[{"type":"text","text":"Inspecting now."}]}}',
           '{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"pwd"}}]}}',
         ],
-        ...(cliOverride ? { executable: cliOverride } : {}),
+        executable: cli,
       },
     );
     try {
@@ -527,7 +531,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       {
         after: ['{"type":"result","result":"Done","session_id":"native-label-live"}'],
         before: ['{"type":"assistant","message":{"content":[{"type":"text","text":"Working."}]}}'],
-        ...(cliOverride ? { executable: cliOverride } : {}),
+        executable: cli,
       },
     );
     try {
@@ -731,7 +735,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     await writeFile(fileInsteadOfDirectory, "not a history directory");
     const storage = await new BridgeService(
       {
-        ...(cliOverride ? { executable: cliOverride } : {}),
+        executable: cli,
         historyDir: fileInsteadOfDirectory,
       },
       TEST_AUTHORIZATION,
@@ -808,18 +812,18 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
   // llmlint: ignore-end[tests_mirror_real_usage]
 
   test("pages SDK summaries without loading every conversation detail", async () => {
-const __t0=performance.now(); const __m=(l:string)=>console.error(`PHASE ${l} ${(performance.now()-__t0).toFixed(0)}ms`);
-    // Every CLI call here is a launcher plus the native CLI, and on a loaded
-    // Windows runner each launch costs more than every record it reads, so the
-    // copies come from the CLI-written lines rather than another `history show`.
+    // Each CLI call is a Bun launcher plus the native CLI, and on a loaded runner
+    // a launch costs more than every record the CLI reads. This test drives only
+    // the three calls its contract needs: the seed run and the two page lists.
+    // The copies come from the CLI-written lines rather than another
+    // `history show`; selecting a listed session is covered by the discovery
+    // test above.
     const report = await seed(
       "page-template",
       '{"result":"Page template answer","session_id":"native-page-template"}',
       { prompt: "summary pages must not include this detail prompt" },
     );
-    __m("seed");
     const { historyFile, lines } = await readFixtureHistoryFile(historyDir, report);
-    __m("read");
     await Promise.all(
       Array.from({ length: 26 }, async (_, index) => {
         const session = `page-session-${String(index).padStart(2, "0")}`;
@@ -834,7 +838,6 @@ const __t0=performance.now(); const __m=(l:string)=>console.error(`PHASE ${l} ${
       }),
     );
 
-    __m("writes");
     const first = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
     if (!first.ok || first.data.kind !== "list") throw new Error(JSON.stringify(first));
     expect(first.data.conversations).toHaveLength(25);
@@ -844,7 +847,6 @@ const __t0=performance.now(); const __m=(l:string)=>console.error(`PHASE ${l} ${
       "summary pages must not include this detail prompt",
     );
 
-    __m("list1");
     await writeFile(
       resolve(dirname(historyFile), "inserted-after-first-page.jsonl"),
       `${copiedSessionLines(lines, {
@@ -861,7 +863,6 @@ const __t0=performance.now(); const __m=(l:string)=>console.error(`PHASE ${l} ${
       { cursor: first.data.nextCursor ?? undefined, kind: "list" },
       TEST_AUTHORIZATION,
     );
-    __m("list2");
     if (!second.ok || second.data.kind !== "list") throw new Error(JSON.stringify(second));
     expect(second.data).toMatchObject({ nextCursor: null, totalCount: 28 });
     expect(second.data.conversations).toHaveLength(2);
