@@ -54,14 +54,17 @@ const props = {
 test("focus opens a collapsed later turn, scrolls locally, moves and recovers from missing targets", async () => {
   const user = userEvent.setup();
   const scrolled: Element[] = [];
-  // Match the prototype used by the other scroll journeys, which may own this method.
-  scrollSpy = spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(function (
+  // Records which container placement scrolls; happy-dom has no layout to scroll.
+  scrollSpy = spyOn(HTMLElement.prototype, "scrollTo").mockImplementation(function (
     this: HTMLElement,
   ) {
     scrolled.push(this);
   });
+  // happy-dom loads no Tailwind; this stands in for the `overflow-y-auto` the turns region has.
+  const scrollable = '[aria-label="Conversation turns"] { overflow-y: auto; }';
   const { rerender } = render(
     <div>
+      <style>{scrollable}</style>
       <ConversationView {...props} />
       <ConversationView {...props} />
     </div>,
@@ -73,6 +76,7 @@ test("focus opens a collapsed later turn, scrolls locally, moves and recovers fr
   expect(within(first).getByRole("button", { name: "Expand turn later" })).toBeTruthy();
   rerender(
     <div>
+      <style>{scrollable}</style>
       <ConversationView
         {...props}
         focus={{ turnId: "later", toolCallId: "write", eventIndex: 2 }}
@@ -87,11 +91,15 @@ test("focus opens a collapsed later turn, scrolls locally, moves and recovers fr
   expect(
     within(turn).getByRole("button", { name: "Write tool details" }).getAttribute("aria-expanded"),
   ).toBe("true");
-  expect(scrolled.includes(turn)).toBe(true);
-  expect(scrolled.includes(write)).toBe(true);
+  const turns = (view: HTMLElement) =>
+    within(view).getByRole("region", { name: "Conversation turns" });
+  // An identity check: `toContain` deep-compares elements, which takes minutes over a DOM tree.
+  expect(scrolled.includes(turns(first))).toBe(true);
+  expect(scrolled.includes(turns(second))).toBe(false);
   expect(second.querySelector('[aria-current="true"]')).toBeNull();
   rerender(
     <div>
+      <style>{scrollable}</style>
       <ConversationView {...props} focus={{ turnId: "early", eventIndex: 2 }} />
       <ConversationView {...props} />
     </div>,

@@ -1,9 +1,10 @@
 "use client";
 
 import { ArrowLeft } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useRef } from "react";
+import { memo, type ReactNode, useCallback, useEffect, useMemo, useRef } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
+import { usePinnedOffset } from "../hooks/use-focus-placement";
 import { useInfiniteScroll } from "../hooks/use-infinite-scroll";
 import { useTimelineScrollSync } from "../hooks/use-timeline-scroll-sync";
 import type { Conversation, ConversationFocus } from "../presentational-types";
@@ -26,6 +27,20 @@ function ConversationTitle({ name }: { name: string }) {
     >
       {name}
     </h1>
+  );
+}
+
+/** The timeline pinned over the turns; it renders before them so focus placement clears it. */
+function PinnedTimeline({ children }: { children: ReactNode }) {
+  const pinned = useRef<HTMLDivElement>(null);
+  usePinnedOffset(pinned);
+  return (
+    <div
+      className="sticky top-0 z-1 mx-auto mb-8 max-w-[850px] bg-background/95 py-2 backdrop-blur"
+      ref={pinned}
+    >
+      {children}
+    </div>
   );
 }
 
@@ -129,14 +144,14 @@ export function ConversationView({
         className="min-h-0 overflow-y-auto px-[clamp(16px,7vw,94px)] pb-14 pt-9"
         ref={setScrollContainer}
       >
-        <div className="sticky top-0 z-1 mx-auto mb-8 max-w-[850px] bg-background/95 py-2 backdrop-blur">
+        <PinnedTimeline>
           <ConversationTimeline
             {...(scrollSync.cursor === undefined ? {} : { cursor: scrollSync.cursor })}
             {...(focus ? { focus } : {})}
             onSelectTurn={scrollSync.scrollTo}
             turns={conversation.turns}
           />
-        </div>
+        </PinnedTimeline>
         <p
           aria-label={`${conversation.turns.length} of ${totalTurnCount} turns loaded`}
           className="mx-auto mb-5 max-w-[850px] text-right text-[10px] text-subtle"

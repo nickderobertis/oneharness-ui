@@ -78,9 +78,14 @@ export interface ConversationSummary {
   turnCount: number;
 }
 
-/** A location within one conversation; toolCallId takes precedence over eventIndex. */
+/**
+ * A location within one conversation. `toolCallId` takes precedence over `eventIndex`, which takes
+ * precedence over `part`; with none of them, or one naming nothing in the turn, the turn is focused.
+ */
 export interface ConversationFocus {
   turnId: string;
   toolCallId?: string;
   eventIndex?: number;
+  /** A part of the turn that is not an indexed item. */
+  part?: "prompt" | "answer" | "end";
 }

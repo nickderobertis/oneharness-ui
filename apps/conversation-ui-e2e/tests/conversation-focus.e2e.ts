@@ -1,14 +1,22 @@
 import { expect, type Locator, type Page, test } from "@playwright/test";
+import { z } from "zod";
 import { harnessOrigin } from "../harness/configuration.ts";
 import {
   backgroundBehind,
+  composite,
   contrastRatio,
   paintedColor,
   parseColor,
   type Rgba,
   recordReading,
 } from "./support/contrast.ts";
-import { type FocusKind, focusEventIndex, focusedTurnIds } from "./support/fixtures.ts";
+import {
+  type FocusKind,
+  focusEventIndex,
+  focusedTurnIds,
+  type PinnedFocusName,
+  pinnedFocuses,
+} from "./support/fixtures.ts";
 
 type Theme = "dark" | "light";
 type View = "conversation" | "turn-list";
@@ -151,6 +159,7 @@ async function highlight(element: Locator) {
     return {
       background: style.backgroundColor,
       outlineColor: style.outlineColor,
+      outlineOffset: style.outlineOffset,
       outlineStyle: style.outlineStyle,
       outlineWidth: style.outlineWidth,
       primary: getComputedStyle(document.documentElement).getPropertyValue("--primary"),
@@ -171,6 +180,8 @@ async function expectHighlightIn(element: Locator, expected: string) {
   expectSameColor(token, parseColor(expected));
   expect(style.outlineStyle).toBe("solid");
   expect(style.outlineWidth).toBe("2px");
+  // Inset by its own width, so the indicator lies wholly inside the element's box.
+  expect(style.outlineOffset).toBe("-2px");
   expectSameColor(paintedColor(style.outlineColor, "focus indicator"), token);
   const tint = parseColor(style.background);
   if (tint.alpha > 0) {
@@ -178,6 +189,15 @@ async function expectHighlightIn(element: Locator, expected: string) {
     expect(tint.alpha).toBeLessThanOrEqual(0.15);
   }
   return style;
+}
+
+/** Nothing is painted over the element's top edge: the point just inside it hits the element. */
+async function expectUncovered(element: Locator) {
+  const hitsItself = await element.evaluate((node) => {
+    const box = node.getBoundingClientRect();
+    return node.contains(document.elementFromPoint(box.left + box.width / 2, box.top + 1));
+  });
+  expect(hitsItself, "the element's top edge is not painted over").toBe(true);
 }
 
 async function expectWithin(element: Locator, container: Locator) {
@@ -210,6 +230,8 @@ for (const view of ["turn-list", "conversation"] as const) {
         await list.focusOn(kind);
         const current = await expectCurrent(page, list.turn(kind), kind);
         await expectWithin(current, list.container);
+        // The conversation view's own sticky timeline must not cover the item placed below it.
+        await expectUncovered(current);
         const focusedStructure = await structure(list.turn(kind));
         expectTurnStructure(focusedStructure, focusedTurnIds[kind]);
         expect(focusedStructure).toEqual(
@@ -254,7 +276,10 @@ for (const theme of ["light", "dark"] as const) {
         await expectWithin(current, conversation.container);
         const style = await expectHighlightIn(current, (await highlight(current)).primary);
         const foreground = paintedColor(style.outlineColor, "focus indicator");
-        const background = await backgroundBehind(current);
+        // The inset indicator is painted over the element's own tint, on top of the card.
+        const tint = parseColor(style.background);
+        const behind = await backgroundBehind(current);
+        const background = tint.alpha > 0 ? composite(tint, behind) : behind;
         await recordReading({
           background,
           browser: test.info().project.name,
@@ -266,5 +291,238 @@ for (const theme of ["light", "dark"] as const) {
         });
       });
     }
+  });
+}
+
+/** One animation frame of the pinned list: its scroll position and the element marked current. */
+const frameSchema = z.object({
+  marked: z.number().int(),
+  scrollTop: z.number().nullable(),
+  target: z.string().nullable(),
+  time: z.number(),
+  top: z.number().nullable(),
+});
+type Frame = z.infer<typeof frameSchema>;
+
+/**
+ * Installed before the page's own scripts: records every animation frame from the document's
+ * start, so the first frame painted with a focus is in the record. A marked element is named
+ * `<turn id>|<part, tool call id or event index>`, or `<turn id>|turn` for the article itself.
+ */
+function recordFrames() {
+  const frames: unknown[] = [];
+  Reflect.set(window, "focusFrames", frames);
+  const name = (element: Element) => {
+    const turn = element.closest("article")?.getAttribute("data-turn-id") ?? "none";
+    const item =
+      element.getAttribute("data-turn-part") ??
+      element.getAttribute("data-tool-call-id") ??
+      element.getAttribute("data-event-index") ??
+      "turn";
+    return `${turn}|${item}`;
+  };
+  const step = (time: number) => {
+    const list = document.querySelector('[aria-label="Pinned turn list"]');
+    const marked = list?.querySelectorAll('[aria-current="true"]') ?? [];
+    const element = marked[0];
+    frames.push({
+      marked: marked.length,
+      scrollTop: list?.scrollTop ?? null,
+      target: element ? name(element) : null,
+      time,
+      top: element ? element.getBoundingClientRect().top : null,
+    });
+    requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+/** The frames recorded from `since` on; only those cross from the page. */
+async function recordedFrames(page: Page, since: number): Promise<Frame[]> {
+  const frames = await page.evaluate((start) => {
+    const recorded: unknown = Reflect.get(window, "focusFrames");
+    return Array.isArray(recorded) ? recorded.slice(start) : null;
+  }, since);
+  return z.array(frameSchema).parse(frames);
+}
+
+async function frameCount(page: Page): Promise<number> {
+  return z
+    .number()
+    .parse(await page.evaluate(() => Reflect.get(window, "focusFrames")?.length ?? 0));
+}
+
+function targetName(name: PinnedFocusName): string {
+  const focus: { turnId: string; part?: string; toolCallId?: string; eventIndex?: number } =
+    pinnedFocuses[name];
+  return `${focus.turnId}|${focus.part ?? focus.toolCallId ?? focus.eventIndex ?? "turn"}`;
+}
+
+const pinnedUrl = `${harnessOrigin}/?${new URLSearchParams({ theme: "light", view: "pinned-list" })}`;
+
+async function openPinned(page: Page, name: PinnedFocusName) {
+  await page.addInitScript(recordFrames);
+  await page.goto(`${pinnedUrl}#${name}`);
+  const list = page.getByRole("region", { name: "Pinned turn list", exact: true });
+  return { list, pinned: list.getByRole("complementary", { name: "Pinned summary" }) };
+}
+
+/** The list's one marked element is `name`'s target, in the turn that focus names. */
+async function expectMarked(list: Locator, name: PinnedFocusName): Promise<Locator> {
+  const focus = pinnedFocuses[name];
+  const marked = list.locator('[aria-current="true"]');
+  await expect(marked).toHaveCount(1);
+  const turn = list.getByRole("article", { name: `Turn ${focus.turnId} from claude-code` });
+  await expect(turn.locator('[aria-current="true"]')).toHaveCount(1);
+  const [attribute, value] =
+    "part" in focus
+      ? ["data-turn-part", focus.part]
+      : "toolCallId" in focus
+        ? ["data-tool-call-id", focus.toolCallId]
+        : ["data-event-index", String(focus.eventIndex)];
+  await expect(marked).toHaveAttribute(attribute, value);
+  return marked;
+}
+
+/** A focused reasoning or tool item is open, by its own trigger. */
+async function expectOpen(marked: Locator, name: PinnedFocusName) {
+  const focus = pinnedFocuses[name];
+  if ("part" in focus || ("eventIndex" in focus && focus.eventIndex === focusEventIndex.message))
+    return;
+  const trigger = "toolCallId" in focus ? "Bash tool details" : "Reasoning";
+  await expect(marked.getByRole("button", { name: trigger })).toHaveAttribute(
+    "aria-expanded",
+    "true",
+  );
+}
+
+/** Where the marked element and the pinned summary sit in the list's visible area, unscrolled. */
+async function placement(list: Locator) {
+  return await list.evaluate((container) => {
+    const element = container.querySelector('[aria-current="true"]');
+    const sticky = container.querySelector('[aria-label="Pinned summary"]');
+    if (!element || !sticky) throw new Error("expected a marked element under a pinned summary");
+    const box = element.getBoundingClientRect();
+    const visibleTop = container.getBoundingClientRect().top + container.clientTop;
+    // One pixel inside the top edge lies on the inset outline's 2px band.
+    const hit = document.elementFromPoint(box.left + box.width / 2, box.top + 1);
+    const style = getComputedStyle(element);
+    const outline = Number.parseFloat(style.outlineWidth);
+    return {
+      highlightInsideBox:
+        style.outlineStyle === "solid" &&
+        outline > 0 &&
+        Number.parseFloat(style.outlineOffset) <= -outline,
+      bottom: box.bottom,
+      clientHeight: container.clientHeight,
+      scrollTop: container.scrollTop,
+      stickyBottom: sticky.getBoundingClientRect().bottom,
+      topHitsElement: element.contains(hit),
+      top: box.top,
+      visibleBottom: visibleTop + container.clientHeight,
+      visibleTop,
+    };
+  });
+}
+
+/**
+ * The first frame painted with `name` marked already has it where it settles, and its top holds
+ * still for the two seconds recorded after it. The scroll position is recorded beside it but may
+ * move: content above the item settling (a web font arriving) is absorbed by scrolling.
+ */
+async function expectPlacedFromFirstFrame(page: Page, name: PinnedFocusName, since: number) {
+  await page.waitForTimeout(2_000);
+  const frames = await recordedFrames(page, since);
+  const first = frames.findIndex((frame) => frame.target === targetName(name));
+  expect(first, `a recorded frame shows ${name} marked`).toBeGreaterThanOrEqual(0);
+  const settled = frames.slice(first);
+  const placed = settled.at(-1);
+  if (!placed?.top) throw new Error("expected a placed frame");
+  expect(placed.time - (settled[0]?.time ?? placed.time)).toBeGreaterThanOrEqual(1_900);
+  for (const [offset, frame] of settled.entries()) {
+    const at = `frame ${offset} after ${name} was first painted`;
+    expect(frame.target, at).toBe(targetName(name));
+    expect(frame.marked, at).toBe(1);
+    expect(Math.abs((frame.top ?? Number.NaN) - placed.top), at).toBeLessThanOrEqual(1);
+    expect(frame.scrollTop, at).not.toBeNull();
+  }
+  return placed;
+}
+
+const fittingFocuses = ["prompt", "answer", "end", "message", "reasoning", "tool"] as const;
+
+for (const name of fittingFocuses) {
+  test(`a list pinned at its top opens on a ${name} focus below the fold wholly in view under the pin`, async ({
+    page,
+  }) => {
+    const { list } = await openPinned(page, name);
+    const marked = await expectMarked(list, name);
+    await expectOpen(marked, name);
+    await expectPlacedFromFirstFrame(page, name, 0);
+    const box = await placement(list);
+    // The package scrolled many screens down to reach it; the journey scrolled nothing.
+    expect(box.scrollTop).toBeGreaterThan(10 * box.clientHeight);
+    expect(box.top).toBeGreaterThanOrEqual(box.stickyBottom - 0.5);
+    expect(box.top - box.stickyBottom).toBeLessThanOrEqual(1);
+    expect(box.top).toBeGreaterThanOrEqual(box.visibleTop);
+    expect(box.bottom).toBeLessThanOrEqual(box.visibleBottom + 0.5);
+    expect(box.topHitsElement, "nothing is painted over its top edge").toBe(true);
+    expect(box.highlightInsideBox, "its highlight is drawn within its visible box").toBe(true);
+  });
+}
+
+for (const name of ["tall-prompt", "tall-reasoning"] as const) {
+  test(`a list pinned at its top opens on a ${name} focus with its top at the pin`, async ({
+    page,
+  }) => {
+    const { list } = await openPinned(page, name);
+    const marked = await expectMarked(list, name);
+    await expectOpen(marked, name);
+    await expectPlacedFromFirstFrame(page, name, 0);
+    const box = await placement(list);
+    expect(Math.abs(box.top - box.stickyBottom)).toBeLessThanOrEqual(1);
+    expect(box.bottom).toBeGreaterThan(box.visibleBottom);
+    expect(box.topHitsElement, "nothing is painted over its top edge").toBe(true);
+    expect(box.highlightInsideBox, "its highlight is drawn within its visible box").toBe(true);
+  });
+}
+
+for (const name of ["collapsed-turn-tool", "collapsed-reasoning"] as const) {
+  test(`a mounted list scrolled elsewhere moves its focus to the ${name} item, open and placed from its first frame`, async ({
+    page,
+  }) => {
+    const { list } = await openPinned(page, "tool");
+    await expectMarked(list, "tool");
+    // The reader collapses the turn the tool focus moves into, then scrolls somewhere else.
+    await list.getByRole("button", { name: "Collapse turn turn-60" }).click();
+    await expect(list.getByRole("button", { name: "Expand turn turn-60" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    await list.hover();
+    await page.mouse.wheel(0, 2_000);
+    const reasoningTurn = list.getByRole("article", { name: "Turn turn-80 from claude-code" });
+    await expect(reasoningTurn.getByRole("button", { name: "Reasoning" })).toHaveAttribute(
+      "aria-expanded",
+      "false",
+    );
+    const since = await frameCount(page);
+    // A consumer re-renders with the new focus; the harness takes it from the hash in place.
+    await page.goto(`${pinnedUrl}#${name}`);
+    const marked = await expectMarked(list, name);
+    await expectOpen(marked, name);
+    // Focus opens the collapsed turn it moves into; a turn it does not name stays as the reader left it.
+    const turn60 = name === "collapsed-turn-tool" ? "Collapse turn turn-60" : "Expand turn turn-60";
+    await expect(list.getByRole("button", { name: turn60 })).toHaveAttribute(
+      "aria-expanded",
+      String(name === "collapsed-turn-tool"),
+    );
+    const placed = await expectPlacedFromFirstFrame(page, name, since);
+    const box = await placement(list);
+    expect(Math.abs(box.top - box.stickyBottom)).toBeLessThanOrEqual(1);
+    expect(Math.abs((placed.top ?? Number.NaN) - box.top)).toBeLessThanOrEqual(1);
+    expect(box.bottom).toBeLessThanOrEqual(box.visibleBottom + 0.5);
+    expect(box.topHitsElement, "nothing is painted over its top edge").toBe(true);
+    expect(box.highlightInsideBox, "its highlight is drawn within its visible box").toBe(true);
   });
 }

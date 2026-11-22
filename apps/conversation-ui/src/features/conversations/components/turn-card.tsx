@@ -1,7 +1,7 @@
 "use client";
 
 import { Terminal } from "lucide-react";
-import { type ReactNode, useEffect, useRef, useState } from "react";
+import { type ReactNode, useRef, useState } from "react";
 import {
   Accordion,
   AccordionContent,
@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/accordion";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/components/utils";
+import { useFocusPlacement } from "../hooks/use-focus-placement";
 import type { ConversationFocus, ConversationTurn } from "../presentational-types";
 import { pairToolEvents, type ToolInvocation } from "../tool-invocations";
 import { compactJsonText, JsonCode, parseJsonText } from "./json-code";
@@ -176,6 +177,16 @@ function ToolInvocationBlock({
   );
 }
 
+const usageKeys = [
+  "inputTokens",
+  "outputTokens",
+  "cacheReadTokens",
+  "cacheWriteTokens",
+  "costUsd",
+] as const satisfies ReadonlyArray<keyof Turn["usage"]>;
+
+const hasUsage = (usage: Turn["usage"]) => usageKeys.some((key) => Object.hasOwn(usage, key));
+
 function Usage({ usage }: { usage: Turn["usage"] }) {
   const entries: ReadonlyArray<readonly [string, keyof Turn["usage"], number | null | undefined]> =
     [
@@ -208,16 +219,25 @@ function Usage({ usage }: { usage: Turn["usage"] }) {
 function ReasoningBlock({
   current,
   eventIndex,
+  onOpenChange,
+  open,
   text,
   value,
 }: {
   current: boolean;
   eventIndex: number;
+  onOpenChange: (open: boolean) => void;
+  open: boolean;
   text: string;
   value: string;
 }) {
   return (
-    <Accordion collapsible type="single">
+    <Accordion
+      collapsible
+      onValueChange={(next) => onOpenChange(next === value)}
+      type="single"
+      value={open ? value : ""}
+    >
       <AccordionItem
         aria-current={current ? "true" : undefined}
         className={cn(
@@ -240,6 +260,50 @@ function ReasoningBlock({
 
 /** The focused item's key: a paired tool invocation's id, or `agent-<index>` for its text. */
 const agentEventKey = (index: number) => `agent-${index}`;
+/** A streamed reasoning item's key among the turn's open items. */
+const reasoningKey = (index: number) => `reasoning-${index}`;
+type TurnPart = NonNullable<ConversationFocus["part"]>;
+
+/** The element a focus names in its turn, decided by `toolCallId`, then `eventIndex`, then `part`. */
+type FocusTarget =
+  | { key: string; kind: "item"; openKey: string | undefined }
+  | { kind: "part"; part: TurnPart }
+  | { kind: "turn" };
+
+function resolveFocus(
+  turn: Turn,
+  focus: ConversationFocus,
+  invocations: readonly ToolInvocation[],
+  hasEnd: boolean,
+): FocusTarget {
+  const item = (key: string, openKey?: string): FocusTarget => ({ key, kind: "item", openKey });
+  if (focus.toolCallId !== undefined) {
+    const tool = invocations.find((invocation) => invocation.toolCallId === focus.toolCallId);
+    return tool ? item(tool.id, tool.id) : { kind: "turn" };
+  }
+  if (focus.eventIndex !== undefined) {
+    const index = focus.eventIndex;
+    const tool = invocations.find((invocation) => invocation.eventIndices.includes(index));
+    if (tool) return item(tool.id, tool.id);
+    const event = turn.agentEvents?.find((agentEvent) => agentEvent.index === index);
+    if (!event) return { kind: "turn" };
+    return item(agentEventKey(index), event.kind === "reasoning" ? reasoningKey(index) : undefined);
+  }
+  if (focus.part === "end" && !hasEnd) return { kind: "turn" };
+  return focus.part ? { kind: "part", part: focus.part } : { kind: "turn" };
+}
+
+/** The open items a focus adds, so a focused item is open on the render that carries it. */
+function withFocusOpen(open: readonly string[], target: FocusTarget | undefined): string[] {
+  const key = target?.kind === "item" ? target.openKey : undefined;
+  return key === undefined || open.includes(key) ? [...open] : [...open, key];
+}
+
+/** The mark a focused part carries, beside the `data-turn-part` every part carries. */
+function partMark(target: FocusTarget | undefined, part: TurnPart) {
+  const current = target?.kind === "part" && target.part === part;
+  return { current, props: { "aria-current": current ? ("true" as const) : undefined } };
+}
 
 type ActivityEntry =
   | { at: number; event: NonNullable<Turn["agentEvents"]>[number]; type: "agent" }
@@ -268,21 +332,25 @@ function activityStream(
 function AgentActivity({
   current,
   entries,
-  onOpenToolsChange,
-  openTools,
+  onOpenItemsChange,
+  openItems,
 }: {
   current: string | undefined;
   entries: readonly ActivityEntry[];
-  onOpenToolsChange: (value: string[]) => void;
-  openTools: string[];
+  onOpenItemsChange: (value: string[]) => void;
+  openItems: string[];
 }) {
+  const setReasoningOpen = (value: string, open: boolean) =>
+    onOpenItemsChange(
+      open ? [...openItems, value] : openItems.filter((openValue) => openValue !== value),
+    );
   return (
     <section aria-label="Agent activity" className="my-3">
       <Accordion
         className="space-y-2"
-        onValueChange={onOpenToolsChange}
+        onValueChange={onOpenItemsChange}
         type="multiple"
-        value={openTools}
+        value={openItems}
       >
         {entries.map((entry) =>
           entry.type === "tool" ? (
@@ -295,9 +363,11 @@ function AgentActivity({
             <ReasoningBlock
               current={current === agentEventKey(entry.event.index)}
               eventIndex={entry.event.index}
-              key={`reasoning-${entry.event.index}`}
+              key={reasoningKey(entry.event.index)}
+              onOpenChange={(open) => setReasoningOpen(reasoningKey(entry.event.index), open)}
+              open={openItems.includes(reasoningKey(entry.event.index))}
               text={entry.event.text}
-              value={`reasoning-${entry.event.index}`}
+              value={reasoningKey(entry.event.index)}
             />
           ) : (
             <div
@@ -335,43 +405,28 @@ export function TurnCard({
   turn: Turn;
 }) {
   const root = useRef<HTMLElement>(null);
-  const [collapsed, setCollapsed] = useState(false);
-  const [openTools, setOpenTools] = useState<string[]>([]);
-  const focused = focus?.turnId === turn.id;
-  const target = focused
-    ? pairToolEvents(turn.tools).find((invocation) =>
-        focus.toolCallId !== undefined
-          ? invocation.toolCallId === focus.toolCallId
-          : focus.eventIndex !== undefined && invocation.eventIndices.includes(focus.eventIndex),
-      )
-    : undefined;
-  const targetId = target?.id;
-  const agentTarget =
-    focused && !target && focus.toolCallId === undefined && focus.eventIndex !== undefined
-      ? turn.agentEvents?.find((event) => event.index === focus.eventIndex)
-      : undefined;
-  const currentKey = targetId ?? (agentTarget ? agentEventKey(agentTarget.index) : undefined);
-  const focusKey = focused ? JSON.stringify(focus) : undefined;
-  useEffect(() => {
-    if (!focusKey) return;
-    setCollapsed(false);
-    if (targetId)
-      setOpenTools((values) => (values.includes(targetId) ? values : [...values, targetId]));
-  }, [focusKey, targetId]);
-  useEffect(() => {
-    if (!focusKey || collapsed || (targetId && !openTools.includes(targetId))) return;
-    const element = root.current;
-    const reveal = () => {
-      element?.scrollIntoView?.({ block: "nearest" });
-      element?.querySelector('[aria-current="true"]')?.scrollIntoView?.({ block: "nearest" });
-    };
-    reveal();
-    // An opened tool call's details animate to full height after this runs; reveal it again then.
-    element?.addEventListener("animationend", reveal, { once: true });
-    return () => element?.removeEventListener("animationend", reveal);
-  }, [focusKey, collapsed, openTools, targetId]);
-  const hasUnknown = Object.keys(turn.unknown).length > 0;
   const invocations = pairToolEvents(turn.tools);
+  const hasEnd = Boolean(turn.failureKind) || hasUsage(turn.usage);
+  const focused = focus?.turnId === turn.id;
+  const target = focused ? resolveFocus(turn, focus, invocations, hasEnd) : undefined;
+  const focusKey = focused ? JSON.stringify(focus) : undefined;
+  const [collapsed, setCollapsed] = useState(false);
+  const [openItems, setOpenItems] = useState(() => withFocusOpen([], target));
+  // A new focus opens its item and its turn during this render, before anything is painted.
+  const [openedFor, setOpenedFor] = useState(focusKey);
+  if (openedFor !== focusKey) {
+    setOpenedFor(focusKey);
+    if (target) {
+      setCollapsed(false);
+      setOpenItems((open) => withFocusOpen(open, target));
+    }
+  }
+  useFocusPlacement(root, focusKey);
+  const currentKey = target?.kind === "item" ? target.key : undefined;
+  const prompt = partMark(target, "prompt");
+  const answer = partMark(target, "answer");
+  const end = partMark(target, "end");
+  const hasUnknown = Object.keys(turn.unknown).length > 0;
   const activity = turn.agentEvents?.length ? activityStream(turn.agentEvents, invocations) : null;
   const streamReasons = activity?.some(
     (entry) => entry.type === "agent" && entry.event.kind === "reasoning",
@@ -381,9 +436,12 @@ export function TurnCard({
     <article
       ref={root}
       data-turn-id={turn.id}
-      aria-current={focused && !currentKey ? "true" : undefined}
+      aria-current={target?.kind === "turn" ? "true" : undefined}
       aria-label={`Turn ${turn.id} from ${turn.harness}`}
-      className="mx-auto mb-10.5 max-w-[850px]"
+      className={cn(
+        "mx-auto mb-10.5 max-w-[850px]",
+        target?.kind === "turn" && focusHighlightClassName,
+      )}
     >
       <button
         className="mb-2 text-[10px] text-muted-foreground hover:text-foreground"
@@ -395,7 +453,15 @@ export function TurnCard({
       </button>
       <div hidden={collapsed}>
         <Message from="user">
-          <MessageContent className="mb-8 ml-auto max-w-[min(680px,88%)] rounded-[22px_22px_5px_22px] border bg-popover px-5 py-4.5">
+          <MessageContent
+            {...prompt.props}
+            className={cn(
+              "mb-8 ml-auto max-w-[min(680px,88%)] rounded-[22px_22px_5px_22px] border",
+              prompt.current ? focusHighlightClassName : "bg-popover",
+              "px-5 py-4.5",
+            )}
+            data-turn-part="prompt"
+          >
             <div className="text-[10px] font-bold uppercase tracking-[.08em] text-subtle">You</div>
             {inFlight && !turn.user ? (
               <p className="text-[13px] italic text-muted-foreground">
@@ -438,20 +504,20 @@ export function TurnCard({
               <AgentActivity
                 current={currentKey}
                 entries={activity}
-                onOpenToolsChange={setOpenTools}
-                openTools={openTools}
+                onOpenItemsChange={setOpenItems}
+                openItems={openItems}
               />
             ) : invocations.length > 0 ? (
               <section aria-label="Tool calls" className="my-3">
                 <Accordion
                   className="space-y-1"
                   type="multiple"
-                  value={openTools}
-                  onValueChange={setOpenTools}
+                  value={openItems}
+                  onValueChange={setOpenItems}
                 >
                   {invocations.map((invocation) => (
                     <ToolInvocationBlock
-                      current={target?.id === invocation.id}
+                      current={currentKey === invocation.id}
                       invocation={invocation}
                       key={invocation.id}
                     />
@@ -459,27 +525,41 @@ export function TurnCard({
                 </Accordion>
               </section>
             ) : null}
-            {turn.assistant ? (
-              <MessageResponse label="Assistant message">{turn.assistant}</MessageResponse>
-            ) : inFlight ? (
-              <p className="text-[13px] italic text-muted-foreground" role="status">
-                Still running. Its final answer appears when the run finishes.
-              </p>
-            ) : (
-              <p className="text-[13px] italic text-muted-foreground">
-                No assistant text was captured for this run.
-              </p>
-            )}
-            {turn.failureKind ? (
-              <p
-                aria-label={`Failure: ${turn.failureKind}`}
-                className="border-l-2 border-destructive pl-2.5 text-xs text-destructive"
-                role="note"
+            <div
+              {...answer.props}
+              className={answer.current ? focusHighlightClassName : undefined}
+              data-turn-part="answer"
+            >
+              {turn.assistant ? (
+                <MessageResponse label="Assistant message">{turn.assistant}</MessageResponse>
+              ) : inFlight ? (
+                <p className="text-[13px] italic text-muted-foreground" role="status">
+                  Still running. Its final answer appears when the run finishes.
+                </p>
+              ) : (
+                <p className="text-[13px] italic text-muted-foreground">
+                  No assistant text was captured for this run.
+                </p>
+              )}
+            </div>
+            {hasEnd ? (
+              <div
+                {...end.props}
+                className={end.current ? focusHighlightClassName : undefined}
+                data-turn-part="end"
               >
-                Failure: {turn.failureKind}
-              </p>
+                {turn.failureKind ? (
+                  <p
+                    aria-label={`Failure: ${turn.failureKind}`}
+                    className="border-l-2 border-destructive pl-2.5 text-xs text-destructive"
+                    role="note"
+                  >
+                    Failure: {turn.failureKind}
+                  </p>
+                ) : null}
+                <Usage usage={turn.usage} />
+              </div>
             ) : null}
-            <Usage usage={turn.usage} />
             {hasUnknown ? (
               <Accordion className="mt-2.5" collapsible type="single">
                 <AccordionItem className="rounded-[10px] border bg-card px-3" value="unknown">
