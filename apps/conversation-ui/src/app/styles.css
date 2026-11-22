@@ -185,6 +185,16 @@
     outline-offset: 2px;
     background-color: color-mix(in srgb, var(--conversation-focus-highlight) 10%, transparent);
   }
+  /* Focus placement puts the focused element's top this far below its scroll container's visible
+     top: a consumer sets `--conversation-focus-offset` to what it pins there, and ConversationView
+     adds its own sticky timeline as `--conversation-pinned-offset`. */
+  [data-turn-id][aria-current="true"],
+  [data-turn-id] [aria-current="true"] {
+    scroll-margin-top: calc(
+      var(--conversation-focus-offset, 0px) +
+      var(--conversation-pinned-offset, 0px)
+    );
+  }
   .message-markdown {
     @apply mt-3 min-w-0 text-[15px];
   }
