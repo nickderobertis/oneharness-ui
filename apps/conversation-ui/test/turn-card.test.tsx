@@ -385,6 +385,8 @@ describe("TurnCard focus", () => {
       const element = current[0];
       if (!(element instanceof HTMLElement)) throw new Error("expected the marked element");
       expect(getComputedStyle(element).outlineStyle).toBe("solid");
+      // Drawn inside the element's box, so a pinned header flush with its top cannot hide it.
+      expect(getComputedStyle(element).outlineOffset).toBe("-2px");
       expect(plain).not.toBe("solid");
       const open = element.querySelector('[data-slot="accordion-trigger"]');
       if (attribute !== "data-turn-part" && value !== "3")

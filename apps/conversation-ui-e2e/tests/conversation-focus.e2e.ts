@@ -3,6 +3,7 @@ import { z } from "zod";
 import { harnessOrigin } from "../harness/configuration.ts";
 import {
   backgroundBehind,
+  composite,
   contrastRatio,
   paintedColor,
   parseColor,
@@ -158,6 +159,7 @@ async function highlight(element: Locator) {
     return {
       background: style.backgroundColor,
       outlineColor: style.outlineColor,
+      outlineOffset: style.outlineOffset,
       outlineStyle: style.outlineStyle,
       outlineWidth: style.outlineWidth,
       primary: getComputedStyle(document.documentElement).getPropertyValue("--primary"),
@@ -178,6 +180,8 @@ async function expectHighlightIn(element: Locator, expected: string) {
   expectSameColor(token, parseColor(expected));
   expect(style.outlineStyle).toBe("solid");
   expect(style.outlineWidth).toBe("2px");
+  // Inset by its own width, so the indicator lies wholly inside the element's box.
+  expect(style.outlineOffset).toBe("-2px");
   expectSameColor(paintedColor(style.outlineColor, "focus indicator"), token);
   const tint = parseColor(style.background);
   if (tint.alpha > 0) {
@@ -272,7 +276,10 @@ for (const theme of ["light", "dark"] as const) {
         await expectWithin(current, conversation.container);
         const style = await expectHighlightIn(current, (await highlight(current)).primary);
         const foreground = paintedColor(style.outlineColor, "focus indicator");
-        const background = await backgroundBehind(current);
+        // The inset indicator is painted over the element's own tint, on top of the card.
+        const tint = parseColor(style.background);
+        const behind = await backgroundBehind(current);
+        const background = tint.alpha > 0 ? composite(tint, behind) : behind;
         await recordReading({
           background,
           browser: test.info().project.name,
@@ -397,8 +404,15 @@ async function placement(list: Locator) {
     if (!element || !sticky) throw new Error("expected a marked element under a pinned summary");
     const box = element.getBoundingClientRect();
     const visibleTop = container.getBoundingClientRect().top + container.clientTop;
+    // One pixel inside the top edge lies on the inset outline's 2px band.
     const hit = document.elementFromPoint(box.left + box.width / 2, box.top + 1);
+    const style = getComputedStyle(element);
+    const outline = Number.parseFloat(style.outlineWidth);
     return {
+      highlightInsideBox:
+        style.outlineStyle === "solid" &&
+        outline > 0 &&
+        Number.parseFloat(style.outlineOffset) <= -outline,
       bottom: box.bottom,
       clientHeight: container.clientHeight,
       scrollTop: container.scrollTop,
@@ -453,6 +467,7 @@ for (const name of fittingFocuses) {
     expect(box.top).toBeGreaterThanOrEqual(box.visibleTop);
     expect(box.bottom).toBeLessThanOrEqual(box.visibleBottom + 0.5);
     expect(box.topHitsElement, "nothing is painted over its top edge").toBe(true);
+    expect(box.highlightInsideBox, "its highlight is drawn within its visible box").toBe(true);
   });
 }
 
@@ -468,6 +483,7 @@ for (const name of ["tall-prompt", "tall-reasoning"] as const) {
     expect(Math.abs(box.top - box.stickyBottom)).toBeLessThanOrEqual(1);
     expect(box.bottom).toBeGreaterThan(box.visibleBottom);
     expect(box.topHitsElement, "nothing is painted over its top edge").toBe(true);
+    expect(box.highlightInsideBox, "its highlight is drawn within its visible box").toBe(true);
   });
 }
 
@@ -507,5 +523,6 @@ for (const name of ["collapsed-turn-tool", "collapsed-reasoning"] as const) {
     expect(Math.abs((placed.top ?? Number.NaN) - box.top)).toBeLessThanOrEqual(1);
     expect(box.bottom).toBeLessThanOrEqual(box.visibleBottom + 0.5);
     expect(box.topHitsElement, "nothing is painted over its top edge").toBe(true);
+    expect(box.highlightInsideBox, "its highlight is drawn within its visible box").toBe(true);
   });
 }

@@ -180,9 +180,11 @@
 }
 
 @layer components {
+  /* Drawn inside the element's own box, so placing the box flush with a pinned header (or an
+     oversized item filling the view) still shows the whole highlight. */
   .conversation-focus-highlight {
     outline: 2px solid var(--conversation-focus-highlight);
-    outline-offset: 2px;
+    outline-offset: -2px;
     background-color: color-mix(in srgb, var(--conversation-focus-highlight) 10%, transparent);
   }
   /* Focus placement puts the focused element's top this far below its scroll container's visible
