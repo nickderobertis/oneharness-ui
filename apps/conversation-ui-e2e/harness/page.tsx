@@ -1,6 +1,7 @@
 import {
   type Conversation,
   type ConversationFocus,
+  ConversationTimeline,
   type ConversationTurn,
   ConversationView,
   Timeline,
@@ -14,9 +15,11 @@ import { z } from "zod";
 import {
   focusEventIndex,
   focusedTurnIds,
+  hostedTimelineFixture,
   type PinnedFocusName,
   pinnedFocuses,
   pinnedOffsetPx,
+  pinnedTimelineOffsetPx,
   pinnedTurnCount,
   tallTurnIds,
   timelineFixture,
@@ -25,12 +28,14 @@ import {
 
 const query = z
   .object({
+    component: z.enum(["conversation-timeline", "timeline"]).optional(),
     highlight: z
       .string()
       .regex(/^#[0-9a-f]{6}$/)
       .optional(),
+    pin: z.enum(["summary", "timeline"]).optional(),
     theme: z.enum(["dark", "light"]),
-    view: z.enum(["conversation", "pinned-list", "timeline", "turn-list"]),
+    view: z.enum(["conversation", "pinned-list", "scrolled-host", "timeline", "turn-list"]),
   })
   .parse(Object.fromEntries(new URLSearchParams(window.location.search)));
 
@@ -87,6 +92,11 @@ const pinnedTurns = Array.from({ length: pinnedTurnCount }, (_, index): Conversa
     };
   return entry;
 });
+/**
+ * The turns the pin's timeline card charts: those around the focuses it is opened on. Charting
+ * all of them leaves WebKit's sticky pin too costly to paint every frame for the journeys.
+ */
+const pinnedTimelineTurns = pinnedTurns.slice(145, 175);
 const focusKind = z.enum(["message", "reasoning", "tool"]).optional();
 const hashFocusKind = () => focusKind.parse(window.location.hash.slice(1) || undefined);
 
@@ -122,8 +132,11 @@ function usePinnedHashFocus(): ConversationFocus | undefined {
  */
 function PinnedList() {
   const focus = usePinnedHashFocus();
+  // With `pin=timeline` the pin is the conversation's timeline card, which marks the focus too.
+  const pinTimeline = query.pin === "timeline";
+  const pinHeight = pinTimeline ? pinnedTimelineOffsetPx : pinnedOffsetPx;
   // React's style type has no entry for custom properties, so the offset is cast in.
-  const offset = { "--conversation-focus-offset": `${pinnedOffsetPx}px` } as CSSProperties;
+  const offset = { "--conversation-focus-offset": `${pinHeight}px` } as CSSProperties;
   return (
     <section
       aria-label="Pinned turn list"
@@ -132,9 +145,17 @@ function PinnedList() {
       <aside
         aria-label="Pinned summary"
         className="border-b bg-background"
-        style={{ height: pinnedOffsetPx, position: "sticky", top: 0, zIndex: 1 }}
+        style={{ height: pinHeight, position: "sticky", top: 0, zIndex: 1 }}
       >
-        Pinned run summary
+        {pinTimeline ? (
+          <ConversationTimeline
+            onSelectTurn={() => undefined}
+            turns={pinnedTimelineTurns}
+            {...(focus ? { focus } : {})}
+          />
+        ) : (
+          "Pinned run summary"
+        )}
       </aside>
       <div style={{ padding: "0 24px" }}>
         {pinnedTurns.map((entry) => (
@@ -229,9 +250,62 @@ function TimelineHarness() {
   );
 }
 
+const hashSelection = () => window.location.hash.slice(1) || undefined;
+
+/** The timeline entry id the URL's hash names, e.g. `#ship`; a consumer changes it in place. */
+function HostedTimeline() {
+  const [selectedId, setSelectedId] = useState(hashSelection);
+  useEffect(() => {
+    const update = () => setSelectedId(hashSelection());
+    window.addEventListener("hashchange", update);
+    return () => window.removeEventListener("hashchange", update);
+  }, []);
+  return (
+    <Timeline
+      expanded
+      items={hostedTimelineFixture.items}
+      lanes={hostedTimelineFixture.lanes}
+      markers={hostedTimelineFixture.markers}
+      range={hostedTimelineFixture.range}
+      {...(selectedId ? { selectedId } : {})}
+    />
+  );
+}
+
+/** The conversation's timeline, focused on the item kind the URL's hash names. */
+function HostedConversationTimeline() {
+  const focus = useHashFocus();
+  return (
+    <ConversationTimeline
+      onSelectTurn={() => undefined}
+      turns={turns}
+      {...(focus ? { focus } : {})}
+    />
+  );
+}
+
+/**
+ * A consumer's container, scrolled both ways by the journey, holding a timeline well inside its
+ * scrolled content: `Timeline` by default, or `ConversationTimeline` with that `component`.
+ */
+function ScrolledHost() {
+  return (
+    <section aria-label="Timeline host" style={{ height: 360, overflow: "auto", width: 480 }}>
+      <div style={{ height: 1_600, paddingLeft: 600, paddingTop: 800, width: 1_400 }}>
+        {query.component === "conversation-timeline" ? (
+          <HostedConversationTimeline />
+        ) : (
+          <HostedTimeline />
+        )}
+      </div>
+    </section>
+  );
+}
+
 const views: Record<typeof query.view, () => ReactNode> = {
   conversation: ConversationHarness,
   "pinned-list": PinnedList,
+  "scrolled-host": ScrolledHost,
   timeline: TimelineHarness,
   "turn-list": TurnList,
 };

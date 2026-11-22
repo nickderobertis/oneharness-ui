@@ -41,7 +41,7 @@ describe("ConversationTimeline", () => {
   });
 });
 
-test("focus selects and scrolls the tool locally, including paired result indices", () => {
+test("focus selects the tool, including paired result indices, without scrolling outside the timeline", () => {
   const scrolled: Element[] = [];
   // Match the prototype used by the other scroll journeys, which may own this method.
   scrollSpy = spyOn(HTMLElement.prototype, "scrollIntoView").mockImplementation(function (
@@ -68,7 +68,8 @@ test("focus selects and scrolls the tool locally, including paired result indice
   const tool = screen.getByRole("button", { name: "Read, point event" });
   expect(tool.getAttribute("aria-current")).toBe("true");
   expect(tool.getAttribute("data-event-index")).toBe("0");
-  expect(scrolled.includes(tool)).toBe(true);
+  // Only the plot's own horizontal offset may move; nothing asks an ancestor to scroll.
+  expect(scrolled).toEqual([]);
   expect(screen.getAllByTestId("timeline-lane")).toHaveLength(2);
   rerender(
     <ConversationTimeline focus={{ turnId: turn.id }} onSelectTurn={() => {}} turns={turns} />,
