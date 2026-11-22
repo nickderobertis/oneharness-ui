@@ -14,6 +14,11 @@ import { z } from "zod";
 import {
   focusEventIndex,
   focusedTurnIds,
+  type PinnedFocusName,
+  pinnedFocuses,
+  pinnedOffsetPx,
+  pinnedTurnCount,
+  tallTurnIds,
   timelineFixture,
   turnCount,
 } from "../tests/support/fixtures.ts";
@@ -25,7 +30,7 @@ const query = z
       .regex(/^#[0-9a-f]{6}$/)
       .optional(),
     theme: z.enum(["dark", "light"]),
-    view: z.enum(["conversation", "timeline", "turn-list"]),
+    view: z.enum(["conversation", "pinned-list", "timeline", "turn-list"]),
   })
   .parse(Object.fromEntries(new URLSearchParams(window.location.search)));
 
@@ -65,6 +70,23 @@ function turn(index: number): ConversationTurn {
 }
 
 const turns = Array.from({ length: turnCount }, (_, index) => turn(index));
+const screens = (line: string) => Array.from({ length: 160 }, (_, at) => `${line} ${at}.`);
+/** The pinned list's turns, two of them with a prompt or a reasoning item of several screens. */
+const pinnedTurns = Array.from({ length: pinnedTurnCount }, (_, index): ConversationTurn => {
+  const entry = turn(index);
+  if (entry.id === tallTurnIds.prompt)
+    return { ...entry, user: screens("Read the long brief, paragraph").join("\n\n") };
+  if (entry.id === tallTurnIds.reasoning)
+    return {
+      ...entry,
+      agentEvents: entry.agentEvents?.map((event) =>
+        event.kind === "reasoning"
+          ? { ...event, text: screens("Weigh the next option, line").join("\n") }
+          : event,
+      ),
+    };
+  return entry;
+});
 const focusKind = z.enum(["message", "reasoning", "tool"]).optional();
 const hashFocusKind = () => focusKind.parse(window.location.hash.slice(1) || undefined);
 
@@ -78,6 +100,55 @@ function useHashFocus(): ConversationFocus | undefined {
   }, []);
   return kind ? { eventIndex: focusEventIndex[kind], turnId: focusedTurnIds[kind] } : undefined;
 }
+// `Object.keys` widens to string[]; the keys are exactly the fixture's focus names.
+const pinnedFocusName = z.enum(Object.keys(pinnedFocuses) as [PinnedFocusName]).optional();
+
+const hashPinnedFocusName = () => pinnedFocusName.parse(window.location.hash.slice(1) || undefined);
+
+/** The pinned list's focus, named by the URL's hash, e.g. `#tall-prompt`. */
+function usePinnedHashFocus(): ConversationFocus | undefined {
+  const [name, setName] = useState(hashPinnedFocusName);
+  useEffect(() => {
+    const update = () => setName(hashPinnedFocusName());
+    window.addEventListener("hashchange", update);
+    return () => window.removeEventListener("hashchange", update);
+  }, []);
+  return name ? pinnedFocuses[name] : undefined;
+}
+
+/**
+ * A consumer's scroll container that pins a summary over its top and tells the package how tall
+ * that is through `--conversation-focus-offset`.
+ */
+function PinnedList() {
+  const focus = usePinnedHashFocus();
+  // React's style type has no entry for custom properties, so the offset is cast in.
+  const offset = { "--conversation-focus-offset": `${pinnedOffsetPx}px` } as CSSProperties;
+  return (
+    <section
+      aria-label="Pinned turn list"
+      style={{ ...offset, height: "100vh", overflowY: "auto" }}
+    >
+      <aside
+        aria-label="Pinned summary"
+        className="border-b bg-background"
+        style={{ height: pinnedOffsetPx, position: "sticky", top: 0, zIndex: 1 }}
+      >
+        Pinned run summary
+      </aside>
+      <div style={{ padding: "0 24px" }}>
+        {pinnedTurns.map((entry) => (
+          <MemoizedTurnCard
+            key={entry.id}
+            turn={entry}
+            {...(focus && entry.id === focus.turnId ? { focus } : {})}
+          />
+        ))}
+      </div>
+    </section>
+  );
+}
+
 const conversation: Conversation = {
   canContinue: false,
   harnesses: ["claude-code"],
@@ -160,6 +231,7 @@ function TimelineHarness() {
 
 const views: Record<typeof query.view, () => ReactNode> = {
   conversation: ConversationHarness,
+  "pinned-list": PinnedList,
   timeline: TimelineHarness,
   "turn-list": TurnList,
 };

@@ -14,6 +14,29 @@ export const focusedTurnIds: Readonly<Record<FocusKind, string>> = {
   tool: "turn-170",
 };
 
+/** The pinned-list view: more turns than the fold by far, under a sticky summary this tall. */
+export const pinnedTurnCount = 220;
+export const pinnedOffsetPx = 96;
+/** Turns whose prompt, or whose reasoning item, runs to several screens. */
+export const tallTurnIds = { prompt: "turn-100", reasoning: "turn-110" } as const;
+/**
+ * Each focus the pinned-list view can open on, by the hash that names it: every focus kind, the
+ * two taller than the visible area, and two whose item starts collapsed in a mounted list.
+ */
+export const pinnedFocuses = {
+  answer: { part: "answer", turnId: "turn-130" },
+  "collapsed-reasoning": { eventIndex: focusEventIndex.reasoning, turnId: "turn-80" },
+  "collapsed-turn-tool": { toolCallId: "call-60", turnId: "turn-60" },
+  end: { part: "end", turnId: "turn-140" },
+  message: { eventIndex: focusEventIndex.message, turnId: "turn-150" },
+  prompt: { part: "prompt", turnId: "turn-120" },
+  reasoning: { eventIndex: focusEventIndex.reasoning, turnId: "turn-160" },
+  "tall-prompt": { part: "prompt", turnId: tallTurnIds.prompt },
+  "tall-reasoning": { eventIndex: focusEventIndex.reasoning, turnId: tallTurnIds.reasoning },
+  tool: { toolCallId: "call-170", turnId: "turn-170" },
+} as const;
+export type PinnedFocusName = keyof typeof pinnedFocuses;
+
 const origin = Date.UTC(2026, 10, 20, 9, 0, 0);
 const at = (seconds: number) => origin + seconds * 1_000;
 
