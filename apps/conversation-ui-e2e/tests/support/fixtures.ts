@@ -17,6 +17,8 @@ export const focusedTurnIds: Readonly<Record<FocusKind, string>> = {
 /** The pinned-list view: more turns than the fold by far, under a sticky summary this tall. */
 export const pinnedTurnCount = 220;
 export const pinnedOffsetPx = 96;
+/** How tall the pinned-list view's pin is when it holds the conversation's timeline card. */
+export const pinnedTimelineOffsetPx = 240;
 /** Turns whose prompt, or whose reasoning item, runs to several screens. */
 export const tallTurnIds = { prompt: "turn-100", reasoning: "turn-110" } as const;
 /**
@@ -84,3 +86,17 @@ export const timelineFixture = {
   range: [at(0), at(100)] as const,
 };
 export const timelineRangeSeconds = 100;
+
+/**
+ * The scrolled-host view's timeline: the fixture above plus a point event on the range's last
+ * instant, whose glyph straddles the plot's right edge, so selecting it needs the plot to pan.
+ */
+export const hostedTimelineFixture = {
+  ...timelineFixture,
+  items: [
+    ...timelineFixture.items,
+    { end: at(100), id: "ship", label: "Ship it", laneId: "tools", payload: null, start: at(100) },
+  ],
+};
+/** Where a journey scrolls the scrolled-host view before it sets a selection. */
+export const hostScroll = { left: 160, top: 240 } as const;

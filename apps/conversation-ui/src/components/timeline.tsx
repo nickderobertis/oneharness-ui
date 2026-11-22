@@ -222,6 +222,28 @@ function useTimelineHover<Payload>(
   return { hoveredKey, leave: () => report(null, null), register, resolve };
 }
 
+/**
+ * Brings `element` into the horizontal view of the nearest horizontal scroller between it and
+ * `plot` (the plot itself when none is closer). Unlike `scrollIntoView`, it never scrolls
+ * vertically and never scrolls anything outside the plot, so a consumer's own scroll position,
+ * and the focus placement it holds, stay where they are.
+ */
+function revealHorizontally(element: Element, plot: HTMLElement) {
+  let scroller: HTMLElement = plot;
+  for (let node = element.parentElement; node && node !== plot; node = node.parentElement) {
+    if (getComputedStyle(node).overflowX !== "visible") {
+      scroller = node;
+      break;
+    }
+  }
+  const target = element.getBoundingClientRect();
+  const bounds = scroller.getBoundingClientRect();
+  const left = bounds.left + scroller.clientLeft;
+  const right = left + scroller.clientWidth;
+  if (target.left < left) scroller.scrollLeft += target.left - left;
+  else if (target.right > right) scroller.scrollLeft += target.right - right;
+}
+
 function useTimelineView(
   fullRange: Range,
   controlledRange: readonly [number, number] | undefined,
@@ -340,8 +362,9 @@ export function Timeline<Payload>({
     return () => observer.disconnect();
   }, [axis, hasEvents]);
   useEffect(() => {
-    if (selectedId)
-      axis.current?.querySelector('[data-selected="true"]')?.scrollIntoView?.({ block: "nearest" });
+    const plot = axis.current;
+    const selected = selectedId ? plot?.querySelector('[data-selected="true"]') : null;
+    if (plot && selected) revealHorizontally(selected, plot);
   }, [axis, selectedId]);
   const rangeDuration = Math.max(1, range.end - range.start);
   const position = (value: number) => ((value - range.start) / rangeDuration) * 100;

@@ -323,7 +323,9 @@ function recordFrames() {
   };
   const step = (time: number) => {
     const list = document.querySelector('[aria-label="Pinned turn list"]');
-    const marked = list?.querySelectorAll('[aria-current="true"]') ?? [];
+    // A timeline card in the pin marks its own entry; only the list's items count here.
+    const marked =
+      list?.querySelectorAll('[aria-current="true"]:not([aria-label="Pinned summary"] *)') ?? [];
     const element = marked[0];
     frames.push({
       marked: marked.length,
@@ -359,10 +361,13 @@ function targetName(name: PinnedFocusName): string {
 }
 
 const pinnedUrl = `${harnessOrigin}/?${new URLSearchParams({ theme: "light", view: "pinned-list" })}`;
+const timelinePinnedUrl = `${harnessOrigin}/?${new URLSearchParams({ pin: "timeline", theme: "light", view: "pinned-list" })}`;
+/** The list's marked items, leaving out the entry a timeline card in the pin marks. */
+const listCurrent = '[aria-current="true"]:not([aria-label="Pinned summary"] *)';
 
-async function openPinned(page: Page, name: PinnedFocusName) {
+async function openPinned(page: Page, name: PinnedFocusName, url = pinnedUrl) {
   await page.addInitScript(recordFrames);
-  await page.goto(`${pinnedUrl}#${name}`);
+  await page.goto(`${url}#${name}`);
   const list = page.getByRole("region", { name: "Pinned turn list", exact: true });
   return { list, pinned: list.getByRole("complementary", { name: "Pinned summary" }) };
 }
@@ -370,7 +375,7 @@ async function openPinned(page: Page, name: PinnedFocusName) {
 /** The list's one marked element is `name`'s target, in the turn that focus names. */
 async function expectMarked(list: Locator, name: PinnedFocusName): Promise<Locator> {
   const focus = pinnedFocuses[name];
-  const marked = list.locator('[aria-current="true"]');
+  const marked = list.locator(listCurrent);
   await expect(marked).toHaveCount(1);
   const turn = list.getByRole("article", { name: `Turn ${focus.turnId} from claude-code` });
   await expect(turn.locator('[aria-current="true"]')).toHaveCount(1);
@@ -398,8 +403,8 @@ async function expectOpen(marked: Locator, name: PinnedFocusName) {
 
 /** Where the marked element and the pinned summary sit in the list's visible area, unscrolled. */
 async function placement(list: Locator) {
-  return await list.evaluate((container) => {
-    const element = container.querySelector('[aria-current="true"]');
+  return await list.evaluate((container, current) => {
+    const element = container.querySelector(current);
     const sticky = container.querySelector('[aria-label="Pinned summary"]');
     if (!element || !sticky) throw new Error("expected a marked element under a pinned summary");
     const box = element.getBoundingClientRect();
@@ -422,7 +427,7 @@ async function placement(list: Locator) {
       visibleBottom: visibleTop + container.clientHeight,
       visibleTop,
     };
-  });
+  }, listCurrent);
 }
 
 /**
@@ -526,3 +531,30 @@ for (const name of ["collapsed-turn-tool", "collapsed-reasoning"] as const) {
     expect(box.highlightInsideBox, "its highlight is drawn within its visible box").toBe(true);
   });
 }
+
+test("a list pinned under its timeline card keeps each focus where its first frame placed it once the card marks it", async ({
+  page,
+}) => {
+  const { list, pinned } = await openPinned(page, "tool", timelinePinnedUrl);
+  const timeline = pinned.getByRole("region", { name: "Conversation timeline" });
+  for (const name of ["tool", "message"] as const) {
+    await test.step(`focused on its ${name}`, async () => {
+      const since = name === "tool" ? 0 : await frameCount(page);
+      // A consumer re-renders with the new focus; the harness takes it from the hash in place.
+      if (name !== "tool")
+        await page.evaluate((hash) => {
+          window.location.hash = hash;
+        }, name);
+      await expectMarked(list, name);
+      // The card marks the focus's entry too, and that selection moves nothing in the list.
+      await expect(timeline.locator('[data-selected="true"]')).toHaveCount(1);
+      const placed = await expectPlacedFromFirstFrame(page, name, since);
+      const box = await placement(list);
+      expect(box.scrollTop).toBeGreaterThan(10 * box.clientHeight);
+      expect(Math.abs(box.top - box.stickyBottom)).toBeLessThanOrEqual(1);
+      expect(Math.abs((placed.top ?? Number.NaN) - box.top)).toBeLessThanOrEqual(1);
+      expect(box.bottom).toBeLessThanOrEqual(box.visibleBottom + 0.5);
+      expect(box.topHitsElement, "nothing is painted over its top edge").toBe(true);
+    });
+  }
+});
