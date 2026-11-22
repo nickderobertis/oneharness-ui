@@ -7,9 +7,9 @@
 //! applied here, because the packaged CLI re-serialises through its own schema
 //! and drops anything the file carries beyond it.
 import { spawnSync } from "node:child_process";
-import { createRequire } from "node:module";
 import { CAPABILITIES, HistoryRecordsSchema } from "@oneharness/sdk";
 import { z } from "zod";
+import { packagedNativeCli } from "../packaged-cli.ts";
 import { FUTURE_RECORD_PATCH_ENV } from "./future-record-contract.ts";
 
 // Which call carries the records to patch is the SDK's to say: `CAPABILITIES`
@@ -27,17 +27,14 @@ const patchSchema = z.record(z.string().min(1).max(128), z.unknown());
 const MAX_PATCH_BYTES = 16_384;
 
 function runPackagedCli(argv: readonly string[], capture: boolean) {
-  const sdkRequire = createRequire(import.meta.resolve("@oneharness/sdk"));
-  const result = spawnSync(
-    process.execPath,
-    [sdkRequire.resolve("oneharness-cli/bin/oneharness.js"), ...argv],
-    {
-      encoding: "utf8",
-      shell: false,
-      stdio: capture ? ["inherit", "pipe", "inherit"] : "inherit",
-      windowsHide: true,
-    },
-  );
+  // The packaged binary itself, not its Bun launcher: one process less per
+  // call, and stopping this stand-in's tree reaches the CLI it started.
+  const result = spawnSync(packagedNativeCli(), argv, {
+    encoding: "utf8",
+    shell: false,
+    stdio: capture ? ["inherit", "pipe", "inherit"] : "inherit",
+    windowsHide: true,
+  });
   if (result.error) throw result.error;
   return result;
 }

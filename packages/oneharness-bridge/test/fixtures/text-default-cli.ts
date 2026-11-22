@@ -5,26 +5,23 @@
 //! the SDK, its schemas, and the history store stay real. Only the text view a
 //! caller gets by omitting the flag is rendered here.
 import { spawnSync } from "node:child_process";
-import { createRequire } from "node:module";
 import { HistoryListSchema } from "@oneharness/sdk";
 import { z } from "zod";
+import { packagedNativeCli } from "../packaged-cli.ts";
 
 // The bridge and SDK pass a short argv of flags, ids, and paths; anything
 // larger is not a call this stand-in was written for.
 const argvSchema = z.array(z.string().min(1).max(4096)).max(64);
 
 function runPackagedCli(argv: readonly string[], capture: boolean) {
-  const sdkRequire = createRequire(import.meta.resolve("@oneharness/sdk"));
-  const result = spawnSync(
-    process.execPath,
-    [sdkRequire.resolve("oneharness-cli/bin/oneharness.js"), ...argv],
-    {
-      encoding: "utf8",
-      shell: false,
-      stdio: capture ? ["inherit", "pipe", "inherit"] : "inherit",
-      windowsHide: true,
-    },
-  );
+  // The packaged binary itself, not its Bun launcher: one process less per
+  // call, and stopping this stand-in's tree reaches the CLI it started.
+  const result = spawnSync(packagedNativeCli(), argv, {
+    encoding: "utf8",
+    shell: false,
+    stdio: capture ? ["inherit", "pipe", "inherit"] : "inherit",
+    windowsHide: true,
+  });
   if (result.error) throw result.error;
   return result;
 }

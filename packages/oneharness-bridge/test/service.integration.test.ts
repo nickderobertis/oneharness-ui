@@ -17,11 +17,11 @@ import { test } from "./bounded-test.ts";
 import { FUTURE_RECORD_PATCH_ENV } from "./fixtures/future-record-contract.ts";
 import {
   copiedSessionLines,
-  packagedNativeCli,
   readFixtureHistoryFile,
   readFixtureHistoryRecord,
   startHeldRun,
 } from "./history-fixture.ts";
+import { packagedNativeCli } from "./packaged-cli.ts";
 
 const repository = resolve(import.meta.dir, "../../..");
 const cliOverride = process.env.ONEHARNESS_UI_TEST_CLI_BIN;
@@ -40,6 +40,8 @@ for (const [name, value] of [
 // The binary itself rather than the package's launcher, so every process a
 // test starts is one its budget can stop (see `packagedNativeCli`).
 const cli = cliOverride ?? packagedNativeCli();
+const readHistoryRecord = (directory: string, report: RunReport) =>
+  readFixtureHistoryRecord(directory, report, cli);
 const provider =
   providerOverride ??
   resolve(
@@ -153,10 +155,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     ).toBe(false);
 
     const report = await seed("schema-boundary", '{"result":"Validated","session_id":"sdk-1"}');
-    const { historyFile, historyLines, record } = await readFixtureHistoryRecord(
-      historyDir,
-      report,
-    );
+    const { historyFile, historyLines, record } = await readHistoryRecord(historyDir, report);
     const rawLine = JSON.parse((await readFile(historyFile, "utf8")).trim()) as Record<
       string,
       unknown
@@ -183,9 +182,9 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
     });
     expect(forwardCompatible.future_payload).toEqual({ preserved: true });
 
-    await expect(
-      readFixtureHistoryRecord(historyDir, { ...report, history_file: null }),
-    ).rejects.toThrow("did not write history");
+    await expect(readHistoryRecord(historyDir, { ...report, history_file: null })).rejects.toThrow(
+      "did not write history",
+    );
     const outside = resolve(historyDir, "..", `${basename(historyDir)}-outside.jsonl`);
     const multiple = resolve(historyDir, "multiple.jsonl");
     try {
@@ -193,11 +192,11 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       // public history-file trust boundary; no user workflow can create them.
       await writeFile(outside, `${historyLines(record)}\n`);
       await expect(
-        readFixtureHistoryRecord(historyDir, { ...report, history_file: outside }),
+        readHistoryRecord(historyDir, { ...report, history_file: outside }),
       ).rejects.toThrow("outside the isolated fixture directory");
       await writeFile(multiple, `${historyLines(record)}\n${historyLines(record)}\n`);
       await expect(
-        readFixtureHistoryRecord(historyDir, { ...report, history_file: multiple }),
+        readHistoryRecord(historyDir, { ...report, history_file: multiple }),
       ).rejects.toThrow("must contain one record");
     } finally {
       await rm(outside, { force: true });
@@ -235,10 +234,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       ].join("\n"),
       { historyLabels: { role: "judge", worker: "7" } },
     );
-    const { historyFile, historyLines, record } = await readFixtureHistoryRecord(
-      historyDir,
-      report,
-    );
+    const { historyFile, historyLines, record } = await readHistoryRecord(historyDir, report);
     record.thinking = "Checked the project shape before answering.";
     record.future_payload = { preserved: true };
     await writeFile(historyFile, `${historyLines(record)}\n`);
@@ -298,7 +294,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
         '{"type":"result","result":"Repository inspected","session_id":"native-timing"}',
       ].join("\n"),
     );
-    const { historyFile } = await readFixtureHistoryRecord(historyDir, report);
+    const { historyFile } = await readHistoryRecord(historyDir, report);
     const sessionId = basename(historyFile, extname(historyFile));
 
     const selected = await service().handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
@@ -346,7 +342,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
         '{"type":"result","result":"Repository inspected","session_id":"native-narrated"}',
       ].join("\n"),
     );
-    const { historyFile } = await readFixtureHistoryRecord(historyDir, report);
+    const { historyFile } = await readHistoryRecord(historyDir, report);
     const sessionId = basename(historyFile, extname(historyFile));
 
     const selected = await service().handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
@@ -876,10 +872,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       "large-conversation",
       '{"result":"Bounded detail answer","session_id":"native-large-conversation"}',
     );
-    const { historyFile, historyLines, record } = await readFixtureHistoryRecord(
-      historyDir,
-      report,
-    );
+    const { historyFile, historyLines, record } = await readHistoryRecord(historyDir, report);
     const largePrompt = "bounded conversation detail ".repeat(6_500);
     const records = Array.from({ length: 5 }, (_, index) =>
       HistoryRecordSchema.parse({
@@ -918,10 +911,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       "oversized-single-turn",
       '{"result":"Oversized turn answer","session_id":"native-oversized-single-turn"}',
     );
-    const { historyFile, historyLines, record } = await readFixtureHistoryRecord(
-      historyDir,
-      report,
-    );
+    const { historyFile, historyLines, record } = await readHistoryRecord(historyDir, report);
     const oversizedPrompt = "oversized history detail ".repeat(25_000);
     const oversizedRecord = HistoryRecordSchema.parse({ ...record, prompt: oversizedPrompt });
     expect(Buffer.byteLength(JSON.stringify(oversizedRecord))).toBeGreaterThan(
