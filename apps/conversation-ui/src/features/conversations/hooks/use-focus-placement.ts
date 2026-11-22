@@ -90,9 +90,13 @@ export function usePinnedOffset(pinned: RefObject<HTMLElement | null>): void {
 }
 
 function publishPinnedOffset(element: HTMLElement) {
+  const container = element.parentElement;
+  if (!container) return;
+  // A sticky element sticks its `top` inset below the container's padding edge, not its border.
+  const padding = Number.parseFloat(getComputedStyle(container).paddingTop) || 0;
   const inset = Number.parseFloat(getComputedStyle(element).top) || 0;
-  element.parentElement?.style.setProperty(
+  container.style.setProperty(
     "--conversation-pinned-offset",
-    `${inset + element.offsetHeight}px`,
+    `${padding + inset + element.offsetHeight}px`,
   );
 }
