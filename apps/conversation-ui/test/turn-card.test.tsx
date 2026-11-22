@@ -121,8 +121,12 @@ describe("TurnCard tool invocations", () => {
       expect({ current: current(), kind }).toEqual({ current: [[String(eventIndex), true]], kind });
     }
     rerender(<TurnCard focus={{ eventIndex: 9, turnId: turn.id }} turn={turn} />);
-    expect(screen.getByRole("article").getAttribute("aria-current")).toBe("true");
-    expect(document.querySelectorAll(".conversation-focus-highlight")).toHaveLength(0);
+    const article = screen.getByRole("article");
+    expect(article.getAttribute("aria-current")).toBe("true");
+    // The article is the resolved target, so it alone carries the highlight beside the mark.
+    const highlighted = [...document.querySelectorAll(".conversation-focus-highlight")];
+    // Identity, not `toEqual`: deep equality over DOM elements takes minutes.
+    expect(highlighted.length === 1 && highlighted[0] === article).toBe(true);
   });
 
   test("keeps the turn's reasoning above the stream when no reasoning event carries it", () => {
@@ -426,6 +430,39 @@ describe("TurnCard focus", () => {
     ]) {
       again(missing);
       expect(only()?.tagName).toBe("ARTICLE");
+    }
+  });
+
+  test("highlights the whole turn, and only it, when the focus resolves to the turn", () => {
+    const peerTurn: ConversationTurn = { ...focusTurn, id: "session-1-1" };
+    for (const focus of [
+      focusOf({}),
+      focusOf({ toolCallId: "absent" }),
+      focusOf({ eventIndex: 99 }),
+      focusOf({ eventIndex: 99, part: "prompt" }),
+    ]) {
+      const view = render(
+        <div className="scroller">
+          <style>{styles}</style>
+          <TurnCard focus={focus} turn={focusTurn} />
+          <TurnCard turn={peerTurn} />
+        </div>,
+      );
+      const focused = screen.getByRole("article", {
+        name: `Turn ${focusTurn.id} from claude-code`,
+      });
+      const peer = screen.getByRole("article", { name: `Turn ${peerTurn.id} from claude-code` });
+      const at = JSON.stringify(focus);
+      // Identity, not `toEqual`: deep equality over DOM elements takes minutes.
+      const onlyFocused = (elements: Element[]) => elements.length === 1 && elements[0] === focused;
+      expect(onlyFocused(marked()), `${at} marks only the turn`).toBe(true);
+      const highlighted = [...document.querySelectorAll(".conversation-focus-highlight")];
+      expect(onlyFocused(highlighted), `${at} highlights only the turn`).toBe(true);
+      expect(getComputedStyle(focused).outlineStyle, at).toBe("solid");
+      expect(getComputedStyle(focused).outlineOffset, at).toBe("-2px");
+      expect(getComputedStyle(peer).outlineStyle, at).not.toBe("solid");
+      expect(peer.hasAttribute("aria-current"), at).toBe(false);
+      view.unmount();
     }
   });
 

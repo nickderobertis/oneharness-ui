@@ -438,7 +438,10 @@ export function TurnCard({
       data-turn-id={turn.id}
       aria-current={target?.kind === "turn" ? "true" : undefined}
       aria-label={`Turn ${turn.id} from ${turn.harness}`}
-      className="mx-auto mb-10.5 max-w-[850px]"
+      className={cn(
+        "mx-auto mb-10.5 max-w-[850px]",
+        target?.kind === "turn" && focusHighlightClassName,
+      )}
     >
       <button
         className="mb-2 text-[10px] text-muted-foreground hover:text-foreground"
