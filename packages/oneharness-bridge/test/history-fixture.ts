@@ -20,10 +20,19 @@ export type FixtureHistory = {
   record: HistoryRecord;
 };
 
-export async function readFixtureHistoryRecord(
+export type FixtureHistoryFile = {
+  historyFile: string;
+  /// The file's lines exactly as the packaged CLI wrote them, each validated by
+  /// the SDK's line schema.
+  lines: HistoryLine[];
+};
+
+/// Read the one-record history file a fixture run wrote, without the extra
+/// `history show` subprocess `readFixtureHistoryRecord` spends to aggregate it.
+export async function readFixtureHistoryFile(
   historyDir: string,
   report: RunReport,
-): Promise<FixtureHistory> {
+): Promise<FixtureHistoryFile> {
   if (!report.history_file) throw new Error("fixture run did not write history");
   const [historyRoot, historyFile] = await Promise.all([
     realpath(historyDir),
@@ -45,8 +54,17 @@ export async function readFixtureHistoryRecord(
   if (lines.filter((line) => line.type === "run").length !== 1) {
     throw new Error("fixture history must contain one record");
   }
+  return { historyFile, lines };
+}
+
+export async function readFixtureHistoryRecord(
+  historyDir: string,
+  report: RunReport,
+  executable?: string,
+): Promise<FixtureHistory> {
+  const { historyFile, lines } = await readFixtureHistoryFile(historyDir, report);
   const eventLineVersion = writtenEventLineVersion(lines);
-  const records = await new OneHarness().history({
+  const records = await new OneHarness(executable ? { executable } : {}).history({
     allProjects: true,
     historyDir,
     session: basename(historyFile, extname(historyFile)),
@@ -58,6 +76,30 @@ export async function readFixtureHistoryRecord(
     historyLines: (written) => historyLines(written, eventLineVersion),
     record,
   };
+}
+
+/// Serialize the CLI-written lines as another session's history file: the run
+/// line takes the given identity and its event lines follow it by run id, so
+/// every other field stays as the packaged CLI wrote it.
+export function copiedSessionLines(
+  lines: readonly HistoryLine[],
+  identity: { historyId: string; name: string; session: string; timestamp?: string },
+): string {
+  return lines
+    .map((line) => {
+      const copy: Record<string, unknown> = { ...line };
+      if (line.type !== "run") return { ...copy, run_id: identity.historyId };
+      return {
+        ...copy,
+        history_id: identity.historyId,
+        name: identity.name,
+        session: identity.session,
+        ...(identity.timestamp ? { timestamp: identity.timestamp } : {}),
+      };
+    })
+    .map((line) => HistoryLineSchema.parse(line))
+    .map((line) => JSON.stringify(line))
+    .join("\n");
 }
 
 /// The event-line schema version the pinned CLI stamped on this file, taken
@@ -95,6 +137,9 @@ function historyLines(
 }
 
 export type HeldRun = {
+  /// Settles when the run ends, without releasing it: it rejects when the run
+  /// is stopped while still held.
+  finished: Promise<void>;
   /// Let the provider finish, then wait for the run to close. Safe to call twice.
   release: () => Promise<void>;
 };
@@ -129,6 +174,7 @@ export async function startHeldRun(
   run.catch(() => {});
   let released: Promise<void> | undefined;
   return {
+    finished: run,
     release: () => {
       released ??= (async () => {
         try {

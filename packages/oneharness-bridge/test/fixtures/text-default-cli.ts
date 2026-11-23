@@ -4,42 +4,21 @@
 //! request is forwarded to the packaged CLI; so is every other subcommand, so
 //! the SDK, its schemas, and the history store stay real. Only the text view a
 //! caller gets by omitting the flag is rendered here.
-import { spawnSync } from "node:child_process";
-import { createRequire } from "node:module";
-import { HistoryListSchema } from "@oneharness/sdk";
-import { z } from "zod";
+import { boundedArgv, runPackagedCli } from "./forwarding-cli.ts";
 
-// The bridge and SDK pass a short argv of flags, ids, and paths; anything
-// larger is not a call this stand-in was written for.
-const argvSchema = z.array(z.string().min(1).max(4096)).max(64);
-
-function runPackagedCli(argv: readonly string[], capture: boolean) {
-  const sdkRequire = createRequire(import.meta.resolve("@oneharness/sdk"));
-  const result = spawnSync(
-    process.execPath,
-    [sdkRequire.resolve("oneharness-cli/bin/oneharness.js"), ...argv],
-    {
-      encoding: "utf8",
-      shell: false,
-      stdio: capture ? ["inherit", "pipe", "inherit"] : "inherit",
-      windowsHide: true,
-    },
-  );
-  if (result.error) throw result.error;
-  return result;
-}
-
-function textView(argv: readonly string[]): number {
+async function textView(argv: readonly string[]): Promise<number> {
   const listed = runPackagedCli([...argv, "--format", "json"], true);
   if (listed.status !== 0) return listed.status ?? 1;
+  // Only this call needs the SDK's schema (see forwarding-cli.ts).
+  const { HistoryListSchema } = await import("@oneharness/sdk");
   for (const session of HistoryListSchema.parse(JSON.parse(listed.stdout))) {
     process.stdout.write(`${session.id}  ${session.name}  ${session.started}\n`);
   }
   return 0;
 }
 
-const argv = argvSchema.parse(process.argv.slice(2));
+const argv = boundedArgv();
 process.exitCode =
   argv[0] === "history" && argv[1] === "list" && !argv.includes("--format")
-    ? textView(argv)
+    ? await textView(argv)
     : (runPackagedCli(argv, false).status ?? 1);
