@@ -38,16 +38,15 @@ function lookupArgv(): unknown[] | undefined {
 async function writePatchedShowOutput(argv: readonly string[]): Promise<number> {
   const shown = runPackagedCli(argv, true);
   if (shown.status !== 0) return shown.status ?? 1;
-  const [{ HistoryRecordsSchema }, { z }] = await Promise.all([
-    import("@oneharness/sdk"),
-    import("zod"),
-  ]);
+  // Only this call needs zod (see forwarding-cli.ts). The records are checked
+  // as objects and no further: the patched output goes back to the bridge,
+  // whose SDK validates it, and that validation is what these tests assert.
+  const { z } = await import("zod");
+  const fields = z.record(z.string().min(1).max(128), z.unknown());
   // The patch arrives as JSON so one fixture covers both a key the SDK does
   // not know and a future value in a key it does.
-  const patch = z
-    .record(z.string().min(1).max(128), z.unknown())
-    .parse(JSON.parse(boundedEnv(FUTURE_RECORD_PATCH_ENV)));
-  const records = HistoryRecordsSchema.parse(JSON.parse(shown.stdout));
+  const patch = fields.parse(JSON.parse(boundedEnv(FUTURE_RECORD_PATCH_ENV)));
+  const records = z.array(fields).parse(JSON.parse(shown.stdout));
   process.stdout.write(`${JSON.stringify(records.map((record) => ({ ...record, ...patch })))}\n`);
   return 0;
 }
