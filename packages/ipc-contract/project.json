@@ -5,7 +5,7 @@
   "sourceRoot": "packages/ipc-contract/src",
   "tags": ["scope:shared", "type:contract"],
   "targets": {
-    "build": { "command": "bunx tsc -p packages/ipc-contract/tsconfig.json" },
+    "build": { "command": "bunx tsc -p packages/ipc-contract/tsconfig.json", "outputs": [] },
     "test": {
       "command": "bun test packages/ipc-contract --coverage --coverage-dir coverage/ipc-contract",
       "outputs": ["{workspaceRoot}/coverage/ipc-contract"]

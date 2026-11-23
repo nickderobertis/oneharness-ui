@@ -27,7 +27,7 @@
       "cache": true,
       "dependsOn": ["^build"],
       "inputs": ["production", "^production"],
-      "outputs": ["{projectRoot}/out", "{projectRoot}/dist", "{workspaceRoot}/target"]
+      "outputs": ["{projectRoot}/out", "{projectRoot}/dist"]
     },
     "test": {
       "cache": true,

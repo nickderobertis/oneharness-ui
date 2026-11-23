@@ -2,7 +2,10 @@
 
 Proves the selector CI uses to gate an expensive suite (`just select-affected
 <project>`) prints `run=true` exactly when the change between `NX_BASE` and
-`NX_HEAD` reaches that Nx project.
+`NX_HEAD` reaches that Nx project, and that no Nx target declares or inherits
+an output at or under the workspace `target/`, which Cargo owns: a cache
+restore of it rewrites Cargo's fingerprints and deletes the bootstrapped test
+provider. Both read the real resolved graph; neither uses an Nx double.
 
 - **Depends on:** no project; its `test` target reads the graph definition
   (`nx.json`, the root `package.json` and every `project.json`), so it re-runs
