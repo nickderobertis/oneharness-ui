@@ -106,6 +106,11 @@ describe("Nx cache outputs", () => {
   describe("in a scratch copy of the workspace", () => {
     let scratch = "";
     let worktree = "";
+    // Loose objects keep every key the edit does not name, so the copy differs
+    // from the checkout only by the edit.
+    const buildOutputs = z.looseObject({
+      build: z.looseObject({ outputs: z.array(z.string()) }),
+    });
 
     function git(args: string[]) {
       const result = Bun.spawnSync(["git", "-c", "core.hooksPath=", ...args], {
@@ -121,11 +126,11 @@ describe("Nx cache outputs", () => {
 
     // Starts each case from this checkout's graph definition, uncommitted edits
     // included, then applies the case's edit to the copy.
-    function withEdit(path: string, edit: (json: Record<string, unknown>) => void) {
+    function withEdit<T>(path: string, schema: z.ZodType<T>, edit: (json: T) => void) {
       for (const file of ["nx.json", "packages/ipc-contract/project.json", path]) {
         writeFileSync(resolve(worktree, file), readFileSync(resolve(repository, file)));
       }
-      const json = JSON.parse(readFileSync(resolve(worktree, path), "utf8"));
+      const json = schema.parse(JSON.parse(readFileSync(resolve(worktree, path), "utf8")));
       edit(json);
       writeFileSync(resolve(worktree, path), JSON.stringify(json));
     }
@@ -147,17 +152,16 @@ describe("Nx cache outputs", () => {
     });
 
     test("reports the Cargo target directory put back on the build default", () => {
-      withEdit("nx.json", (json) => {
-        const defaults = json.targetDefaults as { build: { outputs: string[] } };
-        defaults.build.outputs.push("{workspaceRoot}/target");
+      withEdit("nx.json", z.looseObject({ targetDefaults: buildOutputs }), (json) => {
+        json.targetDefaults.build.outputs.push("{workspaceRoot}/target");
       });
       expect(cargoTargetClaims(worktree)).toEqual(["targetDefaults.build {workspaceRoot}/target"]);
     }, 60_000);
 
     test("reports a project target claiming a path under the Cargo target directory", () => {
-      withEdit("apps/desktop-shell/project.json", (json) => {
-        const targets = json.targets as { build: { outputs: string[] } };
-        targets.build.outputs = ["{projectRoot}/../../target/debug"];
+      const project = z.looseObject({ targets: buildOutputs });
+      withEdit("apps/desktop-shell/project.json", project, (json) => {
+        json.targets.build.outputs = ["{projectRoot}/../../target/debug"];
       });
       expect(cargoTargetClaims(worktree)).toEqual([
         "desktop-shell:build {projectRoot}/../../target/debug",
