@@ -58,8 +58,29 @@ export async function runWithinBudget(
   if (!outcome.ok) throw outcome.error;
 }
 
+let inFlight = false;
+
 /// A `bun:test` test whose body fails past `TEST_BUDGET_MS` without leaving a
 /// process it started running into cleanup or the next test.
 export function test(name: string, body: () => Promise<void>): void {
-  bunTest(name, () => runWithinBudget(body), TEST_BUDGET_MS + STOP_MS);
+  bunTest(
+    name,
+    async () => {
+      inFlight = true;
+      try {
+        await runWithinBudget(body);
+      } finally {
+        inFlight = false;
+      }
+    },
+    TEST_BUDGET_MS + STOP_MS,
+  );
+}
+
+/// Call first in `afterEach`, and remove what the test used only after it.
+/// When bun's own limit abandoned a test before its stop finished, this stops
+/// what the test still runs; on Linux that includes every orphan, which this
+/// process adopts. The removal waits on the stop, not on any time limit.
+export async function stopAbandonedTest(): Promise<void> {
+  if (inFlight) await stopProcessTree();
 }

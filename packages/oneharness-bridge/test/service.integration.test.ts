@@ -13,7 +13,7 @@ import {
 } from "@oneharness/sdk";
 import type { BridgeStreamFrame, ConversationSummary } from "@oneharness-ui/ipc-contract";
 import { BridgeService, MAX_CONVERSATION_PAGE_BYTES } from "../src/service.ts";
-import { test } from "./bounded-test.ts";
+import { stopAbandonedTest, test } from "./bounded-test.ts";
 import { FUTURE_RECORD_PATCH_ENV } from "./fixtures/future-record-contract.ts";
 import {
   copiedSessionLines,
@@ -92,7 +92,10 @@ afterEach(async () => {
     else process.env[key] = value;
   }
   originalMockEnvironment.clear();
-  await rm(historyDir, { force: true, recursive: true });
+  // Captured first: the next test's `beforeEach` replaces it.
+  const directory = historyDir;
+  await stopAbandonedTest();
+  await rm(directory, { force: true, recursive: true });
 });
 
 async function seed(

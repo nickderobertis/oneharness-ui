@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { resolve } from "node:path";
@@ -26,7 +27,18 @@ afterEach(async () => {
   await rm(historyDir, { force: true, recursive: true });
 });
 
+/// Whether `pid` is still running. A Linux test process adopts its orphans,
+/// and one that was killed stays a zombie, exited but unreaped, until this
+/// process ends; it runs nothing and holds nothing open.
 function running(pid: number): boolean {
+  if (process.platform === "linux") {
+    try {
+      const stat = readFileSync(`/proc/${pid}/stat`, "utf8");
+      return !["Z", "X"].includes(stat.slice(stat.lastIndexOf(")") + 2).split(" ")[0] ?? "");
+    } catch {
+      return false;
+    }
+  }
   try {
     process.kill(pid, 0);
     return true;
