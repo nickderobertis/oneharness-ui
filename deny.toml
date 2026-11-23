@@ -4,16 +4,6 @@
 # upgrade. RUSTSEC-2024-0370 is pulled only through the same GTK macros.
 ignore = [
   "RUSTSEC-2024-0370",
-  "RUSTSEC-2024-0411",
-  "RUSTSEC-2024-0412",
-  "RUSTSEC-2024-0413",
-  "RUSTSEC-2024-0414",
-  "RUSTSEC-2024-0415",
-  "RUSTSEC-2024-0416",
-  "RUSTSEC-2024-0417",
-  "RUSTSEC-2024-0418",
-  "RUSTSEC-2024-0419",
-  "RUSTSEC-2024-0420",
   # Tauri's urlpattern dependency uses rust-unic. These are maintenance
   # notices with no safe upgrade; the app does not directly consume them.
   "RUSTSEC-2025-0075",
