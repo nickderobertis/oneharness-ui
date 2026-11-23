@@ -6,57 +6,54 @@
 //! Only the patch that makes each shown record look like a newer contract is
 //! applied here, because the packaged CLI re-serialises through its own schema
 //! and drops anything the file carries beyond it.
-import { spawnSync } from "node:child_process";
-import { CAPABILITIES, HistoryRecordsSchema } from "@oneharness/sdk";
-import { z } from "zod";
-import { packagedNativeCli } from "../packaged-cli.ts";
-import { FUTURE_RECORD_PATCH_ENV } from "./future-record-contract.ts";
+import { boundedArgv, runPackagedCli } from "./forwarding-cli.ts";
+import { FUTURE_RECORD_LOOKUP_ENV, FUTURE_RECORD_PATCH_ENV } from "./future-record-contract.ts";
 
-// Which call carries the records to patch is the SDK's to say: `CAPABILITIES`
-// is the manifest the SDK itself renders this argv from, so a release that
-// renames the lookup subcommand moves this stand-in with it rather than
-// leaving it forwarding a call it no longer recognises.
-const LOOKUP_ARGV = CAPABILITIES.history.argv;
+const MAX_ENV_BYTES = 16_384;
 
-// The bridge and SDK pass a short argv of flags, ids, and paths; anything
-// larger is not a call this stand-in was written for.
-const argvSchema = z.array(z.string().min(1).max(4096)).max(64);
-// The patch arrives as JSON so one fixture covers both a key the SDK does not
-// know and a future value in a key it does.
-const patchSchema = z.record(z.string().min(1).max(128), z.unknown());
-const MAX_PATCH_BYTES = 16_384;
-
-function runPackagedCli(argv: readonly string[], capture: boolean) {
-  // The packaged binary itself, not its Bun launcher: one process less per
-  // call, and stopping this stand-in's tree reaches the CLI it started.
-  const result = spawnSync(packagedNativeCli(), argv, {
-    encoding: "utf8",
-    shell: false,
-    stdio: capture ? ["inherit", "pipe", "inherit"] : "inherit",
-    windowsHide: true,
-  });
-  if (result.error) throw result.error;
-  return result;
-}
-
-function recordPatch(): Record<string, unknown> {
-  const raw = process.env[FUTURE_RECORD_PATCH_ENV] ?? "";
-  if (raw.length === 0 || Buffer.byteLength(raw) > MAX_PATCH_BYTES) {
-    throw new Error(`${FUTURE_RECORD_PATCH_ENV} must be a bounded JSON object of record fields`);
+function boundedEnv(name: string): string {
+  const raw = process.env[name] ?? "";
+  if (raw.length === 0 || Buffer.byteLength(raw) > MAX_ENV_BYTES) {
+    throw new Error(`${name} must be bounded, non-empty JSON`);
   }
-  return patchSchema.parse(JSON.parse(raw));
+  return raw;
 }
 
-function writePatchedShowOutput(argv: readonly string[]): number {
+// Which call carries the records to patch is the SDK's to say: the test passes
+// the argv the SDK's `CAPABILITIES` manifest renders the lookup from, so a
+// release that renames the lookup subcommand moves this stand-in with it. It
+// arrives over the environment so that a call this stand-in only forwards
+// never loads the SDK (see forwarding-cli.ts). The bridge runs history
+// discovery under its allowlisted CLI environment, which never carries it; a
+// call without it is therefore always one this stand-in only forwards.
+function lookupArgv(): unknown[] | undefined {
+  if (process.env[FUTURE_RECORD_LOOKUP_ENV] === undefined) return undefined;
+  const parsed: unknown = JSON.parse(boundedEnv(FUTURE_RECORD_LOOKUP_ENV));
+  if (!Array.isArray(parsed) || parsed.length === 0) {
+    throw new Error(`${FUTURE_RECORD_LOOKUP_ENV} must be the SDK's lookup argv`);
+  }
+  return parsed;
+}
+
+async function writePatchedShowOutput(argv: readonly string[]): Promise<number> {
   const shown = runPackagedCli(argv, true);
   if (shown.status !== 0) return shown.status ?? 1;
+  const [{ HistoryRecordsSchema }, { z }] = await Promise.all([
+    import("@oneharness/sdk"),
+    import("zod"),
+  ]);
+  // The patch arrives as JSON so one fixture covers both a key the SDK does
+  // not know and a future value in a key it does.
+  const patch = z
+    .record(z.string().min(1).max(128), z.unknown())
+    .parse(JSON.parse(boundedEnv(FUTURE_RECORD_PATCH_ENV)));
   const records = HistoryRecordsSchema.parse(JSON.parse(shown.stdout));
-  const patch = recordPatch();
   process.stdout.write(`${JSON.stringify(records.map((record) => ({ ...record, ...patch })))}\n`);
   return 0;
 }
 
-const argv = argvSchema.parse(process.argv.slice(2));
-process.exitCode = LOOKUP_ARGV.every((word, index) => argv[index] === word)
-  ? writePatchedShowOutput(argv)
+const argv = boundedArgv();
+const lookup = lookupArgv();
+process.exitCode = lookup?.every((word, index) => argv[index] === word)
+  ? await writePatchedShowOutput(argv)
   : (runPackagedCli(argv, false).status ?? 1);

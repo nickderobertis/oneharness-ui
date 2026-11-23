@@ -5,6 +5,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, dirname, extname, isAbsolute, resolve } from "node:path";
 import {
+  CAPABILITIES,
   HistoryLineSchema,
   HistoryRecordSchema,
   OneHarness,
@@ -14,7 +15,10 @@ import {
 import type { BridgeStreamFrame, ConversationSummary } from "@oneharness-ui/ipc-contract";
 import { BridgeService, MAX_CONVERSATION_PAGE_BYTES } from "../src/service.ts";
 import { stopAbandonedTest, test } from "./bounded-test.ts";
-import { FUTURE_RECORD_PATCH_ENV } from "./fixtures/future-record-contract.ts";
+import {
+  FUTURE_RECORD_LOOKUP_ENV,
+  FUTURE_RECORD_PATCH_ENV,
+} from "./fixtures/future-record-contract.ts";
 import {
   copiedSessionLines,
   readFixtureHistoryFile,
@@ -71,6 +75,7 @@ const mockKeys = [
   "MOCK_STDOUT",
   "ONEHARNESS_HISTORY_LABELS",
   "ONEHARNESS_NO_CONFIG",
+  FUTURE_RECORD_LOOKUP_ENV,
   FUTURE_RECORD_PATCH_ENV,
 ];
 
@@ -772,6 +777,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
   // llmlint: ignore-block[tests_mirror_real_usage] Every case in this service-boundary suite enters at `BridgeService.handle`, which is where a per-test stand-in executable can be selected at all; the transports that wrap it are driven separately, by server.integration.test.ts over HTTP and by the conversation-ui e2e suite, whose conversation selection reaches this same `get` through the real UI.
   test("preserves a record field this SDK does not know as unknown upstream data", async () => {
     await seed("future-record", '{"result":"Ahead of this SDK","session_id":"native-future"}');
+    process.env[FUTURE_RECORD_LOOKUP_ENV] = JSON.stringify(CAPABILITIES.history.argv);
     process.env[FUTURE_RECORD_PATCH_ENV] = JSON.stringify(FUTURE_RECORD_FIELD);
     const bridge = new BridgeService(
       { executable: futureRecordCli, historyDir },
@@ -794,6 +800,7 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
 
   test("refuses a future value in a record field this SDK does know", async () => {
     await seed("future-status", '{"result":"Ahead of this SDK","session_id":"native-future-2"}');
+    process.env[FUTURE_RECORD_LOOKUP_ENV] = JSON.stringify(CAPABILITIES.history.argv);
     process.env[FUTURE_RECORD_PATCH_ENV] = JSON.stringify({ status: "future-status" });
     const bridge = new BridgeService(
       { executable: futureRecordCli, historyDir },
