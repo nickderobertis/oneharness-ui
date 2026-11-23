@@ -775,7 +775,9 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       TEST_AUTHORIZATION,
     );
 
-    const listed = await bridge.handle({ kind: "list" }, TEST_AUTHORIZATION);
+    // Only the lookup is ahead of this SDK, so the session is found through
+    // the packaged CLI and one stand-in process fewer.
+    const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
     const sessionId =
       listed.ok && listed.data.kind === "list" ? listed.data.conversations[0]?.id : "";
     const selected = await bridge.handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
@@ -795,7 +797,9 @@ describe("BridgeService across SDK, CLI, provider, and history boundaries", () =
       TEST_AUTHORIZATION,
     );
 
-    const listed = await bridge.handle({ kind: "list" }, TEST_AUTHORIZATION);
+    // Only the lookup is ahead of this SDK, so the session is found through
+    // the packaged CLI and one stand-in process fewer.
+    const listed = await service().handle({ kind: "list" }, TEST_AUTHORIZATION);
     const sessionId =
       listed.ok && listed.data.kind === "list" ? listed.data.conversations[0]?.id : "";
     const selected = await bridge.handle({ kind: "get", sessionId }, TEST_AUTHORIZATION);
