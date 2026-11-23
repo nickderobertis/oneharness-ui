@@ -137,6 +137,9 @@ function historyLines(
 }
 
 export type HeldRun = {
+  /// Settles when the run ends, without releasing it: it rejects when the run
+  /// is stopped while still held.
+  finished: Promise<void>;
   /// Let the provider finish, then wait for the run to close. Safe to call twice.
   release: () => Promise<void>;
 };
@@ -171,6 +174,7 @@ export async function startHeldRun(
   run.catch(() => {});
   let released: Promise<void> | undefined;
   return {
+    finished: run,
     release: () => {
       released ??= (async () => {
         try {

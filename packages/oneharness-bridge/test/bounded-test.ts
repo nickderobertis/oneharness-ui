@@ -1,40 +1,41 @@
 import { test as bunTest } from "bun:test";
-import { stopProcessTree } from "./process-tree.ts";
+import { ProcessOwner, runOwned } from "./owned-processes.ts";
 
 /// Each test body's time budget: bun's default limit, which this suite has
 /// always run under. A body that takes longer fails.
 export const TEST_BUDGET_MS = 5_000;
 
 /// How long past the budget bun still waits on a test, so the stop below has
-/// time to list, kill and outwait the process tree. When bun's own limit fires
-/// it abandons the body and kills only the CLI launcher the body is awaiting:
-/// the rejection surfaces as `oneharness exited null` between later tests, the
-/// native CLI the launcher started keeps running as an orphan while `afterEach`
-/// removes its history, and the abandoned body goes on to call the CLI against
-/// the next test's history directory.
+/// time to kill the body's processes and the body time to settle. When bun's
+/// own limit fires it abandons the body and kills only the CLI launcher the
+/// body is awaiting: the rejection surfaces as `oneharness exited null` between
+/// later tests, the native CLI the launcher started keeps running while
+/// `afterEach` removes its history, and the abandoned body goes on to call the
+/// CLI against the next test's history directory.
 const STOP_MS = 10_000;
-
-/// How long an overrun body is given to settle once its processes are gone.
-/// One that still has not settled is waiting on something other than a
-/// subprocess, and has nothing left running to clean up after.
-const SETTLE_AFTER_STOP_MS = 1_000;
 
 export class TestBudgetError extends Error {}
 
-/// Run `body` within `budgetMs`. At the budget, stop every process it started
-/// and fail. When it ends in time, stop whatever it left running: a stream the
-/// bridge closes without waiting on its watcher, or a discovery call still
-/// running when a sibling failure answered the request. Either way, nothing it
-/// started is still running when this returns or throws.
+type Running = { owner: ProcessOwner; settled: Promise<unknown> };
+
+/// Run `body` within `budgetMs`. At the budget, refuse its further launches,
+/// stop every process it started, wait for it to settle, and fail. When it ends
+/// in time, do the same to whatever it left running: a stream the bridge closes
+/// without waiting on its watcher, or a discovery call still running when a
+/// sibling failure answered the request. Either way, when this returns or
+/// throws the body has finished and nothing it started is still running.
 export async function runWithinBudget(
   body: () => Promise<void>,
   budgetMs: number = TEST_BUDGET_MS,
+  onStart: (running: Running) => void = () => {},
 ): Promise<void> {
+  const owner = new ProcessOwner();
   let timer: ReturnType<typeof setTimeout> | undefined;
-  const settled = body().then(
+  const settled = runOwned(owner, body).then(
     () => ({ ok: true as const }),
     (error: unknown) => ({ error, ok: false as const }),
   );
+  onStart({ owner, settled });
   const outcome = await Promise.race([
     settled,
     new Promise<"overran">((resolve) => {
@@ -42,35 +43,42 @@ export async function runWithinBudget(
     }),
   ]);
   clearTimeout(timer);
-  const stopped = await stopProcessTree();
+  const stopped = await settle({ owner, settled });
   if (outcome === "overran") {
-    await Promise.race([
-      settled,
-      new Promise((resolve) => setTimeout(resolve, SETTLE_AFTER_STOP_MS)),
-    ]);
-    // A body that went on to start another process after the stop gets it
-    // stopped too, before cleanup can run.
-    const late = await stopProcessTree();
     throw new TestBudgetError(
-      `test exceeded its ${budgetMs}ms budget; stopped ${stopped + late} process(es) it started`,
+      `test exceeded its ${budgetMs}ms budget; stopped ${stopped} process(es) it started`,
     );
   }
   if (!outcome.ok) throw outcome.error;
 }
 
-let inFlight = false;
+/// Refuse the body's later launches, stop what it started, and wait for it to
+/// finish. Once no launch can succeed and every process it awaited is gone, a
+/// body still waiting can only be waiting on its own timers; bun's per-test
+/// limit, `TEST_BUDGET_MS + STOP_MS`, bounds that wait.
+async function settle({ owner, settled }: Running): Promise<number> {
+  owner.cancel();
+  // `spawn` captures each PID synchronously, so after the cancel nothing can be
+  // added to what this stops.
+  const stopped = await owner.stop();
+  await settled;
+  return stopped;
+}
+
+let inFlight: Running | undefined;
 
 /// A `bun:test` test whose body fails past `TEST_BUDGET_MS` without leaving a
-/// process it started running into cleanup or the next test.
+/// process it started, or the body itself, running into cleanup or the next test.
 export function test(name: string, body: () => Promise<void>): void {
   bunTest(
     name,
     async () => {
-      inFlight = true;
       try {
-        await runWithinBudget(body);
+        await runWithinBudget(body, TEST_BUDGET_MS, (running) => {
+          inFlight = running;
+        });
       } finally {
-        inFlight = false;
+        inFlight = undefined;
       }
     },
     TEST_BUDGET_MS + STOP_MS,
@@ -78,9 +86,11 @@ export function test(name: string, body: () => Promise<void>): void {
 }
 
 /// Call first in `afterEach`, and remove what the test used only after it.
-/// When bun's own limit abandoned a test before its stop finished, this stops
-/// what the test still runs; on Linux that includes every orphan, which this
-/// process adopts. The removal waits on the stop, not on any time limit.
+/// When bun's own limit abandoned a test before its stop finished, this refuses
+/// the body's further launches, stops what it started, and waits for the body
+/// to finish. The removal waits on that, not on any time limit.
 export async function stopAbandonedTest(): Promise<void> {
-  if (inFlight) await stopProcessTree();
+  const running = inFlight;
+  inFlight = undefined;
+  if (running) await settle(running);
 }
